@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMZ STUDIOS | Hub Principal</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="flex flex-col min-h-screen overflow-x-hidden bg-black">
+
+    <nav class="fixed w-full z-50 bg-black/95 backdrop-blur-sm border-b border-white/5 px-8 py-4 flex justify-between items-center h-20">
+        <div class="flex items-center gap-3">
+            <img src="./assets/logo.png" alt="AMZ Studios Logo" class="h-12 w-auto grayscale">
+            <span class="font-black tracking-tighter text-2xl uppercase">AMZ <span class="text-neutral-500 font-light">STUDIOS</span></span>
+        </div>
+        
+        <div class="hidden md:flex items-center gap-10">
+            <div class="flex gap-10 text-xs font-bold uppercase tracking-[0.2em] text-neutral-400">
+                <a href="#inicio" class="hover:text-white transition">Início</a>
+                <a href="#aplicativos" class="hover:text-white transition">Aplicativos</a>
+            </div>
+            <button onclick="acessarTelaBot()" class="border border-white/10 px-8 py-4 font-bold uppercase text-[10px] tracking-widest hover:bg-white/5 transition">
+                Acessar Painel do Bot
+            </button>
+        </div>
+    </nav>
+
+    <div id="site-principal" class="flex flex-col min-h-screen fade-in">
+        <main class="flex-1 pt-20">
+            <section id="inicio" class="py-32 px-8">
+                <div class="max-w-6xl mx-auto text-center">
+                    <span class="text-[10px] border border-white/10 px-4 py-2 rounded-full uppercase tracking-[0.4em] text-neutral-600 font-bold">Development Hub</span>
+                    <h1 class="text-7xl md:text-9xl font-black tracking-tighter mt-12 mb-8 leading-none uppercase">CÓDIGO. <br> PERFORMANCE.</h1>
+                    <p class="text-lg text-neutral-400 max-w-2xl mx-auto leading-relaxed">
+                        Central de desenvolvimento da **AMZ Studios**. Otimização e automação de alto nível.
+                    </p>
+                    <div class="mt-12 flex flex-wrap justify-center gap-6">
+                        <a href="#aplicativos" class="bg-white text-black px-10 py-5 font-bold uppercase text-xs tracking-widest hover:bg-neutral-200 transition">Ver Aplicativos</a>
+                        
+                        <button onclick="acessarTelaBot()" class="border border-white/10 px-10 py-5 font-bold uppercase text-xs tracking-widest hover:bg-white/5 transition">
+                            Acessar Painel do Bot
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="aplicativos" class="py-24 px-8 border-t border-white/5 bg-[#050505]">
+                <div class="max-w-6xl mx-auto">
+                    <div class="flex items-center gap-4 mb-16">
+                        <div class="w-12 h-1 bg-white"></div>
+                        <h2 class="text-4xl font-extrabold uppercase tracking-tighter">Repositório de Software</h2>
+                    </div>
+                    
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div class="bw-border p-10 bg-black group relative overflow-hidden">
+                            <div class="flex justify-between items-start mb-16">
+                                <i class="ph ph-cpu text-5xl text-white group-hover:scale-110 transition-transform"></i>
+                                <span class="font-mono text-[10px] border border-neutral-700 text-neutral-500 px-3 py-1 uppercase tracking-widest">Windows EXE</span>
+                            </div>
+                            <h3 class="text-3xl font-black uppercase mb-3 group-hover:tracking-wider transition-all">Amz Clicker</h3>
+                            <p class="text-neutral-500 text-sm mb-10 leading-relaxed max-w-sm">Macro otimizado para farm automático no Roblox. Foco em estabilidade e precisão.</p>
+                            
+                            <a href="./assets/meu-site-downloads/Amz Clicker.exe" download class="inline-flex items-center gap-3 bg-white text-black px-6 py-3 font-bold text-xs uppercase tracking-widest hover:bg-neutral-200 transition">
+                                <i class="ph ph-download-simple text-lg"></i> Baixar v1.0
+                            </a>
+                        </div>
+
+                        <div class="bw-border border-dashed p-10 bg-transparent flex flex-col items-center justify-center text-center opacity-40">
+                            <i class="ph ph-code-block text-5xl text-neutral-700 mb-6"></i>
+                            <p class="font-mono text-[10px] uppercase tracking-[0.4em] text-neutral-600">Novo Projeto em Desenvolvimento</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="py-16 px-8 border-t border-white/5 bg-[#050505] text-center mt-auto">
+            <div class="max-w-6xl mx-auto flex flex-col items-center gap-6">
+                <img src="./assets/logo.png" alt="AMZ Logo Footer" class="h-10 w-auto grayscale opacity-50">
+                <p class="text-xs text-neutral-600 uppercase tracking-[0.5em]">&copy; 2026 AMZ Studios. Douglas.</p>
+            </div>
+        </footer>
+    </div>
+
+    <div id="painel-loritta" class="hidden flex-col bg-[#030303] min-h-screen relative fade-in pt-20">
+        <main class="flex-1 w-full max-w-6xl mx-auto px-8 py-20 relative z-10">
+            
+            <button onclick="voltarAoInicioBot()" class="text-[10px] text-white/50 hover:text-white uppercase tracking-[0.3em] transition flex items-center gap-2 mb-16 w-fit font-bold">
+                <i class="ph ph-arrow-left text-lg"></i> Voltar ao Hub
+            </button>
+
+            <div id="bot-landing" class="text-center py-10">
+                <h2 class="text-white/30 text-xl font-light tracking-[0.6em] uppercase mb-4 italic">Gerenciamento</h2>
+                <h1 class="text-white text-7xl md:text-9xl font-black tracking-tighter mb-10 leading-none uppercase">
+                    AMZ <span class="text-neutral-800">BOT</span>
+                </h1>
+                <p class="text-white/60 text-lg max-w-2xl mx-auto leading-relaxed mb-16">
+                    Gerenciamento avançado de servidores Discord e sincronização com Cluster MongoDB.
+                </p>
+                
+                <div class="flex flex-wrap justify-center gap-6">
+                    <button onclick="window.open('https://discord.com/oauth2/authorize?client_id=1479103284064026787&permissions=8&integration_type=0&scope=bot+applications.commands', '_blank')" 
+                            class="bg-white text-black px-12 py-6 font-bold uppercase text-xs tracking-[0.2em] hover:bg-neutral-200 transition">
+                        Me Adicione
+                    </button>
+                    <button onclick="abrirListaServidores()" class="border border-white/10 text-white px-12 py-6 font-bold uppercase text-xs tracking-[0.2em] hover:bg-white/5 transition">
+                        Painel de Controle
+                    </button>
+                </div>
+            </div>
+
+            <div id="lista-servidores" class="hidden fade-in">
+                <div class="flex items-center justify-between mb-8">
+                    <h2 class="text-3xl font-black uppercase tracking-tighter italic">// SERVIDORES_VINCULADOS</h2>
+                    <span class="text-[9px] font-mono text-white/20 uppercase tracking-[0.3em]">Status: Conectado</span>
+                </div>
+                <div class="border-b border-white/10 mb-8 pb-4">
+                    <p class="text-white font-bold text-sm">Seus Servidores Ativos</p>
+                    <p class="text-neutral-500 text-[10px] uppercase tracking-widest font-mono">MongoDB Sync Active</p>
+                </div>
+                
+                <div id="container-servidores" class="grid md:grid-cols-2 gap-4"></div>
+            </div>
+
+            <div id="config-limpeza" class="hidden fade-in max-w-2xl mx-auto">
+                <div class="bw-border p-10 bg-black/40 backdrop-blur-md">
+                    <div class="flex items-center gap-4 mb-10">
+                        <div class="w-12 h-1 bg-white"></div>
+                        <h2 id="nome-servidor-atual" class="text-2xl font-extrabold uppercase tracking-tighter text-white">---</h2>
+                    </div>
+                    
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-[10px] uppercase tracking-widest text-white/40 mb-2 font-bold">Discord Channel ID</label>
+                            <input type="text" id="canal_id" placeholder="ID do Canal" 
+                                class="w-full bg-black/30 border border-white/10 p-4 font-mono text-sm text-white focus:border-white outline-none transition">
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] uppercase tracking-[0.3em] text-white/40 mb-3 font-bold">Retention Period</label>
+                            <select id="dias" class="w-full bg-black/30 border border-white/10 p-4 font-mono text-xs text-white outline-none cursor-pointer">
+                                <option value="1">24 Horas (1 dia)</option>
+                                <option value="3">72 Horas (3 dias)</option>
+                                <option value="7">168 Horas (7 dias)</option>
+                            </select>
+                        </div>
+
+                        <button onclick="enviarConfiguracao()" class="w-full bg-white text-black py-4 font-bold uppercase text-xs tracking-widest hover:bg-neutral-200 transition flex items-center justify-center gap-3">
+                            <i class="ph ph-arrows-clockwise font-bold" id="icon-sync"></i> Sincronizar MongoDB
+                        </button>
+
+                        <div id="status_msg" class="text-[10px] uppercase tracking-widest text-center mt-4 hidden font-black"></div>
+                        
+                        <button onclick="abrirListaServidores()" class="text-[10px] text-white/30 hover:text-white uppercase tracking-widest block mx-auto mt-6 transition font-bold">
+                            ← Voltar para a lista
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="py-10 border-t border-white/10 bg-black text-center mt-auto">
+            <p class="text-xs text-white/50 uppercase tracking-[0.5em]">&copy; 2026 AMZ Studios.</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

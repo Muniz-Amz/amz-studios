@@ -1,0 +1,20 @@
+# Ignorar chaves e credenciais locais (Segurança Crítica)
+backend/.env
+.env
+
+# Ignorar arquivos temporários e caches do Python
+backend/__pycache__/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Ignorar ambientes virtuais locais (se você usar venv)
+venv/
+.venv/
+env/
+
+# Ignorar arquivos de sistema
+.DS_Store
+Thumbs.db

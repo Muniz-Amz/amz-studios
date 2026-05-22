@@ -1,0 +1,113 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap');
+
+body { 
+    font-family: 'Inter', sans-serif; 
+    background-color: #000; 
+    color: #fff; 
+    scroll-behavior: smooth;
+}
+
+/* B&W Estilo Premium */
+.bw-border { 
+    border: 1px solid #1a1a1a; 
+    transition: all 0.3s ease;
+}
+
+.bw-border:hover { 
+    border-color: #fff; 
+}
+
+/* --- NOVO FUNDO DO PAINEL --- */
+#painel-loritta {
+    background-color: #0a0a0a;
+    background-image: radial-gradient(circle at top right, #111, #050505);
+}
+
+/* --- ESTILO DOS CARDS DE SERVIDOR --- */
+.server-card {
+    background: #111;
+    border: 1px solid #1a1a1a;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.server-card:hover {
+    border-color: #ffffff; /* Ajustado para seu B&W estrito */
+    background: #161616;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(255, 255, 255, 0.05);
+}
+
+.server-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    filter: grayscale(100%);
+    transition: filter 0.3s ease;
+}
+
+.server-card:hover .server-icon {
+    filter: grayscale(0%);
+}
+
+/* --- TIPOGRAFIA E BOTÕES --- */
+.font-mono { 
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.btn-config {
+    background-color: #ffffff;
+    color: #000000;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    transition: all 0.3s ease;
+}
+
+.btn-config:hover {
+    background-color: #cccccc;
+}
+
+/* Espaçamento extra para compensar o menu fixo ao rolar */
+section { 
+    scroll-margin-top: 80px;
+}
+
+/* Scrollbar customizada AMZ */
+::-webkit-scrollbar { 
+    width: 6px; 
+}
+
+::-webkit-scrollbar-track { 
+    background: #000;
+}
+
+::-webkit-scrollbar-thumb { 
+    background: #1a1a1a; 
+    border-radius: 10px; 
+}
+
+::-webkit-scrollbar-thumb:hover { 
+    background: #333;
+}
+
+/* Animação suave de transição de telas */
+.fade-in { 
+    animation: fadeIn 0.5s ease-in-out forwards;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Utilitários de visibilidade do JS */
+.hidden {
+    display: none !important;
+}
