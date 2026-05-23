@@ -1,7 +1,7 @@
-// Configuração da API
+// ==========================================
+// CONFIGURAÇÕES E URLS
+// ==========================================
 const API_URL = 'https://amz-studios-api.onrender.com';
-
-// URL oficial do OAuth2 padrão (com a barra normal no final)
 const DISCORD_LOGIN_URL = "https://discord.com/oauth2/authorize?client_id=1479103284064026787&response_type=code&redirect_uri=https%3A%2F%2Fmuniz-amz.github.io%2Famz-studios%2F&scope=identify+guilds";
 
 // ==========================================
@@ -9,15 +9,12 @@ const DISCORD_LOGIN_URL = "https://discord.com/oauth2/authorize?client_id=147910
 // ==========================================
 
 function acessarTelaBot() {
-    // Esconde a página principal do Hub
     document.getElementById('site-principal').classList.add('hidden');
     
-    // Mostra o container do painel
     const painel = document.getElementById('painel-loritta');
     painel.classList.remove('hidden');
     painel.classList.add('flex');
     
-    // Mostra SEMPRE a tela de introdução primeiro (para exibir o botão "Me Adicione")
     document.getElementById('bot-landing').classList.remove('hidden');
     document.getElementById('lista-servidores').classList.add('hidden');
     document.getElementById('config-limpeza').classList.add('hidden');
@@ -28,7 +25,6 @@ function abrirListaServidores() {
     document.getElementById('config-limpeza').classList.add('hidden');
     document.getElementById('lista-servidores').classList.remove('hidden');
     
-    // Dispara a segurança para conferir o login do administrador
     verificarAutenticacao();
 }
 
@@ -59,7 +55,8 @@ async function verificarAutenticacao() {
             const dados = await response.json();
 
             if (response.ok && dados.status === "sucesso") {
-                // Salva a sessão no navegador para persistir o login
+                // SALVANDO O TOKEN E A SESSÃO
+                localStorage.setItem('discord_token', dados.access_token);
                 localStorage.setItem('servidores_amz', JSON.stringify(dados.servidores));
                 renderizarServidores(dados.servidores);
             } else {
@@ -70,7 +67,6 @@ async function verificarAutenticacao() {
             mostrarBotaoLogin("Erro ao conectar ao servidor de segurança.");
         }
     } else {
-        // Se não tem código na URL, tenta usar o que já está salvo localmente
         const sessaoSalva = localStorage.getItem('servidores_amz');
         if (sessaoSalva) {
             renderizarServidores(JSON.parse(sessaoSalva));
@@ -97,7 +93,7 @@ function renderizarServidores(servidores) {
     const container = document.getElementById('container-servidores');
     
     if (servidores.length === 0) {
-        container.innerHTML = '<p class="text-white/40 text-xs py-4">Você não é Administrador de nenhum servidor em comum com o Celestial Bot.</p>';
+        container.innerHTML = '<p class="text-white/40 text-xs py-4">Você não é Administrador de nenhum servidor em comum.</p>';
         return;
     }
 
@@ -113,7 +109,7 @@ function renderizarServidores(servidores) {
 }
 
 // ==========================================
-// CONFIGURAÇÕES DO SERVIDOR (SINCRONIZADO COM INDEX.HTML)
+// CONFIGURAÇÕES DO SERVIDOR
 // ==========================================
 function configurarServidor(id, nome) {
     document.getElementById('lista-servidores').classList.add('hidden');
@@ -126,12 +122,20 @@ function configurarServidor(id, nome) {
 async function enviarConfiguracao() {
     const serverId = document.getElementById('canal_id').dataset.id;
     const canalInput = document.getElementById('canal_id').value;
-    const diasSelect = document.getElementById('dias').value; // ID correto do select no HTML
+    const diasSelect = document.getElementById('dias').value;
     const statusMsg = document.getElementById('status_msg');
     const iconSync = document.getElementById('icon-sync');
+    
+    // PEGANDO O TOKEN SALVO
+    const token = localStorage.getItem('discord_token');
 
     if (!canalInput) {
-        alert('Por favor, insira o ID do canal do Discord.');
+        alert('Por favor, insira o ID do canal.');
+        return;
+    }
+
+    if (!token) {
+        alert('Sessão expirada. Por favor, logue novamente.');
         return;
     }
 
@@ -145,9 +149,13 @@ async function enviarConfiguracao() {
     try {
         if(iconSync) iconSync.classList.add('animate-spin');
         
+        // ENVIANDO O TOKEN NO CABEÇALHO (AUTHORIZATION)
         const response = await fetch(`${API_URL}/api/config`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` 
+            },
             body: JSON.stringify(dados)
         });
         
@@ -162,17 +170,17 @@ async function enviarConfiguracao() {
             }
             alert('Configurações salvas com sucesso!');
         } else {
-            alert('Erro ao salvar: ' + (resultado.erro || 'Resposta inválida do servidor.'));
+            alert('Erro de permissão: ' + (resultado.erro || 'Resposta inválida do servidor.'));
         }
     } catch (e) {
         console.error('Erro ao salvar:', e);
         if (iconSync) iconSync.classList.remove('animate-spin');
-        alert('Erro ao conectar na API para salvar configurações.');
+        alert('Erro ao conectar na API.');
     }
 }
 
 // ==========================================
-// INTERCEPTADOR DE REDIRECIONAMENTO PADRÃO
+// INICIALIZAÇÃO
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -183,7 +191,6 @@ document.addEventListener("DOMContentLoaded", () => {
         
         verificarAutenticacao();
         
-        // Limpa a URL de forma limpa (?code=...) removendo o lixo visual da barra
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 });

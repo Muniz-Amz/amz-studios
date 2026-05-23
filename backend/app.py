@@ -20,6 +20,34 @@ REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "").strip()
 
 DISCORD_API_URL = "https://discord.com/api/v10"
 
+# ==========================================
+# FUNÇÃO DE SEGURANÇA (VERIFICADOR)
+# ==========================================
+def verificar_admin(token, server_id):
+    """
+    Pergunta ao Discord em tempo real se o usuário detém o token
+    é Admin no servidor especificado.
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+    response = requests.get(f"{DISCORD_API_URL}/users/@me/guilds", headers=headers)
+    
+    if response.status_code != 200:
+        return False
+    
+    guilds = response.json()
+    
+    for guild in guilds:
+        if str(guild.get("id")) == str(server_id):
+            # 0x8 é o bitmask para Administrador no Discord
+            permissions = int(guild.get("permissions", 0))
+            return (permissions & 0x8) == 0x8
+            
+    return False
+
+# ==========================================
+# ROTAS DA API
+# ==========================================
+
 @app.route("/api/auth/callback", methods=["POST"])
 def discord_callback():
     dados_frontend = request.json
@@ -38,17 +66,15 @@ def discord_callback():
     
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     
-    # Faz a requisição ao Discord
     token_response = requests.post(f"{DISCORD_API_URL}/oauth2/token", data=data, headers=headers)
     
-    # Debug: Se falhar, imprime o erro real nos logs do Render
     if token_response.status_code != 200:
-        print(f"[DEBUG] Erro Discord: {token_response.text}")
         return jsonify({"erro": "Falha ao obter token do Discord", "detalhe": token_response.text}), 400
         
-    access_token = token_response.json().get("access_token")
+    token_data = token_response.json()
+    access_token = token_data.get("access_token")
 
-    # Busca os servidores do usuário
+    # Busca servidores para retornar ao frontend
     user_headers = {"Authorization": f"Bearer {access_token}"}
     guilds_response = requests.get(f"{DISCORD_API_URL}/users/@me/guilds", headers=user_headers)
     
@@ -73,17 +99,31 @@ def discord_callback():
 
     return jsonify({
         "status": "sucesso",
+        "access_token": access_token, # Retornando o token para o front salvar
         "servidores": servidores_autorizados
     }), 200
 
 @app.route("/api/config", methods=["POST"])
 def receber_config():
+    # 1. Pega o token do cabeçalho da requisição
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify({"status": "erro", "mensagem": "Token não fornecido"}), 401
+    
+    token = auth_header.split(" ")[1]
+    
+    # 2. Pega os dados
     dados = request.json
     server_id = dados.get("id")
     
     if not server_id:
         return jsonify({"status": "erro", "mensagem": "ID do servidor inválido."}), 400
     
+    # 3. VALIDAÇÃO DE SEGURANÇA (O Pulo do Gato)
+    if not verificar_admin(token, server_id):
+        return jsonify({"status": "erro", "mensagem": "Acesso negado: Você não é mais administrador deste servidor."}), 403
+    
+    # 4. Salva no banco apenas se a validação passou
     try:
         futuro = asyncio.run_coroutine_threadsafe(salvar_config(server_id, dados), bot.loop)
         futuro.result()
