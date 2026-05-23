@@ -1,28 +1,33 @@
 // Configuração da API
 const API_URL = 'https://amz-studios-api.onrender.com';
 
-// ⚠️ PASSO IMPORTANTE: Cole aqui dentro das aspas a NOVA URL que você copiou do gerador do Discord!
-const DISCORD_LOGIN_URL = "https://discord.com/oauth2/authorize?client_id=1479103284064026787&response_type=code&redirect_uri=https%3A%2F%2Fmuniz-amz.github.io%2Famz-studios.github.io%2F&scope=identify+guilds"; 
+// URL oficial do OAuth2 padrão (com a barra normal no final)
+const DISCORD_LOGIN_URL = "https://discord.com/oauth2/authorize?client_id=1479103284064026787&response_type=code&redirect_uri=https%3A%2F%2Fmuniz-amz.github.io%2Famz-studios.github.io%2F&scope=identify+guilds";
 
 // ==========================================
-// FUNÇÕES DE NAVEGAÇÃO CORRIGIDAS
+// FUNÇÕES DE NAVEGAÇÃO
 // ==========================================
 
 function acessarTelaBot() {
+    // Esconde a página principal do Hub
     document.getElementById('site-principal').classList.add('hidden');
     
+    // Mostra o container do painel
     const painel = document.getElementById('painel-loritta');
     painel.classList.remove('hidden');
     painel.classList.add('flex');
     
+    // Verifica se o usuário já possui um login salvou no navegador
     const sessaoSalva = localStorage.getItem('servidores_amz');
     
     if (sessaoSalva) {
+        // Se já está logado, pula a introdução e vai direto para a lista de servidores
         document.getElementById('bot-landing').classList.add('hidden');
         document.getElementById('config-limpeza').classList.add('hidden');
         document.getElementById('lista-servidores').classList.remove('hidden');
         renderizarServidores(JSON.parse(sessaoSalva));
     } else {
+        // Se não está logado, mostra a sua tela do AMZ BOT (Apresentação com os 3 botões)
         document.getElementById('bot-landing').classList.remove('hidden');
         document.getElementById('lista-servidores').classList.add('hidden');
         document.getElementById('config-limpeza').classList.add('hidden');
@@ -33,6 +38,8 @@ function abrirListaServidores() {
     document.getElementById('bot-landing').classList.add('hidden');
     document.getElementById('config-limpeza').classList.add('hidden');
     document.getElementById('lista-servidores').classList.remove('hidden');
+    
+    // Dispara a segurança para conferir o login do administrador
     verificarAutenticacao();
 }
 
@@ -47,10 +54,7 @@ function voltarAoInicioBot() {
 
 async function verificarAutenticacao() {
     const container = document.getElementById('container-servidores');
-    
-    // Pega o código independente de onde ele esteja (na ? ou no #)
-    const buscaNaUrl = window.location.search || window.location.hash;
-    const urlParams = new URLSearchParams(buscaNaUrl.replace('#/', '?').replace('#', '?'));
+    const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
 
     if (code) {
@@ -66,6 +70,7 @@ async function verificarAutenticacao() {
             const dados = await response.json();
 
             if (response.ok && dados.status === "sucesso") {
+                // Salva a sessão no navegador para persistir o login
                 localStorage.setItem('servidores_amz', JSON.stringify(dados.servidores));
                 renderizarServidores(dados.servidores);
             } else {
@@ -76,6 +81,7 @@ async function verificarAutenticacao() {
             mostrarBotaoLogin("Erro ao conectar ao servidor de segurança.");
         }
     } else {
+        // Se não tem código na URL, tenta usar o que já está salvo localmente
         const sessaoSalva = localStorage.getItem('servidores_amz');
         if (sessaoSalva) {
             renderizarServidores(JSON.parse(sessaoSalva));
@@ -118,7 +124,7 @@ function renderizarServidores(servidores) {
 }
 
 // ==========================================
-// CONFIGURAÇÕES DO SERVIDOR (SINCRONIZADO)
+// CONFIGURAÇÕES DO SERVIDOR (SINCRONIZADO COM INDEX.HTML)
 // ==========================================
 function configurarServidor(id, nome) {
     document.getElementById('lista-servidores').classList.add('hidden');
@@ -131,7 +137,7 @@ function configurarServidor(id, nome) {
 async function enviarConfiguracao() {
     const serverId = document.getElementById('canal_id').dataset.id;
     const canalInput = document.getElementById('canal_id').value;
-    const diasSelect = document.getElementById('dias').value; 
+    const diasSelect = document.getElementById('dias').value; // ID correto do select no HTML
     const statusMsg = document.getElementById('status_msg');
     const iconSync = document.getElementById('icon-sync');
 
@@ -177,30 +183,18 @@ async function enviarConfiguracao() {
 }
 
 // ==========================================
-// INTERCEPTADOR VIA SESSIONSTORAGE (ANTI-404 DEFINITIVO)
+// INTERCEPTADOR DE REDIRECIONAMENTO PADRÃO
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
-    // Tenta pegar o código que a página 404 guardou para nós
-    const code = sessionStorage.getItem('discord_auth_code');
-    
-    if (code) {
-        // Limpa imediatamente o código da memória para não rodar em loop no F5
-        sessionStorage.removeItem('discord_auth_code');
-
-        // 1. Abre os containers corretos do painel visualmente de forma imediata
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('code')) {
         acessarTelaBot();
         document.getElementById('bot-landing').classList.add('hidden');
         document.getElementById('lista-servidores').classList.remove('hidden');
         
-        // 2. Cria o parâmetro fake temporário que a sua função verificarAutenticacao() original espera ler
-        const novaUrl = new URL(window.location.href);
-        novaUrl.searchParams.set('code', code);
-        window.history.replaceState({}, document.title, novaUrl.toString());
-
-        // 3. Faz a chamada de segurança para o seu backend no Render
         verificarAutenticacao();
         
-        // 4. Limpa a barra do navegador deixando o link 100% limpo
+        // Limpa a URL de forma limpa (?code=...) removendo o lixo visual da barra
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 });
