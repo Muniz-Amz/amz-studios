@@ -1,5 +1,5 @@
 // Configuração da API
-const API_URL = 'https://SUA-API-NO-RENDER.onrender.com';
+const API_URL = 'https://amz-studios-api.onrender.com';
 
 // Funções de Navegação
 function acessarTelaBot() {
