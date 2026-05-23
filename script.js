@@ -1,9 +1,8 @@
 // Configuração da API
 const API_URL = 'https://amz-studios-api.onrender.com';
 
-
-// URL oficial do OAuth2 atualizada do portal do Discord
-const DISCORD_LOGIN_URL = "https://discord.com/oauth2/authorize?client_id=1479103284064026787&response_type=code&redirect_uri=https%3A%2F%2Fmuniz-amz.github.io%2Famz-studios.github.io%2F&scope=identify+guilds"; 
+// URL oficial do OAuth2 apontando estritamente para o index.html (Evita erro 404 no GitHub Pages)
+const DISCORD_LOGIN_URL = "https://discord.com/oauth2/authorize?client_id=1479103284064026787&response_type=code&redirect_uri=https%3A%2F%2Fmuniz-amz.github.io%2Famz-studios.github.io%2Findex.html&scope=identify+guilds";
 
 // ==========================================
 // FUNÇÕES DE NAVEGAÇÃO CORRIGIDAS
@@ -23,7 +22,7 @@ function acessarTelaBot() {
     const sessaoSalva = localStorage.getItem('servidores_amz');
     
     if (sessaoSalva) {
-        // Se já está logado, pula a introdução azul e vai direto para a lista de servidores
+        // Se já está logado, pula a introdução e vai direto para a lista de servidores
         document.getElementById('bot-landing').classList.add('hidden');
         document.getElementById('config-limpeza').classList.add('hidden');
         document.getElementById('lista-servidores').classList.remove('hidden');
@@ -63,7 +62,7 @@ async function verificarAutenticacao() {
 
     // Se o usuário acabou de voltar da autorização do Discord com o código na URL
     if (code) {
-        container.innerHTML = '<p class="text-white/20 animate-pulse">Verificando suas permissões de Administrador...</p>';
+        container.innerHTML = '<p class="text-white/20 animate-pulse text-xs">Verificando suas permissões de Administrador...</p>';
         
         try {
             const response = await fetch(`${API_URL}/api/auth/callback`, {
@@ -118,8 +117,8 @@ function renderizarServidores(servidores) {
     }
 
     container.innerHTML = servidores.map(s => `
-        <div class="bw-border p-6 bg-black flex justify-between items-center w-full">
-            <h3 class="font-bold text-white">${s.nome}</h3>
+        <div class="bw-border p-6 bg-black flex justify-between items-center w-full border border-white/10">
+            <h3 class="font-bold text-white text-sm">${s.nome}</h3>
             <button onclick="configurarServidor('${s.id}', '${s.nome}')" 
                     class="bg-white text-black px-4 py-2 text-[10px] font-black uppercase hover:bg-black hover:text-white border border-white transition-colors">
                 Configurar
@@ -129,24 +128,40 @@ function renderizarServidores(servidores) {
 }
 
 // ==========================================
-// CONFIGURAÇÕES DO SERVIDOR
+// CONFIGURAÇÕES DO SERVIDOR (SINCRONIZADO COM INDEX.HTML)
 // ==========================================
 function configurarServidor(id, nome) {
     document.getElementById('lista-servidores').classList.add('hidden');
     document.getElementById('config-limpeza').classList.remove('hidden');
     document.getElementById('nome-servidor-atual').innerText = nome;
+    document.getElementById('canal_id').value = ""; // Limpa o input para novos dados
     document.getElementById('canal_id').dataset.id = id;
 }
 
-async function salvarConfiguracoes() {
-    const serverId = document.getElementById('canal_id').dataset.id; 
+// Batendo certinho com o onclick="enviarConfiguracao()" do seu index.html
+async function enviarConfiguracao() {
+    const serverId = document.getElementById('canal_id').dataset.id;
+    const canalInput = document.getElementById('canal_id').value;
+    const diasSelect = document.getElementById('dias').value; // ID correto do select no HTML
+    const statusMsg = document.getElementById('status_msg');
+    const iconSync = document.getElementById('icon-sync');
+
+    if (!canalInput) {
+        alert('Por favor, insira o ID do canal do Discord.');
+        return;
+    }
+
     const dados = {
         id: serverId,
         nome: document.getElementById('nome-servidor-atual').innerText,
-        dias: document.getElementById('input-dias').value 
+        canal_id: canalInput,
+        dias: diasSelect 
     };
 
     try {
+        // Efeito visual de loading no ícone
+        if(iconSync) iconSync.classList.add('animate-spin');
+        
         const response = await fetch(`${API_URL}/api/config`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -154,12 +169,22 @@ async function salvarConfiguracoes() {
         });
         
         const resultado = await response.json();
+        
+        if (iconSync) iconSync.classList.remove('animate-spin');
+
         if(resultado.status === 'sucesso') {
+            if(statusMsg) {
+                statusMsg.innerText = "Sincronizado com MongoDB com sucesso!";
+                statusMsg.className = "text-[10px] uppercase tracking-widest text-center mt-4 text-green-500 font-black block";
+            }
             alert('Configurações salvas com sucesso!');
+        } else {
+            alert('Erro ao salvar: ' + (resultado.erro || 'Resposta inválida do servidor.'));
         }
     } catch (e) {
         console.error('Erro ao salvar:', e);
-        alert('Erro ao salvar configurações.');
+        if (iconSync) iconSync.classList.remove('animate-spin');
+        alert('Erro ao conectar na API para salvar configurações.');
     }
 }
 
@@ -169,15 +194,15 @@ async function salvarConfiguracoes() {
 document.addEventListener("DOMContentLoaded", () => {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('code')) {
-        // 1. Abre os containers corretos do painel visualmente
+        // 1. Abre os containers corretos do painel visualmente de forma imediata
         acessarTelaBot();
         document.getElementById('bot-landing').classList.add('hidden');
         document.getElementById('lista-servidores').classList.remove('hidden');
         
-        // 2. Faz a chamada de segurança para ler o código
+        // 2. Faz a chamada de segurança para ler o código enviado pelo Discord
         verificarAutenticacao();
         
-        // 3. Limpa imediatamente o "?code=..." da URL para evitar bugs de F5
+        // 3. Limpa imediatamente o "?code=..." da URL mas mantém o arquivo index.html estável
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 });
