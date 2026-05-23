@@ -2,7 +2,7 @@
 const API_URL = 'https://amz-studios-api.onrender.com';
 
 // URL oficial do OAuth2 padrão (com a barra normal no final)
-const DISCORD_LOGIN_URL = "https://discord.com/oauth2/authorize?client_id=1479103284064026787&response_type=code&redirect_uri=https%3A%2F%2Fmuniz-amz.github.io%2Famz-studios.github.io%2F&scope=identify+guilds";
+const DISCORD_LOGIN_URL = "https://discord.com/oauth2/authorize?client_id=1479103284064026787&response_type=code&redirect_uri=https%3A%2F%2Fmuniz-amz.github.io%2Famz-studios%2F&scope=identify+guilds";
 
 // ==========================================
 // FUNÇÕES DE NAVEGAÇÃO
