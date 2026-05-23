@@ -13,9 +13,10 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
-CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
-REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI")
+# Proteção contra espaços acidentais nas variáveis de ambiente
+CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "").strip()
+CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "").strip()
+REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "").strip()
 
 DISCORD_API_URL = "https://discord.com/api/v10"
 
@@ -34,14 +35,20 @@ def discord_callback():
         "code": code,
         "redirect_uri": REDIRECT_URI
     }
+    
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     
+    # Faz a requisição ao Discord
     token_response = requests.post(f"{DISCORD_API_URL}/oauth2/token", data=data, headers=headers)
+    
+    # Debug: Se falhar, imprime o erro real nos logs do Render
     if token_response.status_code != 200:
-        return jsonify({"erro": "Falha ao obter token do Discord"}), 400
+        print(f"[DEBUG] Erro Discord: {token_response.text}")
+        return jsonify({"erro": "Falha ao obter token do Discord", "detalhe": token_response.text}), 400
         
     access_token = token_response.json().get("access_token")
 
+    # Busca os servidores do usuário
     user_headers = {"Authorization": f"Bearer {access_token}"}
     guilds_response = requests.get(f"{DISCORD_API_URL}/users/@me/guilds", headers=user_headers)
     
@@ -55,7 +62,6 @@ def discord_callback():
         permissions = int(guild.get("permissions", 0))
         is_admin = (permissions & 0x8) == 0x8
         
-        # Correção importante: Busca o servidor de forma segura no cache do bot
         bot_guild = bot.get_guild(int(guild["id"]))
         
         if is_admin and bot_guild:
@@ -79,29 +85,21 @@ def receber_config():
         return jsonify({"status": "erro", "mensagem": "ID do servidor inválido."}), 400
     
     try:
-        # Usa o próprio loop que já está rodando o bot para salvar no banco
         futuro = asyncio.run_coroutine_threadsafe(salvar_config(server_id, dados), bot.loop)
-        futuro.result() # Espera a execução acabar
+        futuro.result()
         return jsonify({"status": "sucesso", "mensagem": "Configurações salvas!"}), 200
     except Exception as e:
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
 
-# ==========================================
-# INICIALIZAÇÃO COMBINADA (FLASK + DISCORD)
-# ==========================================
+# Inicialização combinada
 async def main():
-    # 1. Configura e inicia o servidor Flask em segundo plano assíncrono
     port = int(os.getenv("PORT", 5000))
-    
-    # Executa o Flask de forma que ele não trave o bot do Discord
     import werkzeug.serving
     loop = asyncio.get_event_loop()
     
-    # Inicia o servidor web dentro do loop assíncrono global
     loop.run_in_executor(None, lambda: werkzeug.serving.run_simple("0.0.0.0", port, app, use_debugger=False, use_reloader=False))
-    print(f"[API] Servidor Flask iniciado com sucesso na porta {port}")
+    print(f"[API] Servidor Flask iniciado na porta {port}")
 
-    # 2. Inicia o Bot do Discord na mesma Thread compartilhando o loop
     async with bot:
         await bot.start(os.getenv("DISCORD_TOKEN"))
 

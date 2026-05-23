@@ -17,21 +17,10 @@ function acessarTelaBot() {
     painel.classList.remove('hidden');
     painel.classList.add('flex');
     
-    // Verifica se o usuário já possui um login salvou no navegador
-    const sessaoSalva = localStorage.getItem('servidores_amz');
-    
-    if (sessaoSalva) {
-        // Se já está logado, pula a introdução e vai direto para a lista de servidores
-        document.getElementById('bot-landing').classList.add('hidden');
-        document.getElementById('config-limpeza').classList.add('hidden');
-        document.getElementById('lista-servidores').classList.remove('hidden');
-        renderizarServidores(JSON.parse(sessaoSalva));
-    } else {
-        // Se não está logado, mostra a sua tela do AMZ BOT (Apresentação com os 3 botões)
-        document.getElementById('bot-landing').classList.remove('hidden');
-        document.getElementById('lista-servidores').classList.add('hidden');
-        document.getElementById('config-limpeza').classList.add('hidden');
-    }
+    // Mostra SEMPRE a tela de introdução primeiro (para exibir o botão "Me Adicione")
+    document.getElementById('bot-landing').classList.remove('hidden');
+    document.getElementById('lista-servidores').classList.add('hidden');
+    document.getElementById('config-limpeza').classList.add('hidden');
 }
 
 function abrirListaServidores() {
