@@ -2,7 +2,7 @@
 const API_URL = 'https://amz-studios-api.onrender.com';
 
 // ⚠️ PASSO IMPORTANTE: Cole aqui dentro das aspas a NOVA URL que você copiou do gerador do Discord!
-const DISCORD_LOGIN_URL = "https://discord.com/oauth2/authorize?client_id=1479103284064026787&response_type=code&redirect_uri=https%3A%2F%2Fmuniz-amz.github.io%2Famz-studios.github.io%2F%23%2F&scope=identify+guilds"; 
+const DISCORD_LOGIN_URL = "https://discord.com/oauth2/authorize?client_id=1479103284064026787&response_type=code&redirect_uri=https%3A%2F%2Fmuniz-amz.github.io%2Famz-studios.github.io%2F&scope=identify+guilds"; 
 
 // ==========================================
 // FUNÇÕES DE NAVEGAÇÃO CORRIGIDAS
@@ -177,21 +177,30 @@ async function enviarConfiguracao() {
 }
 
 // ==========================================
-// INTERCEPTADOR ANTI-404 (CAPTURA O HASH DO DISCORD)
+// INTERCEPTADOR VIA SESSIONSTORAGE (ANTI-404 DEFINITIVO)
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
-    const buscaNaUrl = window.location.search || window.location.hash;
+    // Tenta pegar o código que a página 404 guardou para nós
+    const code = sessionStorage.getItem('discord_auth_code');
     
-    if (buscaNaUrl.includes('code=')) {
-        // Abre as telas certas do robô
+    if (code) {
+        // Limpa imediatamente o código da memória para não rodar em loop no F5
+        sessionStorage.removeItem('discord_auth_code');
+
+        // 1. Abre os containers corretos do painel visualmente de forma imediata
         acessarTelaBot();
         document.getElementById('bot-landing').classList.add('hidden');
         document.getElementById('lista-servidores').classList.remove('hidden');
         
-        // Manda rodar a verificação
+        // 2. Cria o parâmetro fake temporário que a sua função verificarAutenticacao() original espera ler
+        const novaUrl = new URL(window.location.href);
+        novaUrl.searchParams.set('code', code);
+        window.history.replaceState({}, document.title, novaUrl.toString());
+
+        // 3. Faz a chamada de segurança para o seu backend no Render
         verificarAutenticacao();
         
-        // Limpa a barra do navegador tirando o # e o code para ficar profissional
+        // 4. Limpa a barra do navegador deixando o link 100% limpo
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 });
