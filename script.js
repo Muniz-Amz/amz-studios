@@ -4,19 +4,31 @@ const API_URL = 'https://amz-studios-api.onrender.com';
 // URL oficial do OAuth2 apontando para a raiz do seu GitHub Pages
 const DISCORD_LOGIN_URL = "https://discord.com/oauth2/authorize?client_id=1479103284064026787&response_type=code&redirect_uri=https%3A%2F%2Fmuniz-amz.github.io%2Famz-studios.github.io%2F&scope=identify+guilds"; 
 
-// Funções de Navegação
+// ==========================================
+// FUNÇÕES DE NAVEGAÇÃO
+// ==========================================
+
 function acessarTelaBot() {
+    // 1. Esconde a página inicial do site principal da AMZ Studios
     document.getElementById('site-principal').classList.add('hidden');
-    document.getElementById('painel-loritta').classList.remove('hidden');
-    document.getElementById('painel-loritta').classList.add('flex');
     
-    // Deixa a landing page do bot visível primeiro (sua tela original)
+    // 2. Mostra a estrutura do painel do Bot
+    const painel = document.getElementById('painel-loritta');
+    painel.classList.remove('hidden');
+    painel.classList.add('flex');
+    
+    // 3. EXIBE A SUA TELA ORIGINAL (Landing do Bot com as opções do Usuário)
     document.getElementById('bot-landing').classList.remove('hidden');
+    
+    // 4. Garante que as outras telas internas comecem escondidas
     document.getElementById('lista-servidores').classList.add('hidden');
     document.getElementById('config-limpeza').classList.add('hidden');
 
-    // Roda a checagem em background para saber se já processa o código do Discord
-    verificarAutenticacao(false); 
+    // Executa a checagem em background apenas caso o usuário já tenha retornado do Discord com um código ativo
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('code') || window.servidoresAutenticados) {
+        verificarAutenticacao(false);
+    }
 }
 
 function voltarAoInicioBot() {
@@ -25,7 +37,7 @@ function voltarAoInicioBot() {
 }
 
 function abrirListaServidores() {
-    // Quando o usuário clica em prosseguir/configurar, chamamos a checagem forçando a exibição do login se necessário
+    // Quando o usuário clica no botão para configurar/abrir a lista dentro da tela do bot, exigimos a checagem/login
     verificarAutenticacao(true);
 }
 
@@ -35,15 +47,14 @@ function abrirListaServidores() {
 
 async function verificarAutenticacao(forçarExibicao = false) {
     const container = document.getElementById('container-servidores');
-    
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
 
     if (code) {
-        // Limpa o código da URL para o visual ficar limpo
+        // Limpa o código da URL para deixar o link curto e limpo
         window.history.replaceState({}, document.title, window.location.pathname);
         
-        // Se há um código, precisamos esconder a landing page e mostrar a lista carregando
+        // Esconde a landing do bot e ativa a visualização da lista com o loading animado
         document.getElementById('bot-landing').classList.add('hidden');
         document.getElementById('config-limpeza').classList.add('hidden');
         document.getElementById('lista-servidores').classList.remove('hidden');
@@ -70,13 +81,13 @@ async function verificarAutenticacao(forçarExibicao = false) {
             mostrarBotaoLogin("Erro ao conectar ao servidor de segurança.");
         }
     } else if (window.servidoresAutenticados) {
-        // Se o usuário já logou nesta sessão, abre a lista direto
+        // Se o usuário já autenticou na sessão atual, avança para a lista de servidores direto
         document.getElementById('bot-landing').classList.add('hidden');
         document.getElementById('config-limpeza').classList.add('hidden');
         document.getElementById('lista-servidores').classList.remove('hidden');
         renderizarServidores(window.servidoresAutenticados);
     } else {
-        // Se não está logado e o usuário clicou para prosseguir (forçarExibicao = true)
+        // Se não tem login e o usuário forçou a abertura clicando para prosseguir
         if (forçarExibicao) {
             document.getElementById('bot-landing').classList.add('hidden');
             document.getElementById('config-limpeza').classList.add('hidden');
@@ -86,7 +97,6 @@ async function verificarAutenticacao(forçarExibicao = false) {
     }
 }
 
-// Injeta o botão de login dentro do container respeitando as suas classes do Tailwind
 function mostrarBotaoLogin(mensagem) {
     const container = document.getElementById('container-servidores');
     container.innerHTML = `
@@ -154,7 +164,7 @@ async function salvarConfiguracoes() {
     }
 }
 
-// Se o cara voltar do redirecionamento do Discord (?code= na URL), o site já chama a tela do bot de forma automática
+// Intercepta se o usuário acabou de voltar do login do Discord externo
 document.addEventListener("DOMContentLoaded", () => {
     if (window.location.search.includes('code=')) {
         acessarTelaBot();
