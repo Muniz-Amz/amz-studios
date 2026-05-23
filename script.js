@@ -1,66 +1,58 @@
 // Configuração da API
 const API_URL = 'https://amz-studios-api.onrender.com';
 
-// URL oficial do OAuth2 apontando estritamente para o index.html (Evita erro 404 no GitHub Pages)
-const DISCORD_LOGIN_URL = "https://discord.com/oauth2/authorize?client_id=1479103284064026787&response_type=code&redirect_uri=https%3A%2F%2Fmuniz-amz.github.io%2Famz-studios.github.io%2Findex.html&scope=identify+guilds";
+// ⚠️ PASSO IMPORTANTE: Cole aqui dentro das aspas a NOVA URL que você copiou do gerador do Discord!
+const DISCORD_LOGIN_URL = "https://discord.com/oauth2/authorize?client_id=1479103284064026787&response_type=code&redirect_uri=https%3A%2F%2Fmuniz-amz.github.io%2Famz-studios.github.io%2F%23%2F&scope=identify+guilds"; 
 
 // ==========================================
 // FUNÇÕES DE NAVEGAÇÃO CORRIGIDAS
 // ==========================================
 
-// 1. Quando clica em "Acessar Painel do Bot" na Home do Hub
 function acessarTelaBot() {
-    // Esconde a página principal do Hub
     document.getElementById('site-principal').classList.add('hidden');
     
-    // Mostra o container do painel
     const painel = document.getElementById('painel-loritta');
     painel.classList.remove('hidden');
     painel.classList.add('flex');
     
-    // Verifica se o usuário já possui um login salvo no navegador
     const sessaoSalva = localStorage.getItem('servidores_amz');
     
     if (sessaoSalva) {
-        // Se já está logado, pula a introdução e vai direto para a lista de servidores
         document.getElementById('bot-landing').classList.add('hidden');
         document.getElementById('config-limpeza').classList.add('hidden');
         document.getElementById('lista-servidores').classList.remove('hidden');
         renderizarServidores(JSON.parse(sessaoSalva));
     } else {
-        // Se não está logado, mostra a sua tela do AMZ BOT (Apresentação com os 3 botões)
         document.getElementById('bot-landing').classList.remove('hidden');
         document.getElementById('lista-servidores').classList.add('hidden');
         document.getElementById('config-limpeza').classList.add('hidden');
     }
 }
 
-// 2. Quando clica no botão "Painel de Controle" dentro da tela do AMZ BOT
 function abrirListaServidores() {
     document.getElementById('bot-landing').classList.add('hidden');
     document.getElementById('config-limpeza').classList.add('hidden');
     document.getElementById('lista-servidores').classList.remove('hidden');
-    
-    // Dispara a segurança para conferir o login do administrador
     verificarAutenticacao();
 }
 
-// 3. Voltar para a Home do Hub
 function voltarAoInicioBot() {
     document.getElementById('painel-loritta').classList.add('hidden');
     document.getElementById('site-principal').classList.remove('hidden');
 }
 
 // ==========================================
-// SISTEMA DE SEGURANÇA E AUTENTICAÇÃO (ESTILO LORITTA)
+// SISTEMA DE SEGURANÇA E AUTENTICAÇÃO
 // ==========================================
 
 async function verificarAutenticacao() {
     const container = document.getElementById('container-servidores');
-    const urlParams = new URLSearchParams(window.location.search);
+    
+    // Pega o código independente de onde ele esteja (na ? ou no #)
+    const buscaNaUrl = window.location.search || window.location.hash;
+    const urlParams = new URLSearchParams(buscaNaUrl.replace('#/', '?').replace('#', '?'));
     const code = urlParams.get('code');
 
-    // Se o usuário acabou de voltar da autorização do Discord com o código na URL
     if (code) {
         container.innerHTML = '<p class="text-white/20 animate-pulse text-xs">Verificando suas permissões de Administrador...</p>';
         
@@ -74,7 +66,6 @@ async function verificarAutenticacao() {
             const dados = await response.json();
 
             if (response.ok && dados.status === "sucesso") {
-                // SALVA A SESSÃO NO NAVEGADOR: É isso que faz o login persistir
                 localStorage.setItem('servidores_amz', JSON.stringify(dados.servidores));
                 renderizarServidores(dados.servidores);
             } else {
@@ -85,7 +76,6 @@ async function verificarAutenticacao() {
             mostrarBotaoLogin("Erro ao conectar ao servidor de segurança.");
         }
     } else {
-        // Se não possui código na URL, tenta buscar o que está salvo no navegador
         const sessaoSalva = localStorage.getItem('servidores_amz');
         if (sessaoSalva) {
             renderizarServidores(JSON.parse(sessaoSalva));
@@ -128,21 +118,20 @@ function renderizarServidores(servidores) {
 }
 
 // ==========================================
-// CONFIGURAÇÕES DO SERVIDOR (SINCRONIZADO COM INDEX.HTML)
+// CONFIGURAÇÕES DO SERVIDOR (SINCRONIZADO)
 // ==========================================
 function configurarServidor(id, nome) {
     document.getElementById('lista-servidores').classList.add('hidden');
     document.getElementById('config-limpeza').classList.remove('hidden');
     document.getElementById('nome-servidor-atual').innerText = nome;
-    document.getElementById('canal_id').value = ""; // Limpa o input para novos dados
+    document.getElementById('canal_id').value = ""; 
     document.getElementById('canal_id').dataset.id = id;
 }
 
-// Batendo certinho com o onclick="enviarConfiguracao()" do seu index.html
 async function enviarConfiguracao() {
     const serverId = document.getElementById('canal_id').dataset.id;
     const canalInput = document.getElementById('canal_id').value;
-    const diasSelect = document.getElementById('dias').value; // ID correto do select no HTML
+    const diasSelect = document.getElementById('dias').value; 
     const statusMsg = document.getElementById('status_msg');
     const iconSync = document.getElementById('icon-sync');
 
@@ -159,7 +148,6 @@ async function enviarConfiguracao() {
     };
 
     try {
-        // Efeito visual de loading no ícone
         if(iconSync) iconSync.classList.add('animate-spin');
         
         const response = await fetch(`${API_URL}/api/config`, {
@@ -189,20 +177,21 @@ async function enviarConfiguracao() {
 }
 
 // ==========================================
-// INTERCEPTADOR DE REDIRECIONAMENTO (MOMENTO DO RETORNO)
+// INTERCEPTADOR ANTI-404 (CAPTURA O HASH DO DISCORD)
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('code')) {
-        // 1. Abre os containers corretos do painel visualmente de forma imediata
+    const buscaNaUrl = window.location.search || window.location.hash;
+    
+    if (buscaNaUrl.includes('code=')) {
+        // Abre as telas certas do robô
         acessarTelaBot();
         document.getElementById('bot-landing').classList.add('hidden');
         document.getElementById('lista-servidores').classList.remove('hidden');
         
-        // 2. Faz a chamada de segurança para ler o código enviado pelo Discord
+        // Manda rodar a verificação
         verificarAutenticacao();
         
-        // 3. Limpa imediatamente o "?code=..." da URL mas mantém o arquivo index.html estável
+        // Limpa a barra do navegador tirando o # e o code para ficar profissional
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 });
