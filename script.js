@@ -5,39 +5,44 @@ const API_URL = 'https://amz-studios-api.onrender.com';
 const DISCORD_LOGIN_URL = "https://discord.com/oauth2/authorize?client_id=1479103284064026787&response_type=code&redirect_uri=https%3A%2F%2Fmuniz-amz.github.io%2Famz-studios.github.io%2F&scope=identify+guilds"; 
 
 // ==========================================
-// FUNÇÕES DE NAVEGAÇÃO ORIGINAIS
+// FUNÇÕES DE NAVEGAÇÃO CORRIGIDAS
 // ==========================================
 
+// 1. Quando clica em "Acessar Painel do Bot" na Home do Hub
 function acessarTelaBot() {
-    // 1. Esconde a página principal do Hub
+    // Esconde a página principal do Hub
     document.getElementById('site-principal').classList.add('hidden');
     
-    // 2. Mostra a área do painel do bot
+    // Mostra o container do painel
     const painel = document.getElementById('painel-loritta');
     painel.classList.remove('hidden');
     painel.classList.add('flex');
     
-    // 3. MOSTRA A SUA TELA DO BOT (Apresentação / Me adicione / Configurar)
+    // TRAZ DE VOLTA A SUA PÁGINA DO AMZ BOT (Apresentação com os 3 botões)
     document.getElementById('bot-landing').classList.remove('hidden');
     
-    // 4. Mantém as telas internas de configuração e servidores bem escondidas
+    // Garante que as telas internas de configuração começam estritamente escondidas
     document.getElementById('lista-servidores').classList.add('hidden');
     document.getElementById('config-limpeza').classList.add('hidden');
 }
 
+// 2. Quando clica no botão roxo/customizado "Painel de Controle" dentro da tela do AMZ BOT
+function abrirListaServidores() {
+    // Esconde a apresentação do bot que você acabou de ver
+    document.getElementById('bot-landing').classList.add('hidden');
+    document.getElementById('config-limpeza').classList.add('hidden');
+    
+    // Mostra a tela escura "//SERVIDORES_VINCULADOS"
+    document.getElementById('lista-servidores').classList.remove('hidden');
+    
+    // Dispara a segurança para conferir o login do administrador
+    verificarAutenticacao();
+}
+
+// 3. Voltar para a Home do Hub
 function voltarAoInicioBot() {
     document.getElementById('painel-loritta').classList.add('hidden');
     document.getElementById('site-principal').classList.remove('hidden');
-}
-
-function abrirListaServidores() {
-    // Abre a seção da lista de servidores
-    document.getElementById('bot-landing').classList.add('hidden');
-    document.getElementById('config-limpeza').classList.add('hidden');
-    document.getElementById('lista-servidores').classList.remove('hidden');
-    
-    // Roda a checagem de segurança apenas aqui dentro
-    verificarAutenticacao();
 }
 
 // ==========================================
@@ -49,9 +54,9 @@ async function verificarAutenticacao() {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
 
-    // Se o usuário já retornou com o token validado do Discord
+    // Se o usuário acabou de voltar da autorização do Discord
     if (code) {
-        // Limpa a URL para o link ficar curto e minimalista
+        // Limpa o "?code=..." da URL na mesma hora para não quebrar o F5 do navegador
         window.history.replaceState({}, document.title, window.location.pathname);
         
         container.innerHTML = '<p class="text-white/20 animate-pulse">Verificando suas permissões de Administrador...</p>';
@@ -76,10 +81,10 @@ async function verificarAutenticacao() {
             mostrarBotaoLogin("Erro ao conectar ao servidor de segurança.");
         }
     } else if (window.servidoresAutenticados) {
-        // Se o usuário já autenticou nesta sessão, renderiza direto os servidores dele
+        // Se já fez login nessa sessão, mostra os servidores direto
         renderizarServidores(window.servidoresAutenticados);
     } else {
-        // Se ele não está logado, injeta o botão de login dentro da sua div de servidores ativos
+        // Se não está logado, joga o botão de autenticação dentro do container de servidores ativos
         mostrarBotaoLogin("Você precisa provar que é Administrador para acessar as configurações.");
     }
 }
@@ -117,7 +122,7 @@ function renderizarServidores(servidores) {
 }
 
 // ==========================================
-// CONFIGURAÇÕES DO SERVIDOR (SUA LÓGICA ATUAL)
+// CONFIGURAÇÕES DO SERVIDOR
 // ==========================================
 function configurarServidor(id, nome) {
     document.getElementById('lista-servidores').classList.add('hidden');
@@ -151,7 +156,7 @@ async function salvarConfiguracoes() {
     }
 }
 
-// Interceptador de redirecionamento: Se o usuário acabou de voltar do Discord, abre o painel e a lista direto
+// Se o usuário acabar de voltar do Discord com o token, o sistema pula a introdução e joga ele direto na lista de servidores validados
 document.addEventListener("DOMContentLoaded", () => {
     if (window.location.search.includes('code=')) {
         acessarTelaBot();
