@@ -18,21 +18,27 @@ function acessarTelaBot() {
     painel.classList.remove('hidden');
     painel.classList.add('flex');
     
-    // TRAZ DE VOLTA A SUA PÁGINA DO AMZ BOT (Apresentação com os 3 botões)
-    document.getElementById('bot-landing').classList.remove('hidden');
+    // Verifica se o usuário já possui um login salvo no navegador
+    const sessaoSalva = localStorage.getItem('servidores_amz');
     
-    // Garante que as telas internas de configuração começam estritamente escondidas
-    document.getElementById('lista-servidores').classList.add('hidden');
-    document.getElementById('config-limpeza').classList.add('hidden');
+    if (sessaoSalva) {
+        // Se já está logado, pula a introdução azul e vai direto para a lista de servidores
+        document.getElementById('bot-landing').classList.add('hidden');
+        document.getElementById('config-limpeza').classList.add('hidden');
+        document.getElementById('lista-servidores').classList.remove('hidden');
+        renderizarServidores(JSON.parse(sessaoSalva));
+    } else {
+        // Se não está logado, mostra a sua tela do AMZ BOT (Apresentação com os 3 botões)
+        document.getElementById('bot-landing').classList.remove('hidden');
+        document.getElementById('lista-servidores').classList.add('hidden');
+        document.getElementById('config-limpeza').classList.add('hidden');
+    }
 }
 
-// 2. Quando clica no botão roxo/customizado "Painel de Controle" dentro da tela do AMZ BOT
+// 2. Quando clica no botão "Painel de Controle" dentro da tela do AMZ BOT
 function abrirListaServidores() {
-    // Esconde a apresentação do bot que você acabou de ver
     document.getElementById('bot-landing').classList.add('hidden');
     document.getElementById('config-limpeza').classList.add('hidden');
-    
-    // Mostra a tela escura "//SERVIDORES_VINCULADOS"
     document.getElementById('lista-servidores').classList.remove('hidden');
     
     // Dispara a segurança para conferir o login do administrador
@@ -46,7 +52,7 @@ function voltarAoInicioBot() {
 }
 
 // ==========================================
-// SISTEMA DE SEGURANÇA E AUTENTICAÇÃO
+// SISTEMA DE SEGURANÇA E AUTENTICAÇÃO (ESTILO LORITTA)
 // ==========================================
 
 async function verificarAutenticacao() {
@@ -54,11 +60,8 @@ async function verificarAutenticacao() {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
 
-    // Se o usuário acabou de voltar da autorização do Discord
+    // Se o usuário acabou de voltar da autorização do Discord com o código na URL
     if (code) {
-        // Limpa o "?code=..." da URL na mesma hora para não quebrar o F5 do navegador
-        window.history.replaceState({}, document.title, window.location.pathname);
-        
         container.innerHTML = '<p class="text-white/20 animate-pulse">Verificando suas permissões de Administrador...</p>';
         
         try {
@@ -71,7 +74,8 @@ async function verificarAutenticacao() {
             const dados = await response.json();
 
             if (response.ok && dados.status === "sucesso") {
-                window.servidoresAutenticados = dados.servidores;
+                // SALVA A SESSÃO NO NAVEGADOR: É isso que faz o login persistir
+                localStorage.setItem('servidores_amz', JSON.stringify(dados.servidores));
                 renderizarServidores(dados.servidores);
             } else {
                 mostrarBotaoLogin(`Erro: ${dados.erro || "Não autorizado"}`);
@@ -80,12 +84,14 @@ async function verificarAutenticacao() {
             console.error("Erro ao conectar na API:", erro);
             mostrarBotaoLogin("Erro ao conectar ao servidor de segurança.");
         }
-    } else if (window.servidoresAutenticados) {
-        // Se já fez login nessa sessão, mostra os servidores direto
-        renderizarServidores(window.servidoresAutenticados);
     } else {
-        // Se não está logado, joga o botão de autenticação dentro do container de servidores ativos
-        mostrarBotaoLogin("Você precisa provar que é Administrador para acessar as configurações.");
+        // Se não possui código na URL, tenta buscar o que está salvo no navegador
+        const sessaoSalva = localStorage.getItem('servidores_amz');
+        if (sessaoSalva) {
+            renderizarServidores(JSON.parse(sessaoSalva));
+        } else {
+            mostrarBotaoLogin("Você precisa provar que é Administrador para acessar as configurações.");
+        }
     }
 }
 
@@ -156,10 +162,21 @@ async function salvarConfiguracoes() {
     }
 }
 
-// Se o usuário acabar de voltar do Discord com o token, o sistema pula a introdução e joga ele direto na lista de servidores validados
+// ==========================================
+// INTERCEPTADOR DE REDIRECIONAMENTO (MOMENTO DO RETORNO)
+// ==========================================
 document.addEventListener("DOMContentLoaded", () => {
-    if (window.location.search.includes('code=')) {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('code')) {
+        // 1. Abre os containers corretos do painel visualmente
         acessarTelaBot();
-        abrirListaServidores();
+        document.getElementById('bot-landing').classList.add('hidden');
+        document.getElementById('lista-servidores').classList.remove('hidden');
+        
+        // 2. Faz a chamada de segurança para ler o código
+        verificarAutenticacao();
+        
+        // 3. Limpa imediatamente o "?code=..." da URL para evitar bugs de F5
+        window.history.replaceState({}, document.title, window.location.pathname);
     }
 });
