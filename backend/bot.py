@@ -37,8 +37,22 @@ def home():
 @app.route("/api/config", methods=["POST"])
 def receber_config():
     dados = request.json
-    # No futuro, o site em preto e branco vai enviar os dados por aqui para salvarmos no MongoDB
+    # O site vai enviar os dados por aqui para salvarmos no MongoDB
     return jsonify({"status": "sucesso", "dados_recebidos": dados}), 200
+
+# ==========================================
+# ROTA ADICIONADA: Busca os servidores para o site
+# ==========================================
+@app.route("/servidores", methods=["GET"])
+def listar_servidores():
+    servidores = []
+    # O bot pega todos os servidores em que ele foi adicionado no Discord
+    for guild in bot.guilds:
+        servidores.append({
+            "id": str(guild.id),
+            "nome": guild.name
+        })
+    return jsonify(servidores)
 
 def rodar_flask():
     port = int(os.getenv("PORT", 5000))
