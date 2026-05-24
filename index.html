@@ -130,37 +130,41 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                 <div id="container-servidores" class="grid md:grid-cols-2 gap-4"></div>
             </div>
 
-            <div id="config-limpeza">
-    
-    <div class="painel-wrapper">
-        
-        <aside class="menu-lateral">
-            <nav>
-                <ul>
-                    <li><button type="button" data-aba="geral">Geral</button></li>
-                    <li><button type="button" data-aba="moderacao">Moderação</button></li>
-                    <li><button type="button" data-aba="avisos">Avisos</button></li>
-                </ul>
-            </nav>
-        </aside>
+            <div id="config-limpeza" class="hidden fade-in max-w-2xl mx-auto">
+                <div class="bw-border p-10 bg-black/40 backdrop-blur-md">
+                    <div class="flex items-center gap-4 mb-10">
+                        <div class="w-12 h-1 bg-white"></div>
+                        <h2 id="nome-servidor-atual" class="text-2xl font-extrabold uppercase tracking-tighter text-white">---</h2>
+                    </div>
+                    
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-[10px] uppercase tracking-widest text-white/40 mb-2 font-bold">Discord Channel ID</label>
+                            <input type="text" id="canal_id" placeholder="ID do Canal" 
+                                class="w-full bg-black/30 border border-white/10 p-4 font-mono text-sm text-white focus:border-white outline-none transition">
+                        </div>
 
-        <main class="conteudo-principal">
-            
-            <section id="aba-geral" class="aba-ativa">
-                <h2>Configurações Gerais</h2>
-                </section>
+                        <div>
+                            <label class="block text-[10px] uppercase tracking-[0.3em] text-white/40 mb-3 font-bold">Retention Period</label>
+                            <select id="dias" class="w-full bg-black/30 border border-white/10 p-4 font-mono text-xs text-white outline-none cursor-pointer">
+                                <option value="1">24 Horas (1 dia)</option>
+                                <option value="3">72 Horas (3 dias)</option>
+                                <option value="7">168 Horas (7 dias)</option>
+                            </select>
+                        </div>
 
-            <section id="aba-moderacao" class="aba-inativa">
-                <h2>Moderação</h2>
-                </section>
+                        <button onclick="enviarConfiguracao()" class="w-full bg-white text-black py-4 font-bold uppercase text-xs tracking-widest hover:bg-neutral-200 transition flex items-center justify-center gap-3">
+                            <i class="ph ph-arrows-clockwise font-bold" id="icon-sync"></i> Sincronizar MongoDB
+                        </button>
 
-            <section id="aba-avisos" class="aba-inativa">
-                <h2>Avisos</h2>
-                </section>
-
-        </main>
-    </div>
-</div>
+                        <div id="status_msg" class="text-[10px] uppercase tracking-widest text-center mt-4 hidden font-black"></div>
+                        
+                        <button onclick="abrirListaServidores()" class="text-[10px] text-white/30 hover:text-white uppercase tracking-widest block mx-auto mt-6 transition font-bold">
+                            ← Voltar para a lista
+                        </button>
+                    </div>
+                </div>
+            </div>
         </main>
         
         <footer class="py-10 border-t border-white/10 bg-black text-center mt-auto">
