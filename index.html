@@ -130,41 +130,80 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                 <div id="container-servidores" class="grid md:grid-cols-2 gap-4"></div>
             </div>
 
-            <div id="config-limpeza" class="hidden fade-in max-w-2xl mx-auto">
-                <div class="bw-border p-10 bg-black/40 backdrop-blur-md">
-                    <div class="flex items-center gap-4 mb-10">
-                        <div class="w-12 h-1 bg-white"></div>
-                        <h2 id="nome-servidor-atual" class="text-2xl font-extrabold uppercase tracking-tighter text-white">---</h2>
-                    </div>
-                    
-                    <div class="space-y-6">
-                        <div>
-                            <label class="block text-[10px] uppercase tracking-widest text-white/40 mb-2 font-bold">Discord Channel ID</label>
-                            <input type="text" id="canal_id" placeholder="ID do Canal" 
-                                class="w-full bg-black/30 border border-white/10 p-4 font-mono text-sm text-white focus:border-white outline-none transition">
-                        </div>
+            /* ================================================================= */
+/* ESTILIZAÇÃO DO NOVO PAINEL DE CONFIGURAÇÃO (B&W PREMIUM)          */
+/* ================================================================= */
 
-                        <div>
-                            <label class="block text-[10px] uppercase tracking-[0.3em] text-white/40 mb-3 font-bold">Retention Period</label>
-                            <select id="dias" class="w-full bg-black/30 border border-white/10 p-4 font-mono text-xs text-white outline-none cursor-pointer">
-                                <option value="1">24 Horas (1 dia)</option>
-                                <option value="3">72 Horas (3 dias)</option>
-                                <option value="7">168 Horas (7 dias)</option>
-                            </select>
-                        </div>
+/* Scrollbar Minimalista para a Lista de Canais */
+#config-limpeza .overflow-y-auto::-webkit-scrollbar {
+    width: 4px;
+}
 
-                        <button onclick="enviarConfiguracao()" class="w-full bg-white text-black py-4 font-bold uppercase text-xs tracking-widest hover:bg-neutral-200 transition flex items-center justify-center gap-3">
-                            <i class="ph ph-arrows-clockwise font-bold" id="icon-sync"></i> Sincronizar MongoDB
-                        </button>
+#config-limpeza .overflow-y-auto::-webkit-scrollbar-track {
+    background: #000;
+}
 
-                        <div id="status_msg" class="text-[10px] uppercase tracking-widest text-center mt-4 hidden font-black"></div>
-                        
-                        <button onclick="abrirListaServidores()" class="text-[10px] text-white/30 hover:text-white uppercase tracking-widest block mx-auto mt-6 transition font-bold">
-                            ← Voltar para a lista
-                        </button>
-                    </div>
-                </div>
-            </div>
+#config-limpeza .overflow-y-auto::-webkit-scrollbar-thumb {
+    background: #222;
+    border-radius: 2px;
+}
+
+#config-limpeza .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+    background: #fff;
+}
+
+/* Customização dos Checkboxes para o Estilo Atormentado/Preto e Branco */
+#config-limpeza input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1px solid #333;
+    background-color: #000;
+    border-radius: 2px;
+    display: inline-grid;
+    place-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#config-limpeza input[type="checkbox"]:checked {
+    background-color: #fff;
+    border-color: #fff;
+}
+
+#config-limpeza input[type="checkbox"]:checked::before {
+    content: "";
+    width: 8px;
+    height: 4px;
+    border-left: 2px solid #000;
+    border-bottom: 2px solid #000;
+    transform: rotate(-45deg) translate(1px, -1px);
+}
+
+#config-limpeza input[type="checkbox"]:hover {
+    border-color: #fff;
+}
+
+/* Customização do Elemento Select (Seta estilizada em branco) */
+#config-limpeza select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23ffffff' viewBox='0 0 256 256'><path d='M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80a8,8,0,0,1,11.32-11.32L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z'></path></svg>");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    padding-right: 40px;
+}
+
+/* Transições e Hover nos Cards de Seleção de Canais */
+#config-limpeza label {
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+#config-limpeza label:hover {
+    background-color: #0c0c0c;
+}
         </main>
         
         <footer class="py-10 border-t border-white/10 bg-black text-center mt-auto">
