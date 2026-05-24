@@ -37,7 +37,10 @@
                     <span class="text-[10px] border border-white/10 px-4 py-2 rounded-full uppercase tracking-[0.4em] text-neutral-600 font-bold">Development Hub</span>
                     <h1 class="text-7xl md:text-9xl font-black tracking-tighter mt-12 mb-8 leading-none uppercase">CÓDIGO. <br> PERFORMANCE.</h1>
                     <p class="text-lg text-neutral-400 max-w-2xl mx-auto leading-relaxed">
-                        Central de desenvolvimento da **AMZ Studios**. Otimização e automação de alto nível.
+                        AMZ Studios
+Central de Desenvolvimento e Automação.
+
+Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que você gerencie sua comunidade com máxima eficiência, segurança e total autonomia.
                     </p>
                     <div class="mt-12 flex flex-wrap justify-center gap-6">
                         <a href="#aplicativos" class="bg-white text-black px-10 py-5 font-bold uppercase text-xs tracking-widest hover:bg-neutral-200 transition">Ver Aplicativos</a>
@@ -100,7 +103,7 @@
                     AMZ <span class="text-neutral-800">BOT</span>
                 </h1>
                 <p class="text-white/60 text-lg max-w-2xl mx-auto leading-relaxed mb-16">
-                    Gerenciamento avançado de servidores Discord e sincronização com MongoDB.
+                    Gerenciamento avançado de servidores Discord
                 </p>
                 
                 <div class="flex flex-wrap justify-center gap-6">
@@ -116,7 +119,7 @@
 
             <div id="lista-servidores" class="hidden fade-in">
                 <div class="flex items-center justify-between mb-8">
-                    <h2 class="text-3xl font-black uppercase tracking-tighter italic">// SERVIDORES_VINCULADOS</h2>
+                    <h2 class="text-3xl font-black uppercase tracking-tighter italic">Servidores</h2>
                     <span class="text-[9px] font-mono text-white/20 uppercase tracking-[0.3em]">Status: Conectado</span>
                 </div>
                 <div class="border-b border-white/10 mb-8 pb-4">
@@ -127,41 +130,37 @@
                 <div id="container-servidores" class="grid md:grid-cols-2 gap-4"></div>
             </div>
 
-            <div id="config-limpeza" class="hidden fade-in max-w-2xl mx-auto">
-                <div class="bw-border p-10 bg-black/40 backdrop-blur-md">
-                    <div class="flex items-center gap-4 mb-10">
-                        <div class="w-12 h-1 bg-white"></div>
-                        <h2 id="nome-servidor-atual" class="text-2xl font-extrabold uppercase tracking-tighter text-white">---</h2>
-                    </div>
-                    
-                    <div class="space-y-6">
-                        <div>
-                            <label class="block text-[10px] uppercase tracking-widest text-white/40 mb-2 font-bold">Discord Channel ID</label>
-                            <input type="text" id="canal_id" placeholder="ID do Canal" 
-                                class="w-full bg-black/30 border border-white/10 p-4 font-mono text-sm text-white focus:border-white outline-none transition">
-                        </div>
+            <div id="config-limpeza">
+    
+    <div class="painel-wrapper">
+        
+        <aside class="menu-lateral">
+            <nav>
+                <ul>
+                    <li><button type="button" data-aba="geral">Geral</button></li>
+                    <li><button type="button" data-aba="moderacao">Moderação</button></li>
+                    <li><button type="button" data-aba="avisos">Avisos</button></li>
+                </ul>
+            </nav>
+        </aside>
 
-                        <div>
-                            <label class="block text-[10px] uppercase tracking-[0.3em] text-white/40 mb-3 font-bold">Retention Period</label>
-                            <select id="dias" class="w-full bg-black/30 border border-white/10 p-4 font-mono text-xs text-white outline-none cursor-pointer">
-                                <option value="1">24 Horas (1 dia)</option>
-                                <option value="3">72 Horas (3 dias)</option>
-                                <option value="7">168 Horas (7 dias)</option>
-                            </select>
-                        </div>
+        <main class="conteudo-principal">
+            
+            <section id="aba-geral" class="aba-ativa">
+                <h2>Configurações Gerais</h2>
+                </section>
 
-                        <button onclick="enviarConfiguracao()" class="w-full bg-white text-black py-4 font-bold uppercase text-xs tracking-widest hover:bg-neutral-200 transition flex items-center justify-center gap-3">
-                            <i class="ph ph-arrows-clockwise font-bold" id="icon-sync"></i> Sincronizar MongoDB
-                        </button>
+            <section id="aba-moderacao" class="aba-inativa">
+                <h2>Moderação</h2>
+                </section>
 
-                        <div id="status_msg" class="text-[10px] uppercase tracking-widest text-center mt-4 hidden font-black"></div>
-                        
-                        <button onclick="abrirListaServidores()" class="text-[10px] text-white/30 hover:text-white uppercase tracking-widest block mx-auto mt-6 transition font-bold">
-                            ← Voltar para a lista
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <section id="aba-avisos" class="aba-inativa">
+                <h2>Avisos</h2>
+                </section>
+
+        </main>
+    </div>
+</div>
         </main>
         
         <footer class="py-10 border-t border-white/10 bg-black text-center mt-auto">
