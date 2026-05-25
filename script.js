@@ -494,6 +494,56 @@ function removerLimpezaDemo(serverId, canalId) {
     return limpezas;
 }
 
+function obterChaveCacheLimpezas(serverId) {
+    return `limpezas_servidor_${serverId}`;
+}
+
+function obterLimpezasCacheServidor(serverId) {
+    try {
+        return JSON.parse(localStorage.getItem(obterChaveCacheLimpezas(serverId)) || '[]');
+    } catch (erro) {
+        console.warn('Cache de limpezas invalido:', erro);
+        return [];
+    }
+}
+
+function salvarLimpezasCacheServidor(serverId, limpezas = []) {
+    localStorage.setItem(obterChaveCacheLimpezas(serverId), JSON.stringify(limpezas));
+}
+
+function mostrarStatusLimpeza(mensagem, tipo = 'error') {
+    const statusMsg = document.getElementById('status_msg');
+    if (!statusMsg) return;
+
+    statusMsg.innerText = mensagem;
+    statusMsg.className = `vm-status-message ${tipo}`;
+}
+
+function renderizarEstadoLimpezas(mensagem, incluirLogin = false) {
+    const container = document.getElementById('limpezas-configuradas');
+    if (!container) return;
+
+    container.className = 'cleanup-list-empty';
+    container.innerHTML = `
+        <div class="cleanup-state">
+            <span>${escaparHTML(mensagem)}</span>
+            ${incluirLogin ? `
+                <a href="${obterDiscordLoginUrl()}" class="cleanup-state-link">
+                    Entrar novamente
+                </a>
+            ` : ''}
+        </div>
+    `;
+}
+
+async function lerJsonResposta(response) {
+    try {
+        return await response.json();
+    } catch {
+        return {};
+    }
+}
+
 function obterRotuloDias(dias) {
     const valor = String(dias);
     const mapa = {
@@ -551,9 +601,11 @@ async function carregarLimpezasConfiguradas() {
     const token = localStorage.getItem('discord_token');
 
     if (!serverId) {
-        renderizarLimpezasConfiguradas([]);
+        renderizarEstadoLimpezas('Servidor nao identificado.');
         return;
     }
+
+    renderizarEstadoLimpezas('Carregando limpezas salvas...');
 
     if (token === 'demo-token') {
         renderizarLimpezasConfiguradas(obterLimpezasDemo(serverId));
@@ -561,7 +613,7 @@ async function carregarLimpezasConfiguradas() {
     }
 
     if (!token) {
-        renderizarLimpezasConfiguradas([]);
+        renderizarEstadoLimpezas('Entre com o Discord para carregar as limpezas salvas.', true);
         return;
     }
 
@@ -569,17 +621,40 @@ async function carregarLimpezasConfiguradas() {
         const response = await fetch(`${API_URL}/api/config/${encodeURIComponent(serverId)}/limpezas`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        const resultado = await response.json();
+        const resultado = await lerJsonResposta(response);
 
         if (response.ok && resultado.status === 'sucesso') {
-            renderizarLimpezasConfiguradas(resultado.limpezas || []);
+            const limpezas = resultado.limpezas || [];
+            salvarLimpezasCacheServidor(serverId, limpezas);
+            renderizarLimpezasConfiguradas(limpezas);
             return;
         }
 
-        renderizarLimpezasConfiguradas([]);
+        if (response.status === 401 || response.status === 403) {
+            localStorage.removeItem('discord_token');
+            renderizarEstadoLimpezas(resultado.mensagem || 'Sessao expirada. Entre novamente para carregar as limpezas salvas.', true);
+            return;
+        }
+
+        const cache = obterLimpezasCacheServidor(serverId);
+        if (cache.length) {
+            renderizarLimpezasConfiguradas(cache);
+            mostrarStatusLimpeza('Nao consegui atualizar agora. Mostrando a ultima lista carregada neste navegador.');
+            return;
+        }
+
+        renderizarEstadoLimpezas(resultado.mensagem || resultado.erro || 'Nao foi possivel carregar as limpezas salvas.');
     } catch (erro) {
         console.error('Erro ao carregar limpezas:', erro);
-        renderizarLimpezasConfiguradas([]);
+        const cache = obterLimpezasCacheServidor(serverId);
+
+        if (cache.length) {
+            renderizarLimpezasConfiguradas(cache);
+            mostrarStatusLimpeza('API indisponivel agora. Mostrando a ultima lista carregada neste navegador.');
+            return;
+        }
+
+        renderizarEstadoLimpezas('Erro ao conectar na API para carregar as limpezas salvas.');
     }
 }
 
@@ -592,7 +667,8 @@ async function removerLimpezaConfigurada(canalId) {
     if (!serverId || !canalId) return;
 
     if (token === 'demo-token') {
-        renderizarLimpezasConfiguradas(removerLimpezaDemo(serverId, canalId));
+        const limpezas = removerLimpezaDemo(serverId, canalId);
+        renderizarLimpezasConfiguradas(limpezas);
         if (statusMsg) {
             statusMsg.innerText = 'Limpeza removida no modo teste local.';
             statusMsg.className = 'vm-status-message success';
@@ -610,10 +686,12 @@ async function removerLimpezaConfigurada(canalId) {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        const resultado = await response.json();
+        const resultado = await lerJsonResposta(response);
 
         if (response.ok && resultado.status === 'sucesso') {
-            renderizarLimpezasConfiguradas(resultado.limpezas || []);
+            const limpezas = resultado.limpezas || [];
+            salvarLimpezasCacheServidor(serverId, limpezas);
+            renderizarLimpezasConfiguradas(limpezas);
             if (statusMsg) {
                 statusMsg.innerText = 'Limpeza removida e banco atualizado.';
                 statusMsg.className = 'vm-status-message success';
@@ -686,12 +764,14 @@ async function enviarConfiguracao() {
             body: JSON.stringify(dados)
         });
         
-        const resultado = await response.json();
+        const resultado = await lerJsonResposta(response);
         
         if (iconSync) iconSync.classList.remove('animate-spin');
 
         if(resultado.status === 'sucesso') {
-            renderizarLimpezasConfiguradas(resultado.limpezas || []);
+            const limpezas = resultado.limpezas || [];
+            salvarLimpezasCacheServidor(serverId, limpezas);
+            renderizarLimpezasConfiguradas(limpezas);
             if(statusMsg) {
                 statusMsg.innerText = "Limpeza salva e sincronizada com MongoDB!";
                 statusMsg.className = "vm-status-message success";

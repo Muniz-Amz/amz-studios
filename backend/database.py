@@ -1,36 +1,20 @@
 # backend/database.py
 import os
 from datetime import datetime, timezone
-from motor.motor_asyncio import AsyncIOMotorClient
 
-# Conecta ao MongoDB usando a variável de ambiente
+from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import ReturnDocument
+
 MONGO_URI = os.getenv("MONGO_URI")
 client = AsyncIOMotorClient(MONGO_URI)
 
-# Seleciona o banco e a coleção
 db = client["AMZCore"]
 collection = db["servidores"]
 
-async def salvar_config(server_id, dados):
-    """
-    Salva ou atualiza as configurações de um servidor.
-    Se o servidor não existir no banco, ele cria um novo (upsert=True).
-    """
-    await collection.update_one(
-        {"id": str(server_id)}, 
-        {"$set": dados}, 
-        upsert=True
-    )
-    return True
-
-async def buscar_config(server_id):
-    """
-    Busca as configurações de um servidor específico no banco de dados.
-    """
-    return await collection.find_one({"id": str(server_id)})
 
 def _agora_iso():
     return datetime.now(timezone.utc).isoformat()
+
 
 def _normalizar_limpeza(dados):
     canal_id = str(dados.get("canal_id", "")).strip()
@@ -42,8 +26,9 @@ def _normalizar_limpeza(dados):
         "canal_nome": canal_nome,
         "dias": dias,
         "acao": "excluir_mensagens",
-        "atualizado_em": _agora_iso()
+        "atualizado_em": _agora_iso(),
     }
+
 
 def _limpezas_do_documento(documento):
     if not documento:
@@ -56,35 +41,76 @@ def _limpezas_do_documento(documento):
 
     return limpezas
 
-async def salvar_limpeza(server_id, dados):
+
+async def salvar_config(server_id, dados):
     """
-    Salva uma limpeza de canal. Se o canal ja existir no servidor,
-    substitui a configuracao antiga pela nova.
+    Salva ou atualiza dados gerais do servidor sem apagar limpezas existentes.
     """
     server_id = str(server_id)
-    limpeza = _normalizar_limpeza(dados)
-
     await collection.update_one(
         {"id": server_id},
         {
             "$set": {
+                **dados,
                 "id": server_id,
-                "nome": dados.get("nome", ""),
-                "atualizado_em": _agora_iso()
-            },
-            "$pull": {
-                "limpezas": {"canal_id": limpeza["canal_id"]}
+                "atualizado_em": _agora_iso(),
             }
         },
-        upsert=True
+        upsert=True,
     )
+    return True
 
-    await collection.update_one(
+
+async def buscar_config(server_id):
+    """
+    Busca as configuracoes de um servidor especifico no banco de dados.
+    """
+    return await collection.find_one({"id": str(server_id)})
+
+
+async def salvar_limpeza(server_id, dados):
+    """
+    Salva uma limpeza de canal no documento do servidor.
+    Se o canal ja existir, substitui a configuracao antiga pela nova.
+    """
+    server_id = str(server_id)
+    limpeza = _normalizar_limpeza(dados)
+    agora = _agora_iso()
+
+    documento = await collection.find_one_and_update(
         {"id": server_id},
-        {"$push": {"limpezas": limpeza}}
+        [
+            {
+                "$set": {
+                    "limpezas": {
+                        "$concatArrays": [
+                            {
+                                "$filter": {
+                                    "input": {"$ifNull": ["$limpezas", []]},
+                                    "as": "limpeza",
+                                    "cond": {"$ne": ["$$limpeza.canal_id", limpeza["canal_id"]]},
+                                }
+                            },
+                            [limpeza],
+                        ]
+                    }
+                }
+            },
+            {
+                "$set": {
+                    "id": server_id,
+                    "nome": dados.get("nome", ""),
+                    "atualizado_em": agora,
+                }
+            },
+        ],
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
+        projection={"_id": 0},
     )
 
-    return await buscar_limpezas(server_id)
+    return _limpezas_do_documento(documento)
+
 
 async def buscar_limpezas(server_id):
     """
@@ -92,6 +118,7 @@ async def buscar_limpezas(server_id):
     """
     documento = await collection.find_one({"id": str(server_id)}, {"_id": 0})
     return _limpezas_do_documento(documento)
+
 
 async def remover_limpeza(server_id, canal_id):
     """
@@ -107,10 +134,10 @@ async def remover_limpeza(server_id, canal_id):
             "$unset": {
                 "canal_id": "",
                 "canal_nome": "",
-                "dias": ""
+                "dias": "",
             },
-            "$set": {"atualizado_em": _agora_iso()}
-        }
+            "$set": {"atualizado_em": _agora_iso()},
+        },
     )
 
     return await buscar_limpezas(server_id)

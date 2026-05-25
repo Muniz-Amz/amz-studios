@@ -24,6 +24,7 @@ REDIRECT_URIS_PERMITIDAS = {
 }
 
 DISCORD_API_URL = "https://discord.com/api/v10"
+DISCORD_TIMEOUT = 12
 
 # ==========================================
 # FUNÇÃO DE SEGURANÇA (VERIFICADOR)
@@ -34,7 +35,10 @@ def verificar_admin(token, server_id):
     é Admin no servidor especificado.
     """
     headers = {"Authorization": f"Bearer {token}"}
-    response = requests.get(f"{DISCORD_API_URL}/users/@me/guilds", headers=headers)
+    try:
+        response = requests.get(f"{DISCORD_API_URL}/users/@me/guilds", headers=headers, timeout=DISCORD_TIMEOUT)
+    except requests.RequestException:
+        return False
     
     if response.status_code != 200:
         return False
@@ -126,7 +130,7 @@ def discord_callback():
     
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     
-    token_response = requests.post(f"{DISCORD_API_URL}/oauth2/token", data=data, headers=headers)
+    token_response = requests.post(f"{DISCORD_API_URL}/oauth2/token", data=data, headers=headers, timeout=DISCORD_TIMEOUT)
     
     if token_response.status_code != 200:
         return jsonify({"erro": "Falha ao obter token do Discord", "detalhe": token_response.text}), 400
@@ -136,7 +140,7 @@ def discord_callback():
 
     # Busca servidores para retornar ao frontend
     user_headers = {"Authorization": f"Bearer {access_token}"}
-    guilds_response = requests.get(f"{DISCORD_API_URL}/users/@me/guilds", headers=user_headers)
+    guilds_response = requests.get(f"{DISCORD_API_URL}/users/@me/guilds", headers=user_headers, timeout=DISCORD_TIMEOUT)
     
     if guilds_response.status_code != 200:
         return jsonify({"erro": "Falha ao buscar servidores do usuário"}), 400
@@ -187,7 +191,7 @@ def receber_config():
     # 4. Salva no banco apenas se a validação passou
     try:
         futuro = asyncio.run_coroutine_threadsafe(salvar_config(server_id, dados), bot.loop)
-        futuro.result()
+        futuro.result(timeout=15)
         return jsonify({"status": "sucesso", "mensagem": "Configurações salvas!"}), 200
     except Exception as e:
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
@@ -211,7 +215,7 @@ def salvar_limpeza_canal():
 
     try:
         futuro = asyncio.run_coroutine_threadsafe(salvar_limpeza(server_id, dados), bot.loop)
-        limpezas = futuro.result()
+        limpezas = futuro.result(timeout=15)
         return jsonify({
             "status": "sucesso",
             "mensagem": "Limpeza de canal salva!",
@@ -250,7 +254,7 @@ def listar_limpezas(server_id):
 
     try:
         futuro = asyncio.run_coroutine_threadsafe(buscar_limpezas(server_id), bot.loop)
-        limpezas = futuro.result()
+        limpezas = futuro.result(timeout=15)
         return jsonify({"status": "sucesso", "limpezas": limpezas}), 200
     except Exception as e:
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
@@ -266,7 +270,7 @@ def excluir_limpeza(server_id, canal_id):
 
     try:
         futuro = asyncio.run_coroutine_threadsafe(remover_limpeza(server_id, canal_id), bot.loop)
-        limpezas = futuro.result()
+        limpezas = futuro.result(timeout=15)
         return jsonify({
             "status": "sucesso",
             "mensagem": "Limpeza removida!",
