@@ -10,6 +10,10 @@ function obterRedirectUriDiscord() {
     urlAtual.search = '';
     urlAtual.hash = '';
 
+    if (urlAtual.hostname === 'muniz-amz.github.io' && urlAtual.pathname === '/amz-studios') {
+        urlAtual.pathname = '/amz-studios/';
+    }
+
     if (urlAtual.protocol === 'http:' || urlAtual.protocol === 'https:') {
         return urlAtual.href;
     }
