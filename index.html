@@ -16,24 +16,22 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    <link rel="stylesheet" href="style.css?v=5">
-    <link rel="stylesheet" href="/amz-studios/style.css?v=5">
+    <link rel="stylesheet" href="style.css?v=7">
+    <link rel="stylesheet" href="/amz-studios/style.css?v=7">
 </head>
 <body class="flex flex-col min-h-screen overflow-x-hidden bg-black">
 
-    <nav class="fixed w-full z-50 bg-black/95 backdrop-blur-sm border-b border-white/5 px-8 py-4 flex justify-between items-center h-20">
-        <div class="flex items-center gap-3">
+    <nav class="site-navbar fixed w-full z-50 bg-black/95 backdrop-blur-sm border-b border-white/5 px-8 py-4 flex justify-between items-center h-20">
+        <div class="site-brand flex items-center gap-3">
             <img src="./assets/logo.png" alt="AMZ Studios Logo" class="h-12 w-auto grayscale">
             <span class="font-black tracking-tighter text-2xl uppercase">AMZ <span class="text-neutral-500 font-light">STUDIOS</span></span>
         </div>
         
-        <div class="hidden md:flex items-center gap-10">
-            <div class="flex gap-10 text-xs font-bold uppercase tracking-[0.2em] text-neutral-400">
-                <a href="#inicio" class="hover:text-white transition">Início</a>
-                <a href="#aplicativos" class="hover:text-white transition">Aplicativos</a>
-            </div>
-            <button onclick="acessarTelaBot()" class="border border-white/10 px-8 py-4 font-bold uppercase text-[10px] tracking-widest hover:bg-white/5 transition">
-                Acessar Painel do Bot
+        <div class="site-nav-links">
+            <a href="#inicio">Início</a>
+            <a href="#aplicativos">Aplicativos</a>
+            <button type="button" onclick="acessarTelaBot()" class="site-nav-dashboard">
+                Dashboard
             </button>
         </div>
     </nav>
