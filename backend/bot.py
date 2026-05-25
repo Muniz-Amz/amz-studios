@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 import discord
+import requests
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
@@ -17,6 +18,13 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 INTERVALO_LIMPEZA_MINUTOS = int(os.getenv("AMZ_CLEANUP_INTERVAL_MINUTES", "30"))
 MAX_MENSAGENS_POR_CANAL = int(os.getenv("AMZ_CLEANUP_MAX_MESSAGES_PER_CHANNEL", "200"))
 PAUSA_ENTRE_DELECOES = float(os.getenv("AMZ_CLEANUP_DELETE_DELAY_SECONDS", "0.35"))
+RENDER_DEPLOY_HOOK_URL = os.getenv("RENDER_DEPLOY_HOOK_URL", "").strip()
+DEPLOY_TIMEOUT_SEGUNDOS = int(os.getenv("AMZ_DEPLOY_TIMEOUT_SECONDS", "15"))
+DEPLOY_ALLOWED_USER_IDS = {
+    user_id.strip()
+    for user_id in os.getenv("AMZ_DEPLOY_ALLOWED_USER_IDS", "").replace(",", " ").split()
+    if user_id.strip()
+}
 
 
 def normalizar_dias(dias):
@@ -37,6 +45,22 @@ def bot_tem_permissoes_limpeza(channel):
 
     permissoes = channel.permissions_for(bot_member)
     return permissoes.manage_messages and permissoes.read_message_history
+
+
+def usuario_pode_deploy(ctx):
+    if str(ctx.author.id) in DEPLOY_ALLOWED_USER_IDS:
+        return True
+
+    if ctx.guild and ctx.guild.owner_id == ctx.author.id:
+        return True
+
+    return False
+
+
+def disparar_deploy_render():
+    response = requests.post(RENDER_DEPLOY_HOOK_URL, timeout=DEPLOY_TIMEOUT_SEGUNDOS)
+    response.raise_for_status()
+    return response.status_code
 
 
 async def excluir_mensagens_antigas(server_id, limpeza):
@@ -129,3 +153,24 @@ async def info(ctx):
         for limpeza in limpezas
     ]
     await ctx.send("Limpezas configuradas:\n" + "\n".join(linhas))
+
+
+@bot.command()
+async def deploy(ctx):
+    if not usuario_pode_deploy(ctx):
+        await ctx.send("Apenas o dono do servidor ou usuarios autorizados podem usar `!deploy`.")
+        return
+
+    if not RENDER_DEPLOY_HOOK_URL:
+        await ctx.send("Deploy Hook nao configurado. Adicione `RENDER_DEPLOY_HOOK_URL` nas variaveis do Render.")
+        return
+
+    await ctx.send("Iniciando deploy no Render...")
+
+    try:
+        status_code = await asyncio.to_thread(disparar_deploy_render)
+    except requests.RequestException as erro:
+        await ctx.send(f"Nao consegui iniciar o deploy: `{erro}`")
+        return
+
+    await ctx.send(f"Deploy solicitado com sucesso. Status HTTP: `{status_code}`")
