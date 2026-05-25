@@ -1111,3 +1111,452 @@ section {
         width: 100%;
     }
 }
+
+@media (max-width: 820px) {
+    body {
+        min-width: 320px;
+    }
+
+    .site-navbar {
+        height: auto;
+        min-height: 104px;
+        align-items: stretch;
+        flex-direction: column;
+        gap: 12px;
+        padding: 14px 18px;
+    }
+
+    .site-brand {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .site-brand img {
+        height: 42px;
+    }
+
+    .site-brand span {
+        font-size: 20px;
+        line-height: 1;
+        white-space: nowrap;
+    }
+
+    .site-nav-links {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-left: 0;
+    }
+
+    .site-nav-links a,
+    .site-nav-links button {
+        min-height: 42px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 6px;
+        font-size: 9px;
+        letter-spacing: 0.08em;
+        line-height: 1.2;
+        text-align: center;
+        white-space: normal;
+    }
+
+    .site-nav-dashboard {
+        padding: 0 6px;
+    }
+
+    #site-principal main,
+    #painel-loritta {
+        padding-top: 118px;
+    }
+
+    #inicio {
+        padding: 72px 18px 64px;
+    }
+
+    #inicio h1 {
+        font-size: 58px;
+        line-height: 0.92;
+        letter-spacing: 0;
+        overflow-wrap: anywhere;
+    }
+
+    #inicio p {
+        font-size: 15px;
+        line-height: 1.7;
+    }
+
+    #inicio .mt-12 {
+        margin-top: 32px;
+    }
+
+    #inicio .mt-12 a,
+    #inicio .mt-12 button,
+    #bot-landing button {
+        width: 100%;
+        max-width: 340px;
+        min-height: 52px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 18px;
+        text-align: center;
+        white-space: normal;
+    }
+
+    #aplicativos {
+        padding: 64px 18px;
+    }
+
+    #aplicativos .flex.items-center.gap-4 {
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 36px;
+    }
+
+    #aplicativos h2 {
+        font-size: 30px;
+        line-height: 1;
+        letter-spacing: 0;
+    }
+
+    #aplicativos .grid {
+        grid-template-columns: 1fr;
+    }
+
+    #aplicativos .bw-border {
+        padding: 24px;
+    }
+
+    #aplicativos .mb-16 {
+        margin-bottom: 32px;
+    }
+
+    #aplicativos h3 {
+        font-size: 28px;
+        line-height: 1;
+        letter-spacing: 0;
+    }
+
+    #aplicativos a[download] {
+        width: 100%;
+        min-height: 50px;
+        justify-content: center;
+        text-align: center;
+    }
+
+    #painel-loritta main {
+        padding: 32px 14px 48px;
+    }
+
+    #painel-loritta main > button {
+        margin-bottom: 34px;
+        letter-spacing: 0.18em;
+    }
+
+    #bot-landing {
+        padding: 36px 0;
+    }
+
+    #bot-landing h2 {
+        font-size: 13px;
+        letter-spacing: 0.24em;
+    }
+
+    #bot-landing h1 {
+        font-size: 58px;
+        line-height: 0.92;
+        letter-spacing: 0;
+    }
+
+    #bot-landing p {
+        font-size: 15px;
+        line-height: 1.6;
+    }
+
+    #bot-landing .flex {
+        gap: 12px;
+    }
+
+    #lista-servidores .flex.items-center.justify-between {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    #lista-servidores h2 {
+        font-size: 32px;
+        letter-spacing: 0;
+    }
+
+    .server-config-card {
+        min-height: auto;
+        align-items: stretch;
+        flex-direction: column;
+        padding: 16px;
+    }
+
+    .server-config-name {
+        width: 100%;
+        font-size: 12px;
+    }
+
+    .server-avatar {
+        width: 36px;
+        height: 36px;
+    }
+
+    .server-config-button {
+        width: 100%;
+        min-height: 44px;
+        font-size: 10px;
+    }
+
+    .dashboard-wrap {
+        width: 100%;
+    }
+
+    .vm-dashboard {
+        display: block;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    .vm-sidebar {
+        padding: 14px;
+        border-right: 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .vm-server-picker {
+        min-height: 48px;
+    }
+
+    .vm-sidebar-nav {
+        display: flex;
+        grid-template-columns: none;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+        scroll-snap-type: x proximity;
+    }
+
+    .vm-sidebar-link {
+        width: auto;
+        min-height: 40px;
+        flex: 0 0 auto;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 0 12px;
+        scroll-snap-align: start;
+        white-space: nowrap;
+    }
+
+    .vm-sidebar-link.active {
+        padding-left: 12px;
+        border-left: 1px solid rgba(255, 255, 255, 0.72);
+    }
+
+    .vm-sidebar-divider {
+        margin: 12px 0;
+    }
+
+    .vm-guide-link,
+    .vm-upgrade-link {
+        min-height: 42px;
+        padding: 0 12px;
+    }
+
+    .vm-content {
+        padding: 14px;
+        background: #030303;
+    }
+
+    .vm-alert {
+        min-height: 0;
+        align-items: flex-start;
+        padding: 12px;
+    }
+
+    .vm-alert div {
+        align-items: flex-start;
+    }
+
+    .vm-alert span {
+        font-size: 10px;
+        line-height: 1.5;
+    }
+
+    .vm-content-heading {
+        padding: 18px 0;
+        text-align: left;
+    }
+
+    .vm-content-heading h2 {
+        font-size: 32px;
+        letter-spacing: 0;
+    }
+
+    .vm-content-heading p {
+        font-size: 11px;
+        line-height: 1.5;
+        letter-spacing: 0.08em;
+    }
+
+    .vm-card-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .vm-dashboard-card {
+        min-height: 72px;
+        padding: 14px;
+    }
+
+    .vm-dashboard-card strong {
+        font-size: 13px;
+    }
+
+    .vm-dashboard-card small {
+        margin-top: 4px;
+        font-size: 11px;
+    }
+
+    .vm-settings-panel {
+        margin-top: 14px;
+        padding: 14px;
+    }
+
+    .vm-panel-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .vm-panel-heading strong {
+        max-width: 100%;
+        line-height: 1.5;
+        white-space: normal;
+    }
+
+    .vm-form-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .vm-form-grid input,
+    .vm-form-grid select {
+        min-height: 48px;
+        font-size: 14px;
+    }
+
+    .vm-save-button {
+        min-height: 50px;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-align: center;
+    }
+
+    .cleanup-list-heading {
+        display: grid;
+        align-items: start;
+        gap: 6px;
+    }
+
+    .cleanup-list-heading strong,
+    .cleanup-list-heading span {
+        letter-spacing: 0.08em;
+        line-height: 1.4;
+    }
+
+    .cleanup-list-empty {
+        min-height: 72px;
+        padding: 16px;
+        line-height: 1.5;
+    }
+
+    .cleanup-item {
+        min-height: 0;
+        align-items: stretch;
+        grid-template-columns: 34px minmax(0, 1fr);
+        gap: 12px;
+        padding: 14px;
+    }
+
+    .cleanup-item button {
+        grid-column: 1 / -1;
+        width: 100%;
+        min-height: 42px;
+    }
+
+    .cleanup-item-body strong {
+        line-height: 1.4;
+        white-space: normal;
+    }
+
+    .cleanup-item-body span,
+    .cleanup-item-body small {
+        font-size: 10px;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+    }
+}
+
+@media (max-width: 420px) {
+    .site-navbar {
+        padding: 12px;
+    }
+
+    .site-brand img {
+        height: 36px;
+    }
+
+    .site-brand span {
+        font-size: 17px;
+    }
+
+    .site-nav-links {
+        gap: 6px;
+    }
+
+    .site-nav-links a,
+    .site-nav-links button {
+        min-height: 38px;
+        font-size: 8px;
+        letter-spacing: 0.04em;
+    }
+
+    #site-principal main,
+    #painel-loritta {
+        padding-top: 106px;
+    }
+
+    #inicio h1,
+    #bot-landing h1 {
+        font-size: 46px;
+    }
+
+    #inicio p,
+    #bot-landing p {
+        font-size: 14px;
+    }
+
+    #aplicativos h2,
+    #lista-servidores h2,
+    .vm-content-heading h2 {
+        font-size: 28px;
+    }
+
+    .vm-sidebar-link {
+        font-size: 10px;
+        letter-spacing: 0.08em;
+    }
+
+    .vm-settings-panel,
+    .vm-content,
+    .vm-sidebar {
+        padding: 12px;
+    }
+}
