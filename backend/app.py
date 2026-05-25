@@ -4,6 +4,8 @@ import hashlib
 import hmac
 import json
 import os
+import platform
+import sys
 import time
 from datetime import datetime, timezone
 
@@ -15,7 +17,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 from bot import bot
-from database import buscar_limpezas, remover_limpeza, salvar_config, salvar_limpeza
+from database import buscar_limpezas, remover_limpeza, salvar_config, salvar_limpeza, status_banco_dados
 
 load_dotenv()
 
@@ -481,6 +483,101 @@ def buscar_limpezas_sync(server_id):
         return []
 
 
+def status_banco_sync():
+    try:
+        futuro = asyncio.run_coroutine_threadsafe(status_banco_dados(), bot.loop)
+        return futuro.result(timeout=12)
+    except Exception as erro:
+        return {
+            "online": False,
+            "ping_ms": None,
+            "database": "AMZCore",
+            "collection": "servidores",
+            "mongo_uri_configurada": bool(os.getenv("MONGO_URI")),
+            "documentos": None,
+            "documentos_com_limpeza": None,
+            "indices": [],
+            "ultimo_documento": None,
+            "erro": str(erro),
+        }
+
+
+def variavel_configurada(nome):
+    return bool(os.getenv(nome, "").strip())
+
+
+def montar_status_render():
+    return {
+        "ambiente": "render" if variavel_configurada("RENDER") or variavel_configurada("RENDER_SERVICE_ID") else "local",
+        "porta": os.getenv("PORT"),
+        "servico_id": os.getenv("RENDER_SERVICE_ID"),
+        "servico_nome": os.getenv("RENDER_SERVICE_NAME"),
+        "url_externa": os.getenv("RENDER_EXTERNAL_URL"),
+        "git_commit": os.getenv("RENDER_GIT_COMMIT"),
+        "git_branch": os.getenv("RENDER_GIT_BRANCH"),
+        "instance_id": os.getenv("RENDER_INSTANCE_ID"),
+        "deploy_hook_configurado": variavel_configurada("RENDER_DEPLOY_HOOK_URL"),
+    }
+
+
+def montar_status_configuracoes():
+    variaveis = (
+        "DISCORD_TOKEN",
+        "DISCORD_CLIENT_ID",
+        "DISCORD_CLIENT_SECRET",
+        "DISCORD_REDIRECT_URI",
+        "MONGO_URI",
+        "RENDER_DEPLOY_HOOK_URL",
+        "AMZ_ADMIN_PASSWORD",
+        "AMZ_ADMIN_SESSION_SECRET",
+        "AMZ_SLASH_GUILD_IDS",
+    )
+
+    return {nome: variavel_configurada(nome) for nome in variaveis}
+
+
+def montar_status_bot_admin():
+    comandos_prefixo = sorted(bot.commands, key=lambda comando: comando.qualified_name)
+
+    return {
+        "prefixo": os.getenv("AMZ_COMMAND_PREFIX", "!"),
+        "cogs": sorted(bot.cogs.keys()),
+        "comandos_prefixo": [comando.qualified_name for comando in comandos_prefixo],
+        "total_comandos_prefixo": len(comandos_prefixo),
+        "total_comandos_slash": len(bot.tree.get_commands()),
+        "slash_guilds_sincronizadas": len(getattr(bot, "slash_synced_guilds", set())),
+        "intents": {
+            "message_content": bot.intents.message_content,
+            "members": bot.intents.members,
+            "guilds": bot.intents.guilds,
+        },
+        "totais": {
+            "servidores": len(bot.guilds),
+            "membros_aproximados": sum(guild.member_count or 0 for guild in bot.guilds),
+            "canais": sum(len(guild.channels) for guild in bot.guilds),
+            "cargos": sum(len(guild.roles) for guild in bot.guilds),
+        },
+    }
+
+
+def montar_status_sistema():
+    return {
+        "api": {
+            "online": True,
+            "iniciada_em": data_iso(API_STARTED_AT),
+            "uptime_segundos": segundos_desde(API_STARTED_AT),
+            "python": sys.version.split()[0],
+            "plataforma": platform.platform(),
+            "processo_id": os.getpid(),
+            "cwd": os.getcwd(),
+        },
+        "render": montar_status_render(),
+        "configuracoes": montar_status_configuracoes(),
+        "bot": montar_status_bot_admin(),
+        "banco": status_banco_sync(),
+    }
+
+
 def montar_info_servidor_admin(guild):
     dono = guild.owner
     canais = sorted(
@@ -560,6 +657,7 @@ def admin_status():
         **status_publico_bot(),
         "admin": True,
         "comandos_slash_sincronizados": len(getattr(bot, "slash_synced_guilds", set())),
+        "sistema": montar_status_sistema(),
         "servidores": servidores,
     }), 200
 

@@ -1235,6 +1235,7 @@ async function carregarStatusAdmin() {
 function renderizarAdminDashboard(dados) {
     const titulo = document.getElementById('admin-bot-title');
     const resumo = document.getElementById('admin-summary-grid');
+    const sistema = document.getElementById('admin-system-panel');
     const lista = document.getElementById('admin-server-list');
     const servidores = Array.isArray(dados.servidores) ? dados.servidores : [];
 
@@ -1253,6 +1254,10 @@ function renderizarAdminDashboard(dados) {
         ].join('');
     }
 
+    if (sistema) {
+        sistema.innerHTML = renderizarSistemaAdmin(dados.sistema || {});
+    }
+
     if (!lista) return;
 
     if (!servidores.length) {
@@ -1269,6 +1274,110 @@ function criarCardResumoAdmin(titulo, valor, detalhe) {
             <span>${escaparHTML(titulo)}</span>
             <strong>${escaparHTML(valor)}</strong>
             <small>${escaparHTML(detalhe)}</small>
+        </article>
+    `;
+}
+
+function simNao(valor) {
+    return valor ? 'Sim' : 'Nao';
+}
+
+function valorAdmin(valor) {
+    if (valor === true) return 'Sim';
+    if (valor === false) return 'Nao';
+    if (valor === null || valor === undefined || valor === '') return '--';
+    return String(valor);
+}
+
+function renderizarLinhaSistema(label, valor, destaque = false) {
+    return `
+        <div class="admin-system-row ${destaque ? 'featured' : ''}">
+            <span>${escaparHTML(label)}</span>
+            <strong>${escaparHTML(valorAdmin(valor))}</strong>
+        </div>
+    `;
+}
+
+function renderizarVariaveisSistema(configuracoes = {}) {
+    return Object.entries(configuracoes).map(([nome, configurada]) => `
+        <span class="admin-env-chip ${configurada ? 'ok' : 'no'}">
+            ${escaparHTML(nome)}: ${configurada ? 'ok' : 'faltando'}
+        </span>
+    `).join('');
+}
+
+function renderizarSistemaAdmin(sistema = {}) {
+    const api = sistema.api || {};
+    const render = sistema.render || {};
+    const banco = sistema.banco || {};
+    const botSistema = sistema.bot || {};
+    const configuracoes = sistema.configuracoes || {};
+    const ultimoDocumento = banco.ultimo_documento || {};
+
+    return `
+        <article class="admin-system-card">
+            <div class="admin-system-heading">
+                <div>
+                    <span>Sistema</span>
+                    <strong>Bot, Render e banco de dados</strong>
+                </div>
+            </div>
+
+            <div class="admin-system-grid">
+                <section>
+                    <h3>API</h3>
+                    ${renderizarLinhaSistema('Status', api.online ? 'Online' : 'Offline', true)}
+                    ${renderizarLinhaSistema('Uptime', formatarDuracao(api.uptime_segundos))}
+                    ${renderizarLinhaSistema('Python', api.python)}
+                    ${renderizarLinhaSistema('Plataforma', api.plataforma)}
+                    ${renderizarLinhaSistema('PID', api.processo_id)}
+                </section>
+
+                <section>
+                    <h3>Render</h3>
+                    ${renderizarLinhaSistema('Ambiente', render.ambiente, true)}
+                    ${renderizarLinhaSistema('Servico', render.servico_nome || render.servico_id)}
+                    ${renderizarLinhaSistema('URL publica', render.url_externa)}
+                    ${renderizarLinhaSistema('Branch', render.git_branch)}
+                    ${renderizarLinhaSistema('Commit', render.git_commit ? String(render.git_commit).slice(0, 12) : '--')}
+                    ${renderizarLinhaSistema('Deploy hook', simNao(render.deploy_hook_configurado))}
+                </section>
+
+                <section>
+                    <h3>MongoDB</h3>
+                    ${renderizarLinhaSistema('Status', banco.online ? 'Online' : 'Offline', true)}
+                    ${renderizarLinhaSistema('Ping', banco.ping_ms ? `${banco.ping_ms} ms` : '--')}
+                    ${renderizarLinhaSistema('Database', banco.database)}
+                    ${renderizarLinhaSistema('Collection', banco.collection)}
+                    ${renderizarLinhaSistema('Documentos', banco.documentos)}
+                    ${renderizarLinhaSistema('Com limpeza', banco.documentos_com_limpeza)}
+                    ${renderizarLinhaSistema('Ultimo update', formatarDataHora(ultimoDocumento.atualizado_em))}
+                </section>
+
+                <section>
+                    <h3>Bot</h3>
+                    ${renderizarLinhaSistema('Prefixo', botSistema.prefixo)}
+                    ${renderizarLinhaSistema('Cogs', Array.isArray(botSistema.cogs) ? botSistema.cogs.join(', ') : '--')}
+                    ${renderizarLinhaSistema('Comandos prefixo', botSistema.total_comandos_prefixo)}
+                    ${renderizarLinhaSistema('Comandos slash', botSistema.total_comandos_slash)}
+                    ${renderizarLinhaSistema('Guilds sync', botSistema.slash_guilds_sincronizadas)}
+                    ${renderizarLinhaSistema('Intent members', simNao(botSistema.intents?.members))}
+                    ${renderizarLinhaSistema('Membros aprox.', botSistema.totais?.membros_aproximados)}
+                </section>
+            </div>
+
+            <details class="admin-system-details">
+                <summary>Variaveis configuradas no Render</summary>
+                <div class="admin-env-grid">
+                    ${renderizarVariaveisSistema(configuracoes)}
+                </div>
+            </details>
+
+            ${banco.erro ? `
+                <div class="admin-system-error">
+                    MongoDB: ${escaparHTML(banco.erro)}
+                </div>
+            ` : ''}
         </article>
     `;
 }

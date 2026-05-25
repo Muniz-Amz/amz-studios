@@ -1,5 +1,6 @@
 # backend/database.py
 import os
+import time
 from datetime import datetime, timezone
 
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -179,3 +180,55 @@ async def remover_limpeza(server_id, canal_id):
     )
 
     return await buscar_limpezas(server_id)
+
+
+async def status_banco_dados():
+    """
+    Retorna informacoes seguras de saude do MongoDB para o painel ADM.
+    """
+    inicio = time.perf_counter()
+
+    try:
+        await client.admin.command("ping")
+        ping_ms = round((time.perf_counter() - inicio) * 1000)
+        total_documentos = await collection.count_documents({})
+        total_com_limpeza = await collection.count_documents(
+            {
+                "$or": [
+                    {"limpezas.0": {"$exists": True}},
+                    {"canal_id": {"$exists": True, "$ne": ""}},
+                ]
+            }
+        )
+        ultimo_documento = await collection.find_one(
+            {},
+            {"_id": 0, "id": 1, "nome": 1, "atualizado_em": 1},
+            sort=[("atualizado_em", -1)],
+        )
+        indices = await collection.index_information()
+
+        return {
+            "online": True,
+            "ping_ms": ping_ms,
+            "database": db.name,
+            "collection": collection.name,
+            "mongo_uri_configurada": bool(MONGO_URI),
+            "documentos": total_documentos,
+            "documentos_com_limpeza": total_com_limpeza,
+            "indices": list(indices.keys()),
+            "ultimo_documento": ultimo_documento,
+            "erro": None,
+        }
+    except Exception as erro:
+        return {
+            "online": False,
+            "ping_ms": None,
+            "database": db.name,
+            "collection": collection.name,
+            "mongo_uri_configurada": bool(MONGO_URI),
+            "documentos": None,
+            "documentos_com_limpeza": None,
+            "indices": [],
+            "ultimo_documento": None,
+            "erro": str(erro),
+        }
