@@ -49,6 +49,10 @@ function obterDiscordLoginUrl() {
     return url.toString();
 }
 
+function prepararLoginDiscord() {
+    sessionStorage.setItem('amz_retorno_oauth', 'servidores');
+}
+
 function estaEmArquivoLocal() {
     return window.location.protocol === 'file:';
 }
@@ -149,10 +153,20 @@ function acessarTelaBot() {
     document.getElementById('config-limpeza').classList.add('hidden');
 }
 
-function abrirListaServidores() {
+function abrirPainelServidores() {
+    document.getElementById('site-principal').classList.add('hidden');
+
+    const painel = document.getElementById('painel-loritta');
+    painel.classList.remove('hidden');
+    painel.classList.add('flex');
+
     document.getElementById('bot-landing').classList.add('hidden');
     document.getElementById('config-limpeza').classList.add('hidden');
     document.getElementById('lista-servidores').classList.remove('hidden');
+}
+
+function abrirListaServidores() {
+    abrirPainelServidores();
     
     verificarAutenticacao();
 }
@@ -160,6 +174,10 @@ function abrirListaServidores() {
 function voltarAoInicioBot() {
     document.getElementById('painel-loritta').classList.add('hidden');
     document.getElementById('site-principal').classList.remove('hidden');
+
+    if (window.location.hash === '#dashboard') {
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
 }
 
 // ==========================================
@@ -214,7 +232,7 @@ function mostrarBotaoLogin(mensagem) {
         <div class="text-center py-8 flex flex-col items-center justify-center w-full">
             <p class="text-white/60 text-xs mb-4 max-w-xs">${mensagem}</p>
             <div class="flex flex-col sm:flex-row gap-3">
-                <a href="${obterDiscordLoginUrl()}" 
+                <a href="${obterDiscordLoginUrl()}" onclick="prepararLoginDiscord()"
                    class="bg-white text-black px-6 py-3 text-[11px] font-black uppercase tracking-wider transition-all hover:bg-black hover:text-white border border-white">
                     Entrar com o Discord
                 </a>
@@ -573,7 +591,7 @@ function renderizarEstadoLimpezas(mensagem, incluirLogin = false) {
         <div class="cleanup-state">
             <span>${escaparHTML(mensagem)}</span>
             ${incluirLogin ? `
-                <a href="${obterDiscordLoginUrl()}" class="cleanup-state-link">
+                <a href="${obterDiscordLoginUrl()}" onclick="prepararLoginDiscord()" class="cleanup-state-link">
                     Entrar novamente
                 </a>
             ` : ''}
@@ -837,15 +855,26 @@ async function enviarConfiguracao() {
 // ==========================================
 // INICIALIZAÇÃO
 // ==========================================
-document.addEventListener("DOMContentLoaded", () => {
+function inicializarAplicacao() {
     const urlParams = new URLSearchParams(window.location.search);
+
     if (urlParams.get('code')) {
-        acessarTelaBot();
-        document.getElementById('bot-landing').classList.add('hidden');
-        document.getElementById('lista-servidores').classList.remove('hidden');
-        
+        abrirPainelServidores();
         verificarAutenticacao();
-        
-        window.history.replaceState({}, document.title, window.location.pathname);
+
+        sessionStorage.removeItem('amz_retorno_oauth');
+        window.history.replaceState({}, document.title, `${window.location.pathname}#dashboard`);
+        return;
     }
-});
+
+    if (window.location.hash === '#dashboard' || sessionStorage.getItem('amz_retorno_oauth') === 'servidores') {
+        sessionStorage.removeItem('amz_retorno_oauth');
+        abrirListaServidores();
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener("DOMContentLoaded", inicializarAplicacao);
+} else {
+    inicializarAplicacao();
+}
