@@ -127,75 +127,182 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                     <p class="text-neutral-500 text-[10px] uppercase tracking-widest font-mono">MongoDB Sync Active</p>
                 </div>
                 
-                <div id="container-servidores" class="grid md:grid-cols-2 gap-4"></div>
+                <div id="container-servidores" class="grid gap-4"></div>
             </div>
 
-            <div class="lg:col-span-2 flex flex-col gap-6">
-        
-        <div class="bg-[#0a0a0a] border border-white/10 p-8 rounded-sm flex flex-col justify-between min-h-[350px]">
-            <div>
-                <div class="flex justify-between items-start mb-6 border-b border-white/5 pb-4">
-                    <div>
-                        <h4 class="text-lg font-black uppercase tracking-tight text-white">Canais Monitorados</h4>
-                        <p class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest mt-1">Selecione os destinos ativos para a limpeza automática</p>
-                    </div>
-                    <span class="text-[10px] font-mono border border-white/10 px-2 py-1 text-neutral-400 uppercase">Filtro Ativo</span>
-                </div>
-
-                <div class="space-y-2 max-h-48 overflow-y-auto pr-2 font-mono text-xs text-neutral-400">
-                    
-                    <div class="flex items-center justify-between p-3 border border-white/5 bg-black/50 hover:border-white/20 transition">
-                        <div class="flex items-center gap-3">
-                            <span class="text-neutral-600">#</span>
-                            <span class="text-white">solicitacoes-gerais</span>
+            <div id="config-limpeza" class="hidden fade-in dashboard-wrap">
+                <div class="vm-dashboard">
+                    <aside class="vm-sidebar">
+                        <div class="vm-sidebar-group">
+                            <p class="vm-sidebar-label">SERVER SETTINGS</p>
+                            <button type="button" class="vm-server-picker" onclick="abrirListaServidores()">
+                                <span class="vm-server-current">
+                                    <span id="icone-servidor-atual" class="vm-server-current-icon">AMZ</span>
+                                    <span id="nome-servidor-atual">---</span>
+                                </span>
+                                <i class="ph ph-caret-down"></i>
+                            </button>
                         </div>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" checked class="sr-only peer">
-                            <div class="w-9 h-5 bg-[#262626] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-400 peer-checked:after:bg-black after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-white"></div>
-                        </label>
-                    </div>
-                    
-                    <div class="flex items-center justify-between p-3 border border-white/5 bg-black/50 hover:border-white/20 transition">
-                        <div class="flex items-center gap-3">
-                            <span class="text-neutral-600">#</span>
-                            <span class="text-white">logs-sistema</span>
-                        </div>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" checked class="sr-only peer">
-                            <div class="w-9 h-5 bg-[#262626] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-400 peer-checked:after:bg-black after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-white"></div>
-                        </label>
-                    </div>
 
-                    <div class="flex items-center justify-between p-3 border border-white/5 bg-black/50 hover:border-white/20 transition">
-                        <div class="flex items-center gap-3">
-                            <span class="text-neutral-600">#</span>
-                            <span class="text-neutral-500">chat-geral</span>
-                        </div>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" class="sr-only peer">
-                            <div class="w-9 h-5 bg-[#262626] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-400 peer-checked:after:bg-black after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-white"></div>
-                        </label>
-                    </div>
+                        <nav class="vm-sidebar-nav" aria-label="Configuracoes do servidor">
+                            <button type="button" class="vm-sidebar-link active" data-dashboard-section="setup" onclick="selecionarSecaoDashboard('setup')">Limpeza</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="server" onclick="selecionarSecaoDashboard('server')">Server Toggles</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="role" onclick="selecionarSecaoDashboard('role')">Role Toggles</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="misc" onclick="selecionarSecaoDashboard('misc')">Misc</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="bot" onclick="selecionarSecaoDashboard('bot')">Bot Profile</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="interface" onclick="selecionarSecaoDashboard('interface')">Interface</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="blacklist" onclick="selecionarSecaoDashboard('blacklist')">Blacklisted Words</button>
+                        </nav>
 
+                        <div class="vm-sidebar-divider"></div>
+
+                        <div class="vm-sidebar-group">
+                            <p class="vm-sidebar-label">PERSONAL SETTINGS</p>
+                            <button type="button" class="vm-sidebar-link active-soft" data-dashboard-section="global" onclick="selecionarSecaoDashboard('global')">Global Profile</button>
+                            <button type="button" class="vm-sidebar-link muted" data-dashboard-section="profiles" onclick="selecionarSecaoDashboard('profiles')">
+                                Server Profiles
+                                <small>Coming Soon</small>
+                            </button>
+                        </div>
+
+                        <div class="vm-sidebar-divider"></div>
+
+                        <div class="vm-sidebar-group">
+                            <p class="vm-sidebar-label">PREMIUM</p>
+                            <button type="button" class="vm-upgrade-link" data-dashboard-section="upgrade" onclick="selecionarSecaoDashboard('upgrade')">
+                                Upgrade
+                                <i class="ph ph-diamond"></i>
+                            </button>
+                        </div>
+
+                        <div class="vm-sidebar-divider"></div>
+
+                        <button type="button" class="vm-guide-link" onclick="abrirListaServidores()">
+                            <span>Voltar aos Servidores</span>
+                            <i class="ph ph-arrow-counter-clockwise"></i>
+                        </button>
+                    </aside>
+
+                    <section class="vm-content">
+                        <div class="vm-alert">
+                            <div>
+                                <i class="ph ph-info"></i>
+                                <span>Se encontrar problemas, reporte em nosso suporte.</span>
+                            </div>
+                            <button type="button" aria-label="Fechar aviso" onclick="this.closest('.vm-alert').classList.add('hidden')">
+                                <i class="ph ph-x"></i>
+                            </button>
+                        </div>
+
+                        <div class="vm-content-heading">
+                            <h2>Dashboard</h2>
+                            <p>Selecione uma secao para configurar o AMZ Bot</p>
+                        </div>
+
+                        <div class="vm-card-grid" id="dashboard-cards">
+                            <button type="button" class="vm-dashboard-card active" data-dashboard-section="setup" onclick="selecionarSecaoDashboard('setup')">
+                                <i class="ph ph-broom"></i>
+                                <span>
+                                    <strong>Limpeza</strong>
+                                    <small>Exclusao por canal</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="server" onclick="selecionarSecaoDashboard('server')">
+                                <i class="ph ph-toggle-left"></i>
+                                <span>
+                                    <strong>Server Toggles</strong>
+                                    <small>Recursos do servidor</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="role" onclick="selecionarSecaoDashboard('role')">
+                                <i class="ph ph-toggle-left"></i>
+                                <span>
+                                    <strong>Role Toggles</strong>
+                                    <small>Permissoes por cargo</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="misc" onclick="selecionarSecaoDashboard('misc')">
+                                <i class="ph ph-list-bullets"></i>
+                                <span>
+                                    <strong>Misc</strong>
+                                    <small>Opcoes adicionais</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="bot" onclick="selecionarSecaoDashboard('bot')">
+                                <i class="ph ph-user-circle"></i>
+                                <span>
+                                    <strong>Bot Profile</strong>
+                                    <small>Aparencia e comportamento</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="global" onclick="selecionarSecaoDashboard('global')">
+                                <i class="ph ph-user"></i>
+                                <span>
+                                    <strong>Global Profile</strong>
+                                    <small>Preferencias pessoais</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card disabled" data-dashboard-section="profiles" onclick="selecionarSecaoDashboard('profiles')">
+                                <i class="ph ph-user-square"></i>
+                                <span>
+                                    <strong>Server Profiles</strong>
+                                    <small>Coming Soon</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="upgrade" onclick="selecionarSecaoDashboard('upgrade')">
+                                <i class="ph ph-diamond"></i>
+                                <span>
+                                    <strong>Upgrade</strong>
+                                    <small>Recursos premium</small>
+                                </span>
+                            </button>
+                        </div>
+
+                        <div class="vm-settings-panel" id="dashboard-section-panel">
+                            <div class="vm-panel-heading">
+                                <span>Limpeza</span>
+                                <strong id="dashboard-server-name">---</strong>
+                            </div>
+
+                            <div class="vm-form-grid">
+                                <label>
+                                    <span>Canal do Discord</span>
+                                    <select id="canal_select" onchange="selecionarCanalLimpeza()">
+                                        <option value="">Carregando canais...</option>
+                                    </select>
+                                    <input type="hidden" id="canal_id">
+                                    <input type="hidden" id="canal_nome">
+                                </label>
+
+                                <label>
+                                    <span>Excluir mensagens apos</span>
+                                    <select id="dias">
+                                        <option value="1">24 Horas (1 dia)</option>
+                                        <option value="3">72 Horas (3 dias)</option>
+                                        <option value="7">168 Horas (7 dias)</option>
+                                    </select>
+                                </label>
+                            </div>
+
+                            <button type="button" onclick="enviarConfiguracao()" class="vm-save-button">
+                                <i class="ph ph-broom" id="icon-sync"></i>
+                                Salvar Limpeza
+                            </button>
+
+                            <div id="status_msg" class="vm-status-message hidden"></div>
+                            <div class="cleanup-list-panel">
+                                <div class="cleanup-list-heading">
+                                    <strong>Limpezas configuradas</strong>
+                                    <span>Canais com exclusao automatica</span>
+                                </div>
+                                <div id="limpezas-configuradas" class="cleanup-list-empty">
+                                    Nenhuma limpeza configurada.
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </div>
             </div>
-
-            <div class="mt-8 pt-6 border-t border-white/5">
-                <div class="flex flex-col sm:flex-row gap-4">
-                    <button onclick="abrirListaServidores()" class="sm:w-1/3 border border-white/10 hover:bg-white/5 text-white py-4 font-bold uppercase text-xs tracking-widest transition text-center">
-                        Voltar
-                    </button>
-                    
-                    <button onclick="enviarConfiguracao()" class="sm:w-2/3 bg-white text-black py-4 font-bold uppercase text-xs tracking-widest hover:bg-neutral-200 transition flex items-center justify-center gap-3">
-                        <i class="ph ph-arrows-clockwise font-bold" id="icon-sync"></i> Sincronizar MongoDB
-                    </button>
-                </div>
-
-                <div id="status_msg" class="text-[10px] uppercase tracking-widest text-center mt-4 hidden font-black"></div>
-            </div>
-        </div>
-
-    </div>
         </main>
         
         <footer class="py-10 border-t border-white/10 bg-black text-center mt-auto">

@@ -74,6 +74,517 @@ body {
     background-color: #cccccc;
 }
 
+/* --- CARD COMPACTO DE SERVIDOR --- */
+.server-config-card {
+    min-height: 56px;
+    background: #020202;
+    border: 1px solid #151515;
+    padding: 14px 14px 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015);
+}
+
+.server-config-card:hover {
+    border-color: rgba(255, 255, 255, 0.38);
+    background: #070707;
+}
+
+.server-config-name {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    font-variant: small-caps;
+}
+
+.server-avatar {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.server-avatar.fallback {
+    display: grid;
+    place-items: center;
+    background: #0d0d0d;
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+}
+
+.server-config-name span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.server-config-name i {
+    flex: 0 0 auto;
+    font-size: 15px;
+    color: #ffffff;
+}
+
+.server-config-button {
+    flex: 0 0 auto;
+    background: #ffffff;
+    color: #000000;
+    border: 1px solid #ffffff;
+    padding: 11px 18px;
+    font-size: 8px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    transition: all 0.2s ease;
+}
+
+.server-config-button:hover {
+    background: #0b0b0b;
+    color: #ffffff;
+}
+
+/* --- DASHBOARD ESTILO REFERENCIA --- */
+.dashboard-wrap {
+    width: min(1120px, 100%);
+    margin: 0 auto;
+}
+
+.vm-dashboard {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    min-height: 690px;
+    overflow: hidden;
+    background: #34353d;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 5px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+}
+
+.vm-sidebar {
+    background: #292a31;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 22px 16px;
+}
+
+.vm-sidebar-group {
+    display: grid;
+    gap: 8px;
+}
+
+.vm-sidebar-label {
+    color: rgba(255, 255, 255, 0.34);
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.vm-server-picker {
+    width: 100%;
+    min-height: 36px;
+    background: #45464f;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: #d8dce8;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13px;
+    text-align: left;
+}
+
+.vm-server-picker span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vm-server-current {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.vm-server-current-icon {
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 50%;
+    background: #000000;
+    color: #ffffff;
+    display: grid;
+    place-items: center;
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+}
+
+.vm-server-current-icon img {
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+}
+
+.vm-server-picker:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.vm-sidebar-nav {
+    display: grid;
+    gap: 2px;
+    margin-top: 14px;
+}
+
+.vm-sidebar-link,
+.vm-guide-link,
+.vm-upgrade-link {
+    width: 100%;
+    min-height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: rgba(255, 255, 255, 0.36);
+    font-size: 15px;
+    font-weight: 900;
+    text-align: left;
+    transition: color 0.2s ease, background 0.2s ease;
+}
+
+.vm-sidebar-link:hover,
+.vm-sidebar-link.active,
+.vm-guide-link:hover {
+    color: #d9def0;
+}
+
+.vm-sidebar-link small {
+    display: block;
+    width: 100%;
+    color: rgba(255, 255, 255, 0.2);
+    font-size: 10px;
+    font-style: italic;
+    font-weight: 700;
+}
+
+.vm-sidebar-link.muted {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0;
+}
+
+.vm-sidebar-link.active-soft {
+    color: #bfc7dd;
+}
+
+.vm-sidebar-divider {
+    height: 1px;
+    margin: 18px 0;
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.vm-upgrade-link {
+    min-height: 31px;
+    background: rgba(0, 0, 0, 0.24);
+    color: #fff200;
+    padding: 0 10px;
+    border-radius: 4px;
+}
+
+.vm-upgrade-link i {
+    font-size: 18px;
+}
+
+.vm-guide-link {
+    color: #b7bdd1;
+}
+
+.vm-content {
+    min-width: 0;
+    padding: 20px;
+}
+
+.vm-alert {
+    min-height: 56px;
+    border: 1px solid #2f65cb;
+    border-radius: 7px;
+    background: rgba(47, 101, 203, 0.17);
+    color: #dbe8ff;
+    padding: 0 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.vm-alert div {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.vm-alert span {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.vm-alert i {
+    color: #65a2ff;
+    font-size: 21px;
+}
+
+.vm-alert button {
+    flex: 0 0 auto;
+}
+
+.vm-content-heading {
+    text-align: center;
+    padding: 20px 0 32px;
+}
+
+.vm-content-heading h2 {
+    color: #ffffff;
+    font-size: 24px;
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: -0.01em;
+}
+
+.vm-content-heading p {
+    margin-top: 12px;
+    color: #b6c0d6;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.vm-card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.vm-dashboard-card {
+    min-height: 120px;
+    background: #3d3e46;
+    border: 1px solid rgba(255, 255, 255, 0.035);
+    border-radius: 8px;
+    padding: 24px 22px;
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    align-items: center;
+    gap: 16px;
+    color: #ffffff;
+    text-align: left;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.vm-dashboard-card:hover,
+.vm-dashboard-card.active {
+    background: #444650;
+    border-color: rgba(255, 242, 0, 0.18);
+    transform: translateY(-2px);
+}
+
+.vm-dashboard-card i {
+    color: #fff200;
+    font-size: 21px;
+}
+
+.vm-dashboard-card strong {
+    display: block;
+    color: #ffffff;
+    font-size: 18px;
+    line-height: 1.1;
+    font-weight: 900;
+}
+
+.vm-dashboard-card small {
+    display: block;
+    margin-top: 10px;
+    color: #b8c2d8;
+    font-size: 14px;
+    line-height: 1.4;
+    font-weight: 500;
+}
+
+.vm-dashboard-card.disabled {
+    opacity: 0.46;
+}
+
+.vm-settings-panel {
+    margin-top: 18px;
+    background: #2e2f36;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 22px;
+}
+
+.vm-panel-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.vm-panel-heading span {
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 900;
+}
+
+.vm-panel-heading strong {
+    min-width: 0;
+    color: #fff200;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vm-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 220px;
+    gap: 14px;
+}
+
+.vm-form-grid label {
+    display: grid;
+    gap: 8px;
+}
+
+.vm-form-grid label span {
+    color: rgba(255, 255, 255, 0.48);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.vm-form-grid input,
+.vm-form-grid select {
+    width: 100%;
+    min-height: 44px;
+    background: #202126;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    outline: none;
+    padding: 0 14px;
+    font-size: 13px;
+}
+
+.vm-form-grid input:focus,
+.vm-form-grid select:focus {
+    border-color: #fff200;
+}
+
+.vm-save-button {
+    width: 100%;
+    min-height: 46px;
+    margin-top: 16px;
+    background: #fff200;
+    color: #090909;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.vm-save-button:hover {
+    background: #ffffff;
+    transform: translateY(-1px);
+}
+
+.vm-status-message {
+    display: block;
+    margin-top: 14px;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.vm-status-message.success {
+    color: #5bff8a;
+}
+
+.vm-status-message.error {
+    color: #ff6767;
+}
+
+.vm-placeholder-panel {
+    display: grid;
+    gap: 18px;
+}
+
+.vm-placeholder-panel p {
+    color: #b8c2d8;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.vm-toggle-list {
+    display: grid;
+    gap: 10px;
+}
+
+.vm-toggle-row {
+    min-height: 58px;
+    background: #27282f;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.vm-toggle-row strong {
+    display: block;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.vm-toggle-row small {
+    display: block;
+    margin-top: 2px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.vm-toggle-row input {
+    width: 34px;
+    height: 18px;
+    accent-color: #fff200;
+}
+
 /* Espaçamento extra para compensar o menu fixo ao rolar */
 section { 
     scroll-margin-top: 80px;
@@ -111,77 +622,396 @@ section {
 .hidden {
     display: none !important;
 }
-/* ================================================================= */
-/* ESTILIZAÇÃO DO NOVO PAINEL DE CONFIGURAÇÃO (B&W PREMIUM)          */
-/* ================================================================= */
 
-/* Scrollbar Minimalista para a Lista de Canais */
-#config-limpeza .overflow-y-auto::-webkit-scrollbar {
-    width: 4px;
+@media (max-width: 980px) {
+    .vm-dashboard {
+        grid-template-columns: 1fr;
+    }
+
+    .vm-sidebar {
+        border-right: 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .vm-sidebar-nav {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px 14px;
+    }
+
+    .vm-card-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
-#config-limpeza .overflow-y-auto::-webkit-scrollbar-track {
-    background: #000;
+@media (max-width: 640px) {
+    .server-config-card {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .server-config-button {
+        width: 100%;
+    }
+
+    .vm-content {
+        padding: 14px;
+    }
+
+    .vm-alert {
+        align-items: flex-start;
+        padding: 14px;
+    }
+
+    .vm-content-heading p {
+        font-size: 14px;
+    }
+
+    .vm-card-grid,
+    .vm-form-grid,
+    .vm-sidebar-nav {
+        grid-template-columns: 1fr;
+    }
+
+    .vm-dashboard-card {
+        min-height: 96px;
+    }
+
+    .vm-panel-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 6px;
+    }
 }
 
-#config-limpeza .overflow-y-auto::-webkit-scrollbar-thumb {
-    background: #222;
-    border-radius: 2px;
+/* --- SKIN AMZ PARA A ABA DO DASHBOARD --- */
+.vm-dashboard {
+    background: #030303;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0;
+    box-shadow: none;
 }
 
-#config-limpeza .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-    background: #fff;
+.vm-sidebar {
+    background: #050505;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Customização dos Checkboxes para o Estilo Atormentado/Preto e Branco */
-#config-limpeza input[type="checkbox"] {
-    appearance: none;
-    -webkit-appearance: none;
-    width: 16px;
-    height: 16px;
-    border: 1px solid #333;
-    background-color: #000;
-    border-radius: 2px;
-    display: inline-grid;
-    place-content: center;
-    cursor: pointer;
+.vm-sidebar-label {
+    color: rgba(255, 255, 255, 0.28);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+}
+
+.vm-server-picker {
+    background: #0b0b0b;
+    border-color: rgba(255, 255, 255, 0.08);
+    border-radius: 0;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.vm-server-picker:hover,
+.vm-server-picker:focus {
+    border-color: rgba(255, 255, 255, 0.42);
+}
+
+.vm-sidebar-link,
+.vm-guide-link,
+.vm-upgrade-link {
+    color: rgba(255, 255, 255, 0.38);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.vm-sidebar-link:hover,
+.vm-sidebar-link.active,
+.vm-sidebar-link.active-soft,
+.vm-guide-link:hover {
+    color: #ffffff;
+}
+
+.vm-sidebar-link.active {
+    padding-left: 10px;
+    border-left: 2px solid #ffffff;
+}
+
+.vm-sidebar-link small {
+    color: rgba(255, 255, 255, 0.25);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+}
+
+.vm-sidebar-divider {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.vm-upgrade-link {
+    background: #ffffff;
+    color: #000000;
+    border-radius: 0;
+}
+
+.vm-upgrade-link:hover {
+    background: #dcdcdc;
+    color: #000000;
+}
+
+.vm-content {
+    background: radial-gradient(circle at top right, #111111, #050505 42%, #030303 100%);
+}
+
+.vm-alert {
+    background: #080808;
+    border-color: rgba(255, 255, 255, 0.12);
+    border-radius: 0;
+    color: rgba(255, 255, 255, 0.66);
+}
+
+.vm-alert i {
+    color: #ffffff;
+}
+
+.vm-alert span {
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.vm-content-heading {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.vm-content-heading h2 {
+    font-size: clamp(32px, 5vw, 58px);
+    letter-spacing: -0.05em;
+    text-transform: uppercase;
+}
+
+.vm-content-heading p {
+    color: rgba(255, 255, 255, 0.42);
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.vm-dashboard-card {
+    background: #050505;
+    border-color: rgba(255, 255, 255, 0.08);
+    border-radius: 0;
+}
+
+.vm-dashboard-card:hover,
+.vm-dashboard-card.active {
+    background: #0f0f0f;
+    border-color: rgba(255, 255, 255, 0.72);
+}
+
+.vm-dashboard-card i {
+    color: #ffffff;
+}
+
+.vm-dashboard-card strong {
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.vm-dashboard-card small {
+    color: rgba(255, 255, 255, 0.42);
+    font-size: 12px;
+}
+
+.vm-settings-panel,
+.vm-placeholder-panel .vm-toggle-row {
+    background: #050505;
+    border-color: rgba(255, 255, 255, 0.08);
+    border-radius: 0;
+}
+
+.vm-panel-heading {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 16px;
+}
+
+.vm-panel-heading span,
+.vm-toggle-row strong {
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.vm-panel-heading strong {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.vm-form-grid label span,
+.vm-toggle-row small,
+.vm-placeholder-panel p {
+    color: rgba(255, 255, 255, 0.42);
+}
+
+.vm-form-grid input,
+.vm-form-grid select {
+    background: #000000;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.vm-form-grid input:focus,
+.vm-form-grid select:focus {
+    border-color: #ffffff;
+}
+
+.vm-form-grid {
+    grid-template-columns: minmax(0, 1fr) 220px;
+}
+
+.vm-save-button {
+    background: #ffffff;
+    color: #000000;
+}
+
+.vm-save-button:hover {
+    background: #dcdcdc;
+}
+
+.vm-toggle-row input {
+    accent-color: #ffffff;
+}
+
+.cleanup-list-panel {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cleanup-list-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.cleanup-list-heading strong {
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.cleanup-list-heading span {
+    color: rgba(255, 255, 255, 0.36);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.cleanup-list-empty {
+    min-height: 64px;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.36);
+    display: grid;
+    place-items: center;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.cleanup-list {
+    display: grid;
+    gap: 10px;
+}
+
+.cleanup-item {
+    min-height: 74px;
+    background: #000000;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 14px;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+}
+
+.cleanup-item-icon {
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    display: grid;
+    place-items: center;
+}
+
+.cleanup-item-icon i {
+    color: #ffffff;
+    font-size: 17px;
+}
+
+.cleanup-item-body {
+    min-width: 0;
+}
+
+.cleanup-item-body strong {
+    display: block;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.cleanup-item-body span,
+.cleanup-item-body small {
+    display: block;
+    margin-top: 3px;
+    color: rgba(255, 255, 255, 0.42);
+    font-size: 11px;
+}
+
+.cleanup-item button {
+    background: #ffffff;
+    border: 1px solid #ffffff;
+    color: #000000;
+    padding: 10px 14px;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
     transition: all 0.2s ease;
 }
 
-#config-limpeza input[type="checkbox"]:checked {
-    background-color: #fff;
-    border-color: #fff;
+.cleanup-item button:hover {
+    background: #050505;
+    color: #ffffff;
 }
 
-#config-limpeza input[type="checkbox"]:checked::before {
-    content: "";
-    width: 8px;
-    height: 4px;
-    border-left: 2px solid #000;
-    border-bottom: 2px solid #000;
-    transform: rotate(-45deg) translate(1px, -1px);
+@media (max-width: 900px) {
+    .vm-form-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
-#config-limpeza input[type="checkbox"]:hover {
-    border-color: #fff;
-}
+@media (max-width: 640px) {
+    .cleanup-list-heading,
+    .cleanup-item {
+        align-items: stretch;
+        grid-template-columns: 1fr;
+    }
 
-/* Customização do Elemento Select (Seta estilizada em branco) */
-#config-limpeza select {
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23ffffff' viewBox='0 0 256 256'><path d='M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80a8,8,0,0,1,11.32-11.32L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z'></path></svg>");
-    background-repeat: no-repeat;
-    background-position: right 16px center;
-    padding-right: 40px;
-}
+    .cleanup-list-heading {
+        display: grid;
+    }
 
-/* Transições e Hover nos Cards de Seleção de Canais */
-#config-limpeza label {
-    transition: background-color 0.2s ease, border-color 0.2s ease;
-}
-
-#config-limpeza label:hover {
-    background-color: #0c0c0c;
+    .cleanup-item button {
+        width: 100%;
+    }
 }
