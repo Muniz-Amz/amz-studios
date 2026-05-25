@@ -53,6 +53,30 @@ function prepararLoginDiscord() {
     sessionStorage.setItem('amz_retorno_oauth', 'servidores');
 }
 
+function obterServidoresDemo() {
+    return [
+        { id: 'demo-celestial', nome: 'Celestial Trindade', icon_url: '' }
+    ];
+}
+
+function obterServidoresCache() {
+    try {
+        return JSON.parse(localStorage.getItem('servidores_amz') || '[]');
+    } catch (erro) {
+        console.warn('Cache de servidores invalido:', erro);
+        return [];
+    }
+}
+
+function salvarServidoresCache(servidores = []) {
+    localStorage.setItem('servidores_amz', JSON.stringify(servidores));
+}
+
+function limparSessaoDiscord() {
+    localStorage.removeItem('discord_token');
+    localStorage.removeItem('servidores_amz');
+}
+
 function estaEmArquivoLocal() {
     return window.location.protocol === 'file:';
 }
@@ -165,6 +189,38 @@ function abrirPainelServidores() {
     document.getElementById('lista-servidores').classList.remove('hidden');
 }
 
+function navegarParaSecaoSite(secao) {
+    const painel = document.getElementById('painel-loritta');
+    const site = document.getElementById('site-principal');
+
+    painel.classList.add('hidden');
+    painel.classList.remove('flex');
+    site.classList.remove('hidden');
+
+    const destino = document.getElementById(secao);
+    if (destino) {
+        requestAnimationFrame(() => destino.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+
+    window.history.replaceState({}, document.title, `${window.location.pathname}#${secao}`);
+}
+
+function configurarNavegacaoTopo() {
+    document.querySelectorAll('.site-nav-links a[href^="#"]').forEach((link) => {
+        if (link.dataset.navConfigurada === 'true') return;
+
+        link.dataset.navConfigurada = 'true';
+        link.addEventListener('click', (evento) => {
+            const secao = link.getAttribute('href')?.replace('#', '');
+
+            if (!secao) return;
+
+            evento.preventDefault();
+            navegarParaSecaoSite(secao);
+        });
+    });
+}
+
 function abrirListaServidores() {
     abrirPainelServidores();
     
@@ -172,7 +228,9 @@ function abrirListaServidores() {
 }
 
 function voltarAoInicioBot() {
-    document.getElementById('painel-loritta').classList.add('hidden');
+    const painel = document.getElementById('painel-loritta');
+    painel.classList.add('hidden');
+    painel.classList.remove('flex');
     document.getElementById('site-principal').classList.remove('hidden');
 
     if (window.location.hash === '#dashboard') {
@@ -207,8 +265,8 @@ async function verificarAutenticacao() {
             if (response.ok && dados.status === "sucesso") {
                 // SALVANDO O TOKEN E A SESSÃO
                 localStorage.setItem('discord_token', dados.access_token);
-                localStorage.setItem('servidores_amz', JSON.stringify(dados.servidores));
-                renderizarServidores(dados.servidores);
+                salvarServidoresCache(dados.servidores || []);
+                renderizarServidores(dados.servidores || []);
             } else {
                 mostrarBotaoLogin(`Erro: ${dados.erro || "Não autorizado"}`);
             }
@@ -217,6 +275,9 @@ async function verificarAutenticacao() {
             mostrarBotaoLogin("Erro ao conectar ao servidor de segurança.");
         }
     } else {
+        await atualizarServidoresAutorizados();
+        return;
+
         const sessaoSalva = localStorage.getItem('servidores_amz');
         if (sessaoSalva) {
             renderizarServidores(JSON.parse(sessaoSalva));
@@ -226,11 +287,82 @@ async function verificarAutenticacao() {
     }
 }
 
+function mostrarAvisoListaServidores(mensagem) {
+    const container = document.getElementById('container-servidores');
+    if (!container) return;
+
+    const aviso = document.createElement('p');
+    aviso.className = 'text-white/35 text-[10px] uppercase tracking-wider pt-2';
+    aviso.textContent = mensagem;
+    container.appendChild(aviso);
+}
+
+async function atualizarServidoresAutorizados() {
+    const container = document.getElementById('container-servidores');
+    const token = localStorage.getItem('discord_token');
+    const cache = obterServidoresCache();
+
+    if (token === 'demo-token') {
+        renderizarServidores(cache.length ? cache : obterServidoresDemo());
+        return;
+    }
+
+    if (!token) {
+        mostrarBotaoLogin("Voce precisa entrar com o Discord para atualizar seus servidores.");
+        return;
+    }
+
+    if (cache.length) {
+        renderizarServidores(cache);
+        mostrarAvisoListaServidores('Atualizando lista de servidores...');
+    } else if (container) {
+        container.innerHTML = '<p class="text-white/20 animate-pulse text-xs">Atualizando servidores que voce pode configurar...</p>';
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/api/servidores`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const resultado = await lerJsonResposta(response);
+
+        if (response.ok && resultado.status === 'sucesso') {
+            const servidores = resultado.servidores || [];
+            salvarServidoresCache(servidores);
+            renderizarServidores(servidores);
+            return;
+        }
+
+        if (response.status === 401) {
+            limparSessaoDiscord();
+            mostrarBotaoLogin(resultado.mensagem || 'Sessao expirada. Entre novamente com o Discord.');
+            return;
+        }
+
+        if (cache.length) {
+            renderizarServidores(cache);
+            mostrarAvisoListaServidores(resultado.mensagem || resultado.erro || 'Nao consegui atualizar agora. Mostrando a ultima lista carregada.');
+            return;
+        }
+
+        mostrarBotaoLogin(resultado.mensagem || resultado.erro || 'Nao consegui atualizar seus servidores agora.');
+    } catch (erro) {
+        console.error('Erro ao atualizar servidores:', erro);
+
+        if (cache.length) {
+            renderizarServidores(cache);
+            mostrarAvisoListaServidores('API indisponivel agora. Mostrando a ultima lista carregada.');
+            return;
+        }
+
+        mostrarBotaoLogin('Erro ao conectar na API para atualizar os servidores.');
+    }
+}
+
 function mostrarBotaoLogin(mensagem) {
     const container = document.getElementById('container-servidores');
     container.innerHTML = `
         <div class="text-center py-8 flex flex-col items-center justify-center w-full">
-            <p class="text-white/60 text-xs mb-4 max-w-xs">${mensagem}</p>
+            <p class="text-white/60 text-xs mb-4 max-w-xs">${escaparHTML(mensagem)}</p>
             <div class="flex flex-col sm:flex-row gap-3">
                 <a href="${obterDiscordLoginUrl()}" onclick="prepararLoginDiscord()"
                    class="bg-white text-black px-6 py-3 text-[11px] font-black uppercase tracking-wider transition-all hover:bg-black hover:text-white border border-white">
@@ -248,12 +380,10 @@ function mostrarBotaoLogin(mensagem) {
 }
 
 function acessarDemoLocal() {
-    const servidoresDemo = [
-        { id: 'demo-celestial', nome: 'Celestial Trindade', icon_url: '' }
-    ];
+    const servidoresDemo = obterServidoresDemo();
 
     localStorage.setItem('discord_token', 'demo-token');
-    localStorage.setItem('servidores_amz', JSON.stringify(servidoresDemo));
+    salvarServidoresCache(servidoresDemo);
     renderizarServidores(servidoresDemo);
 }
 
@@ -524,7 +654,7 @@ async function carregarCanaisServidor() {
         }
 
         if (response.status === 401) {
-            localStorage.removeItem('discord_token');
+            limparSessaoDiscord();
             renderizarErroCanais(resultado.mensagem || 'Sessao expirada. Entre novamente com o Discord.', true);
             return;
         }
@@ -687,9 +817,15 @@ async function carregarLimpezasConfiguradas() {
             return;
         }
 
-        if (response.status === 401 || response.status === 403) {
-            localStorage.removeItem('discord_token');
+        if (response.status === 401) {
+            limparSessaoDiscord();
             renderizarEstadoLimpezas(resultado.mensagem || 'Sessao expirada. Entre novamente para carregar as limpezas salvas.', true);
+            return;
+        }
+
+        if (response.status === 403) {
+            renderizarEstadoLimpezas(resultado.mensagem || 'Acesso negado para este servidor.');
+            mostrarStatusLimpeza('Atualize a lista de servidores ou entre novamente se sua permissao mudou.');
             return;
         }
 
@@ -753,6 +889,12 @@ async function removerLimpezaConfigurada(canalId) {
                 statusMsg.innerText = 'Limpeza removida e banco atualizado.';
                 statusMsg.className = 'vm-status-message success';
             }
+            return;
+        }
+
+        if (response.status === 401) {
+            limparSessaoDiscord();
+            alert(resultado.mensagem || 'Sessao expirada. Entre novamente com o Discord.');
             return;
         }
 
@@ -825,7 +967,7 @@ async function enviarConfiguracao() {
         
         if (iconSync) iconSync.classList.remove('animate-spin');
 
-        if(resultado.status === 'sucesso') {
+        if(response.ok && resultado.status === 'sucesso') {
             const limpezas = resultado.limpezas || [];
             salvarLimpezasCacheServidor(serverId, limpezas);
             renderizarLimpezasConfiguradas(limpezas);
@@ -835,6 +977,10 @@ async function enviarConfiguracao() {
             }
             alert('Limpeza salva com sucesso!');
         } else {
+            if (response.status === 401) {
+                limparSessaoDiscord();
+            }
+
             if(statusMsg) {
                 statusMsg.innerText = resultado.mensagem || resultado.erro || "Resposta invalida do servidor.";
                 statusMsg.className = "vm-status-message error";
@@ -856,6 +1002,8 @@ async function enviarConfiguracao() {
 // INICIALIZAÇÃO
 // ==========================================
 function inicializarAplicacao() {
+    configurarNavegacaoTopo();
+
     const urlParams = new URLSearchParams(window.location.search);
 
     if (urlParams.get('code')) {

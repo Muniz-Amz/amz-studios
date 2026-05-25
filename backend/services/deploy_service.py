@@ -21,6 +21,16 @@ def usuario_pode_deploy(ctx):
     return False
 
 
+def usuario_pode_deploy_interaction(interaction):
+    if str(interaction.user.id) in DEPLOY_ALLOWED_USER_IDS:
+        return True
+
+    if interaction.guild and interaction.guild.owner_id == interaction.user.id:
+        return True
+
+    return False
+
+
 def deploy_configurado():
     return bool(RENDER_DEPLOY_HOOK_URL)
 

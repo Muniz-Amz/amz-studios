@@ -1,3 +1,5 @@
+import discord
+from discord import app_commands
 from discord.ext import commands, tasks
 
 from database import buscar_limpezas
@@ -38,6 +40,23 @@ class CleanupCog(commands.Cog):
             for limpeza in limpezas
         ]
         await ctx.send("Limpezas configuradas:\n" + "\n".join(linhas))
+
+    @app_commands.command(name="info", description="Mostra as limpezas configuradas neste servidor.")
+    async def slash_info(self, interaction: discord.Interaction):
+        limpezas = await buscar_limpezas(str(interaction.guild_id))
+
+        if not limpezas:
+            await interaction.response.send_message(
+                "Esse servidor ainda nao tem limpeza configurada no painel web.",
+                ephemeral=True,
+            )
+            return
+
+        linhas = [
+            f"#{limpeza.get('canal_nome', limpeza.get('canal_id'))}: {normalizar_dias(limpeza.get('dias'))} dias"
+            for limpeza in limpezas
+        ]
+        await interaction.response.send_message("Limpezas configuradas:\n" + "\n".join(linhas), ephemeral=True)
 
 
 async def setup(bot):

@@ -29,8 +29,8 @@
         
         <div class="site-nav-links">
             <a href="#inicio">Início</a>
-            <a href="#aplicativos">Aplicativos</a>
-            <button type="button" onclick="acessarTelaBot()" class="site-nav-dashboard">
+            <a href="#aplicativos" onclick="navegarParaSecaoSite('aplicativos')">Aplicativos</a>
+            <button type="button" onclick="abrirListaServidores()" class="site-nav-dashboard">
                 Dashboard
             </button>
         </div>
@@ -329,7 +329,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
 
     <script>
         const amzScript = document.createElement('script');
-        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=8' : 'script.js?v=8';
+        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=9' : 'script.js?v=9';
         document.body.appendChild(amzScript);
     </script>
 </body>

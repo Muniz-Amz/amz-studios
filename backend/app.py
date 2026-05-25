@@ -1,6 +1,7 @@
 import asyncio
 import os
 
+import discord
 import requests
 import werkzeug.serving
 from dotenv import load_dotenv
@@ -26,6 +27,8 @@ REDIRECT_URIS_PERMITIDAS = {
 
 DISCORD_API_URL = "https://discord.com/api/v10"
 DISCORD_TIMEOUT = 12
+PERMISSAO_ADMINISTRADOR = 0x8
+PERMISSAO_GERENCIAR_SERVIDOR = 0x20
 
 
 def usuario_admin_ou_dono(guild):
@@ -37,8 +40,31 @@ def usuario_admin_ou_dono(guild):
     except (TypeError, ValueError):
         permissions = 0
 
-    # 0x8 e o bit de Administrador no Discord.
-    return (permissions & 0x8) == 0x8
+    return (permissions & (PERMISSAO_ADMINISTRADOR | PERMISSAO_GERENCIAR_SERVIDOR)) != 0
+
+
+def buscar_usuario_discord(token):
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        response = requests.get(
+            f"{DISCORD_API_URL}/users/@me",
+            headers=headers,
+            timeout=DISCORD_TIMEOUT,
+        )
+    except requests.RequestException:
+        return None, "discord_indisponivel"
+
+    if response.status_code in (401, 403):
+        return None, "token_expirado"
+
+    if response.status_code != 200:
+        return None, "discord_recusou"
+
+    try:
+        return response.json(), None
+    except ValueError:
+        return None, "resposta_invalida"
 
 
 def buscar_guilds_usuario(token):
@@ -78,6 +104,98 @@ def verificar_admin(token, server_id):
     return False
 
 
+def obter_guild_bot(server_id):
+    try:
+        return bot.get_guild(int(server_id))
+    except (TypeError, ValueError):
+        return None
+
+
+async def usuario_tem_permissao_pelo_bot(server_id, user_id):
+    guild = obter_guild_bot(server_id)
+
+    if not guild:
+        return None
+
+    try:
+        user_id_int = int(user_id)
+    except (TypeError, ValueError):
+        return None
+
+    if guild.owner_id == user_id_int:
+        return True
+
+    member = guild.get_member(user_id_int)
+
+    if member is None:
+        try:
+            member = await guild.fetch_member(user_id_int)
+        except discord.NotFound:
+            return False
+        except (discord.Forbidden, discord.HTTPException):
+            return None
+
+    permissoes = member.guild_permissions
+    return permissoes.administrator or permissoes.manage_guild
+
+
+def confirmar_permissao_pelo_bot(server_id, user_id):
+    try:
+        futuro = asyncio.run_coroutine_threadsafe(
+            usuario_tem_permissao_pelo_bot(server_id, user_id),
+            bot.loop,
+        )
+        return futuro.result(timeout=10)
+    except Exception:
+        return None
+
+
+def usuario_pode_configurar_servidor(guild, user_id):
+    if usuario_admin_ou_dono(guild):
+        return True
+
+    return confirmar_permissao_pelo_bot(guild.get("id"), user_id) is True
+
+
+def montar_servidores_autorizados(token):
+    usuario, erro_usuario = buscar_usuario_discord(token)
+
+    if erro_usuario:
+        return None, erro_usuario
+
+    guilds, erro_guilds = buscar_guilds_usuario(token)
+
+    if erro_guilds:
+        return None, erro_guilds
+
+    user_id = usuario.get("id")
+    servidores_autorizados = []
+
+    for guild in guilds or []:
+        guild_id = guild.get("id")
+        bot_guild = obter_guild_bot(guild_id)
+
+        if not guild_id or not bot_guild:
+            continue
+
+        if usuario_pode_configurar_servidor(guild, user_id):
+            servidores_autorizados.append({
+                "id": str(guild_id),
+                "nome": guild.get("name", bot_guild.name),
+                "icon": guild.get("icon"),
+                "icon_url": montar_icon_url(guild_id, guild.get("icon")),
+            })
+
+    return {
+        "usuario": {
+            "id": str(user_id),
+            "nome": usuario.get("username"),
+            "avatar": usuario.get("avatar"),
+        },
+        "servidores": servidores_autorizados,
+    }, None
+
+
 def obter_redirect_uri_permitida(dados_frontend):
     redirect_uri = (dados_frontend.get("redirect_uri") or "").strip()
 
@@ -102,6 +220,14 @@ def validar_admin_requisicao(server_id):
     if not token:
         return jsonify({"status": "erro", "mensagem": "Sessao expirada. Entre novamente com o Discord."}), 401
 
+    usuario, erro_usuario = buscar_usuario_discord(token)
+
+    if erro_usuario == "token_expirado":
+        return jsonify({"status": "erro", "mensagem": "Sessao expirada. Entre novamente com o Discord."}), 401
+
+    if erro_usuario:
+        return jsonify({"status": "erro", "mensagem": "Nao consegui confirmar sua conta no Discord agora."}), 503
+
     guilds, erro = buscar_guilds_usuario(token)
 
     if erro == "token_expirado":
@@ -112,12 +238,12 @@ def validar_admin_requisicao(server_id):
 
     for guild in guilds:
         if str(guild.get("id")) == str(server_id):
-            if usuario_admin_ou_dono(guild):
+            if usuario_pode_configurar_servidor(guild, usuario.get("id")):
                 return None
 
             return jsonify({
                 "status": "erro",
-                "mensagem": "Acesso negado: sua conta nao tem permissao de administrador neste servidor.",
+                "mensagem": "Acesso negado: sua conta nao tem permissao de administrador ou gerenciar servidor.",
             }), 403
 
     return jsonify({"status": "erro", "mensagem": "Servidor nao encontrado na sua conta Discord."}), 403
@@ -190,28 +316,39 @@ def discord_callback():
     token_data = token_response.json()
     access_token = token_data.get("access_token")
 
-    guilds, erro = buscar_guilds_usuario(access_token)
+    if not access_token:
+        return jsonify({"erro": "Falha ao obter token do Discord"}), 400
+
+    dados_autorizados, erro = montar_servidores_autorizados(access_token)
 
     if erro:
         return jsonify({"erro": "Falha ao buscar servidores do usuario"}), 400
 
-    servidores_autorizados = []
-
-    for guild in guilds:
-        bot_guild = bot.get_guild(int(guild["id"]))
-
-        if usuario_admin_ou_dono(guild) and bot_guild:
-            servidores_autorizados.append({
-                "id": str(guild["id"]),
-                "nome": guild["name"],
-                "icon": guild.get("icon"),
-                "icon_url": montar_icon_url(guild["id"], guild.get("icon")),
-            })
-
     return jsonify({
         "status": "sucesso",
         "access_token": access_token,
-        "servidores": servidores_autorizados,
+        **dados_autorizados,
+    }), 200
+
+
+@app.route("/api/servidores", methods=["GET"])
+def listar_servidores_usuario():
+    token = obter_token_autorizacao()
+
+    if not token:
+        return jsonify({"status": "erro", "mensagem": "Sessao expirada. Entre novamente com o Discord."}), 401
+
+    dados_autorizados, erro = montar_servidores_autorizados(token)
+
+    if erro == "token_expirado":
+        return jsonify({"status": "erro", "mensagem": "Sessao expirada. Entre novamente com o Discord."}), 401
+
+    if erro:
+        return jsonify({"status": "erro", "mensagem": "Nao consegui atualizar seus servidores agora."}), 503
+
+    return jsonify({
+        "status": "sucesso",
+        **dados_autorizados,
     }), 200
 
 
