@@ -10,21 +10,30 @@ client = AsyncIOMotorClient(MONGO_URI)
 
 db = client["AMZCore"]
 collection = db["servidores"]
+MAX_DIAS_LIMPEZA_DISCORD = 14
 
 
 def _agora_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
+def _normalizar_dias(dias):
+    try:
+        valor = int(dias)
+    except (TypeError, ValueError):
+        valor = 1
+
+    return str(min(max(valor, 1), MAX_DIAS_LIMPEZA_DISCORD))
+
+
 def _normalizar_limpeza(dados):
     canal_id = str(dados.get("canal_id", "")).strip()
     canal_nome = str(dados.get("canal_nome") or dados.get("canal") or canal_id).strip()
-    dias = str(dados.get("dias", "1")).strip()
 
     return {
         "canal_id": canal_id,
         "canal_nome": canal_nome,
-        "dias": dias,
+        "dias": _normalizar_dias(dados.get("dias", "1")),
         "acao": "excluir_mensagens",
         "atualizado_em": _agora_iso(),
     }

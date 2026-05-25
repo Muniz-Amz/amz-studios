@@ -8,8 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    <link rel="stylesheet" href="style.css?v=4">
-    <link rel="stylesheet" href="/amz-studios/style.css?v=4">
+    <link rel="stylesheet" href="style.css?v=5">
+    <link rel="stylesheet" href="/amz-studios/style.css?v=5">
 </head>
 <body class="flex flex-col min-h-screen overflow-x-hidden bg-black">
 
@@ -278,8 +278,19 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                                     <span>Excluir mensagens apos</span>
                                     <select id="dias">
                                         <option value="1">24 Horas (1 dia)</option>
+                                        <option value="2">48 Horas (2 dias)</option>
                                         <option value="3">72 Horas (3 dias)</option>
+                                        <option value="4">96 Horas (4 dias)</option>
+                                        <option value="5">120 Horas (5 dias)</option>
+                                        <option value="6">144 Horas (6 dias)</option>
                                         <option value="7">168 Horas (7 dias)</option>
+                                        <option value="8">192 Horas (8 dias)</option>
+                                        <option value="9">216 Horas (9 dias)</option>
+                                        <option value="10">240 Horas (10 dias)</option>
+                                        <option value="11">264 Horas (11 dias)</option>
+                                        <option value="12">288 Horas (12 dias)</option>
+                                        <option value="13">312 Horas (13 dias)</option>
+                                        <option value="14">336 Horas (14 dias)</option>
                                     </select>
                                 </label>
                             </div>
@@ -312,7 +323,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
 
     <script>
         const amzScript = document.createElement('script');
-        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=4' : 'script.js?v=4';
+        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=5' : 'script.js?v=5';
         document.body.appendChild(amzScript);
     </script>
 </body>

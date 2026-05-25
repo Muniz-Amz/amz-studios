@@ -4,6 +4,25 @@
 const API_URL = 'https://amz-studios-api.onrender.com';
 const DISCORD_CLIENT_ID = '1479103284064026787';
 const DISCORD_REDIRECT_PADRAO = 'https://muniz-amz.github.io/amz-studios/';
+const MAX_DIAS_LIMPEZA_DISCORD = 14;
+
+function normalizarDiasLimpeza(dias) {
+    const valor = Number.parseInt(dias, 10);
+
+    if (!Number.isFinite(valor)) return 1;
+
+    return Math.min(Math.max(valor, 1), MAX_DIAS_LIMPEZA_DISCORD);
+}
+
+function gerarOpcoesDiasLimpeza() {
+    return Array.from({ length: MAX_DIAS_LIMPEZA_DISCORD }, (_, indice) => {
+        const dias = indice + 1;
+        const horas = dias * 24;
+        const rotuloDias = dias === 1 ? 'dia' : 'dias';
+
+        return `<option value="${dias}">${horas} Horas (${dias} ${rotuloDias})</option>`;
+    }).join('');
+}
 
 function obterRedirectUriDiscord() {
     const urlAtual = new URL(window.location.href);
@@ -327,9 +346,7 @@ function selecionarSecaoDashboard(secao = 'setup') {
                 <label>
                     <span>Excluir mensagens apos</span>
                     <select id="dias">
-                        <option value="1">24 Horas (1 dia)</option>
-                        <option value="3">72 Horas (3 dias)</option>
-                        <option value="7">168 Horas (7 dias)</option>
+                        ${gerarOpcoesDiasLimpeza()}
                     </select>
                 </label>
             </div>
@@ -573,14 +590,8 @@ async function lerJsonResposta(response) {
 }
 
 function obterRotuloDias(dias) {
-    const valor = String(dias);
-    const mapa = {
-        '1': '1 dia',
-        '3': '3 dias',
-        '7': '7 dias'
-    };
-
-    return mapa[valor] || `${valor} dias`;
+    const valor = normalizarDiasLimpeza(dias);
+    return `${valor} ${valor === 1 ? 'dia' : 'dias'}`;
 }
 
 function renderizarLimpezasConfiguradas(limpezas = []) {
