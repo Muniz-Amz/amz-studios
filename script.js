@@ -403,6 +403,7 @@ function renderizarSelectCanais(canais = []) {
     const canalNome = document.getElementById('canal_nome');
 
     if (!select) return;
+    select.disabled = false;
 
     if (!canais.length) {
         select.innerHTML = '<option value="">Nenhum canal de texto encontrado</option>';
@@ -421,6 +422,26 @@ function renderizarSelectCanais(canais = []) {
     ].join('');
 
     selecionarCanalLimpeza();
+}
+
+function renderizarErroCanais(mensagem, incluirLogin = false) {
+    const select = document.getElementById('canal_select');
+    const canalId = document.getElementById('canal_id');
+    const canalNome = document.getElementById('canal_nome');
+
+    if (select) {
+        select.disabled = true;
+        select.innerHTML = '<option value="">Canais indisponiveis no momento</option>';
+    }
+
+    if (canalId) canalId.value = '';
+    if (canalNome) canalNome.value = '';
+
+    mostrarStatusLimpeza(mensagem, 'error');
+
+    if (incluirLogin) {
+        renderizarEstadoLimpezas(mensagem, true);
+    }
 }
 
 function selecionarCanalLimpeza() {
@@ -444,6 +465,7 @@ async function carregarCanaisServidor() {
     if (!serverId || !select) return;
 
     select.innerHTML = '<option value="">Carregando canais...</option>';
+    select.disabled = true;
 
     if (token === 'demo-token') {
         renderizarSelectCanais(obterCanaisDemo());
@@ -451,7 +473,7 @@ async function carregarCanaisServidor() {
     }
 
     if (!token) {
-        select.innerHTML = '<option value="">Sessao expirada</option>';
+        renderizarErroCanais('Sessao expirada. Entre novamente com o Discord.', true);
         return;
     }
 
@@ -459,17 +481,23 @@ async function carregarCanaisServidor() {
         const response = await fetch(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/canais`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        const resultado = await response.json();
+        const resultado = await lerJsonResposta(response);
 
         if (response.ok && resultado.status === 'sucesso') {
             renderizarSelectCanais(resultado.canais || []);
             return;
         }
 
-        select.innerHTML = `<option value="">${escaparHTML(resultado.mensagem || 'Erro ao carregar canais')}</option>`;
+        if (response.status === 401) {
+            localStorage.removeItem('discord_token');
+            renderizarErroCanais(resultado.mensagem || 'Sessao expirada. Entre novamente com o Discord.', true);
+            return;
+        }
+
+        renderizarErroCanais(resultado.mensagem || resultado.erro || 'Nao foi possivel carregar os canais.');
     } catch (erro) {
         console.error('Erro ao carregar canais:', erro);
-        select.innerHTML = '<option value="">Erro ao conectar na API</option>';
+        renderizarErroCanais('Erro ao conectar na API para carregar os canais.');
     }
 }
 
