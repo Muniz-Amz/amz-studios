@@ -16,8 +16,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    <link rel="stylesheet" href="style.css?v=8">
-    <link rel="stylesheet" href="/amz-studios/style.css?v=8">
+    <link rel="stylesheet" href="style.css?v=9">
+    <link rel="stylesheet" href="/amz-studios/style.css?v=9">
 </head>
 <body class="flex flex-col min-h-screen overflow-x-hidden bg-black">
 
@@ -54,6 +54,13 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                         <button onclick="acessarTelaBot()" class="border border-white/10 px-10 py-5 font-bold uppercase text-xs tracking-widest hover:bg-white/5 transition">
                             Acessar Painel do Bot
                         </button>
+                    </div>
+
+                    <div class="bot-status-strip" id="bot-status-publico">
+                        <span class="bot-status-dot" id="bot-status-dot"></span>
+                        <strong id="bot-status-label">Verificando bot</strong>
+                        <span id="bot-status-servidores">Servidores: --</span>
+                        <small id="bot-status-sync">Ultima sincronizacao: --</small>
                     </div>
                 </div>
             </section>
@@ -327,9 +334,60 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
         </footer>
     </div>
 
+    <div id="admin-area" class="hidden admin-area fade-in">
+        <main class="admin-shell">
+            <button type="button" class="admin-back" onclick="fecharAreaAdmin()">
+                <i class="ph ph-arrow-left"></i>
+                Voltar ao site
+            </button>
+
+            <section class="admin-hero">
+                <span>AMZ CONTROL</span>
+                <h1>ADM</h1>
+                <p>Status interno do bot, servidores conectados e leitura tecnica das permissoes.</p>
+            </section>
+
+            <section class="admin-login-panel" id="admin-login-panel">
+                <form class="admin-login-card" onsubmit="entrarAreaAdmin(event)">
+                    <label>
+                        <span>Senha ADM</span>
+                        <input type="password" id="admin-password" autocomplete="current-password" placeholder="Digite a senha configurada no Render">
+                    </label>
+                    <button type="submit">
+                        <i class="ph ph-lock-key-open"></i>
+                        Entrar
+                    </button>
+                    <p id="admin-login-status"></p>
+                </form>
+            </section>
+
+            <section class="admin-dashboard hidden" id="admin-dashboard">
+                <div class="admin-toolbar">
+                    <div>
+                        <span>Painel protegido</span>
+                        <strong id="admin-bot-title">AMZ Bot</strong>
+                    </div>
+                    <div class="admin-toolbar-actions">
+                        <button type="button" onclick="carregarStatusAdmin()">
+                            <i class="ph ph-arrows-clockwise"></i>
+                            Atualizar
+                        </button>
+                        <button type="button" onclick="sairAreaAdmin()">
+                            <i class="ph ph-sign-out"></i>
+                            Sair
+                        </button>
+                    </div>
+                </div>
+
+                <div class="admin-summary-grid" id="admin-summary-grid"></div>
+                <div class="admin-server-list" id="admin-server-list"></div>
+            </section>
+        </main>
+    </div>
+
     <script>
         const amzScript = document.createElement('script');
-        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=9' : 'script.js?v=9';
+        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=10' : 'script.js?v=10';
         document.body.appendChild(amzScript);
     </script>
 </body>

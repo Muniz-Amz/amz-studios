@@ -5,6 +5,7 @@ const API_URL = 'https://amz-studios-api.onrender.com';
 const DISCORD_CLIENT_ID = '1479103284064026787';
 const DISCORD_REDIRECT_PADRAO = 'https://muniz-amz.github.io/amz-studios/';
 const MAX_DIAS_LIMPEZA_DISCORD = 14;
+const ADMIN_TOKEN_KEY = 'amz_admin_token';
 
 function normalizarDiasLimpeza(dias) {
     const valor = Number.parseInt(dias, 10);
@@ -167,6 +168,7 @@ function renderizarAvatarServidor(nome, iconUrl, classe = 'server-avatar') {
 
 function acessarTelaBot() {
     document.getElementById('site-principal').classList.add('hidden');
+    document.getElementById('admin-area')?.classList.add('hidden');
     
     const painel = document.getElementById('painel-loritta');
     painel.classList.remove('hidden');
@@ -179,6 +181,7 @@ function acessarTelaBot() {
 
 function abrirPainelServidores() {
     document.getElementById('site-principal').classList.add('hidden');
+    document.getElementById('admin-area')?.classList.add('hidden');
 
     const painel = document.getElementById('painel-loritta');
     painel.classList.remove('hidden');
@@ -195,6 +198,7 @@ function navegarParaSecaoSite(secao) {
 
     painel.classList.add('hidden');
     painel.classList.remove('flex');
+    document.getElementById('admin-area')?.classList.add('hidden');
     site.classList.remove('hidden');
 
     const destino = document.getElementById(secao);
@@ -1003,8 +1007,14 @@ async function enviarConfiguracao() {
 // ==========================================
 function inicializarAplicacao() {
     configurarNavegacaoTopo();
+    carregarStatusPublico();
 
     const urlParams = new URLSearchParams(window.location.search);
+
+    if (window.location.hash === '#amz-admin') {
+        abrirAreaAdmin();
+        return;
+    }
 
     if (urlParams.get('code')) {
         abrirPainelServidores();
@@ -1026,3 +1036,363 @@ if (document.readyState === 'loading') {
 } else {
     inicializarAplicacao();
 }
+
+// ==========================================
+// STATUS PUBLICO E AREA ADM ESCONDIDA
+// ==========================================
+function formatarDataHora(valor) {
+    if (!valor) return '--';
+
+    try {
+        return new Intl.DateTimeFormat('pt-BR', {
+            dateStyle: 'short',
+            timeStyle: 'short'
+        }).format(new Date(valor));
+    } catch {
+        return '--';
+    }
+}
+
+function formatarDuracao(segundos) {
+    const total = Number(segundos);
+
+    if (!Number.isFinite(total) || total < 0) return '--';
+
+    const dias = Math.floor(total / 86400);
+    const horas = Math.floor((total % 86400) / 3600);
+    const minutos = Math.floor((total % 3600) / 60);
+
+    if (dias > 0) return `${dias}d ${horas}h`;
+    if (horas > 0) return `${horas}h ${minutos}m`;
+    return `${Math.max(minutos, 1)}m`;
+}
+
+function definirStatusPublico(dados = null, erro = false) {
+    const strip = document.getElementById('bot-status-publico');
+    const dot = document.getElementById('bot-status-dot');
+    const label = document.getElementById('bot-status-label');
+    const servidores = document.getElementById('bot-status-servidores');
+    const sync = document.getElementById('bot-status-sync');
+
+    if (!strip || !dot || !label || !servidores || !sync) return;
+
+    const online = Boolean(dados?.online) && !erro;
+    strip.classList.toggle('online', online);
+    strip.classList.toggle('offline', !online);
+    dot.classList.toggle('online', online);
+
+    label.innerText = online ? 'Bot online' : 'Bot offline';
+    servidores.innerText = `Servidores: ${online ? dados.servidores ?? 0 : '--'}`;
+    sync.innerText = `Ultima sincronizacao: ${formatarDataHora(dados?.ultima_sincronizacao_em)}`;
+}
+
+async function carregarStatusPublico() {
+    try {
+        const response = await fetch(`${API_URL}/api/status`);
+        const dados = await lerJsonResposta(response);
+
+        if (response.ok && dados.status === 'sucesso') {
+            definirStatusPublico(dados);
+            return;
+        }
+
+        definirStatusPublico(null, true);
+    } catch (erro) {
+        console.warn('Nao foi possivel carregar status publico do bot:', erro);
+        definirStatusPublico(null, true);
+    }
+}
+
+function obterAdminToken() {
+    return localStorage.getItem(ADMIN_TOKEN_KEY);
+}
+
+function salvarAdminToken(token) {
+    localStorage.setItem(ADMIN_TOKEN_KEY, token);
+}
+
+function limparAdminToken() {
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+}
+
+function mostrarStatusLoginAdmin(mensagem, tipo = 'error') {
+    const status = document.getElementById('admin-login-status');
+
+    if (!status) return;
+
+    status.innerText = mensagem;
+    status.className = tipo;
+}
+
+function abrirAreaAdmin() {
+    document.getElementById('site-principal')?.classList.add('hidden');
+
+    const painel = document.getElementById('painel-loritta');
+    painel?.classList.add('hidden');
+    painel?.classList.remove('flex');
+
+    document.getElementById('admin-area')?.classList.remove('hidden');
+
+    if (obterAdminToken()) {
+        carregarStatusAdmin();
+    } else {
+        document.getElementById('admin-login-panel')?.classList.remove('hidden');
+        document.getElementById('admin-dashboard')?.classList.add('hidden');
+    }
+}
+
+function fecharAreaAdmin() {
+    document.getElementById('admin-area')?.classList.add('hidden');
+    document.getElementById('site-principal')?.classList.remove('hidden');
+    window.history.replaceState({}, document.title, window.location.pathname);
+}
+
+function sairAreaAdmin() {
+    limparAdminToken();
+    document.getElementById('admin-dashboard')?.classList.add('hidden');
+    document.getElementById('admin-login-panel')?.classList.remove('hidden');
+    mostrarStatusLoginAdmin('Sessao ADM encerrada.', 'success');
+}
+
+async function entrarAreaAdmin(evento) {
+    evento.preventDefault();
+
+    const input = document.getElementById('admin-password');
+    const senha = input?.value || '';
+
+    if (!senha) {
+        mostrarStatusLoginAdmin('Digite a senha ADM.');
+        return;
+    }
+
+    mostrarStatusLoginAdmin('Verificando acesso...', 'loading');
+
+    try {
+        const response = await fetch(`${API_URL}/api/admin/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ senha })
+        });
+        const dados = await lerJsonResposta(response);
+
+        if (response.ok && dados.status === 'sucesso' && dados.token) {
+            salvarAdminToken(dados.token);
+            if (input) input.value = '';
+            mostrarStatusLoginAdmin('Acesso liberado.', 'success');
+            await carregarStatusAdmin();
+            return;
+        }
+
+        mostrarStatusLoginAdmin(dados.mensagem || dados.erro || 'Nao foi possivel entrar.');
+    } catch (erro) {
+        console.error('Erro ao entrar na area ADM:', erro);
+        mostrarStatusLoginAdmin('Erro ao conectar na API.');
+    }
+}
+
+async function carregarStatusAdmin() {
+    const token = obterAdminToken();
+
+    if (!token) {
+        document.getElementById('admin-login-panel')?.classList.remove('hidden');
+        document.getElementById('admin-dashboard')?.classList.add('hidden');
+        return;
+    }
+
+    document.getElementById('admin-login-panel')?.classList.add('hidden');
+    document.getElementById('admin-dashboard')?.classList.remove('hidden');
+
+    const lista = document.getElementById('admin-server-list');
+    const resumo = document.getElementById('admin-summary-grid');
+
+    if (lista) lista.innerHTML = '<div class="admin-loading">Carregando servidores...</div>';
+    if (resumo) resumo.innerHTML = '';
+
+    try {
+        const response = await fetch(`${API_URL}/api/admin/status`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const dados = await lerJsonResposta(response);
+
+        if (response.ok && dados.status === 'sucesso') {
+            renderizarAdminDashboard(dados);
+            return;
+        }
+
+        if (response.status === 401) {
+            limparAdminToken();
+            document.getElementById('admin-dashboard')?.classList.add('hidden');
+            document.getElementById('admin-login-panel')?.classList.remove('hidden');
+        }
+
+        mostrarStatusLoginAdmin(dados.mensagem || dados.erro || 'Nao foi possivel carregar ADM.');
+    } catch (erro) {
+        console.error('Erro ao carregar status ADM:', erro);
+        if (lista) lista.innerHTML = '<div class="admin-loading">Erro ao conectar na API.</div>';
+    }
+}
+
+function renderizarAdminDashboard(dados) {
+    const titulo = document.getElementById('admin-bot-title');
+    const resumo = document.getElementById('admin-summary-grid');
+    const lista = document.getElementById('admin-server-list');
+    const servidores = Array.isArray(dados.servidores) ? dados.servidores : [];
+
+    if (titulo) {
+        titulo.innerText = dados.bot?.display || dados.bot?.nome || 'AMZ Bot';
+    }
+
+    if (resumo) {
+        resumo.innerHTML = [
+            criarCardResumoAdmin('Status', dados.online ? 'Online' : 'Offline', dados.online ? 'Conectado ao Discord' : 'Sem conexao ativa'),
+            criarCardResumoAdmin('Servidores', servidores.length, 'Onde o bot esta conectado'),
+            criarCardResumoAdmin('Latencia', dados.latencia_ms ? `${dados.latencia_ms} ms` : '--', 'Ping do bot'),
+            criarCardResumoAdmin('Uptime', formatarDuracao(dados.online_ha_segundos), 'Tempo online'),
+            criarCardResumoAdmin('Slash Sync', dados.comandos_slash_sincronizados ?? 0, 'Servidores sincronizados'),
+            criarCardResumoAdmin('Ultima sync', formatarDataHora(dados.ultima_sincronizacao_em), 'Comandos e ready')
+        ].join('');
+    }
+
+    if (!lista) return;
+
+    if (!servidores.length) {
+        lista.innerHTML = '<div class="admin-loading">Nenhum servidor conectado ao bot.</div>';
+        return;
+    }
+
+    lista.innerHTML = servidores.map(renderizarServidorAdmin).join('');
+}
+
+function criarCardResumoAdmin(titulo, valor, detalhe) {
+    return `
+        <article class="admin-summary-card">
+            <span>${escaparHTML(titulo)}</span>
+            <strong>${escaparHTML(valor)}</strong>
+            <small>${escaparHTML(detalhe)}</small>
+        </article>
+    `;
+}
+
+function renderizarPermissoesAdmin(permissoes = {}) {
+    const nomes = {
+        administrador: 'Administrador',
+        gerenciar_servidor: 'Gerenciar servidor',
+        gerenciar_mensagens: 'Gerenciar mensagens',
+        ver_canais: 'Ver canais',
+        enviar_mensagens: 'Enviar mensagens',
+        ler_historico: 'Ler historico',
+        gerenciar_cargos: 'Gerenciar cargos',
+        ver_auditoria: 'Ver auditoria'
+    };
+
+    return Object.entries(nomes).map(([chave, nome]) => `
+        <span class="admin-permission ${permissoes[chave] ? 'ok' : 'no'}">
+            ${escaparHTML(nome)}
+        </span>
+    `).join('');
+}
+
+function renderizarServidorAdmin(servidor) {
+    const avatar = servidor.icone_url
+        ? `<img src="${escaparHTML(servidor.icone_url)}" alt="${escaparHTML(servidor.nome)}">`
+        : `<span>${escaparHTML(obterIniciaisServidor(servidor.nome))}</span>`;
+
+    const canais = Array.isArray(servidor.canais) ? servidor.canais : [];
+    const cargos = Array.isArray(servidor.cargos) ? servidor.cargos : [];
+    const limpezas = Array.isArray(servidor.limpezas_configuradas) ? servidor.limpezas_configuradas : [];
+    const features = Array.isArray(servidor.features) && servidor.features.length
+        ? servidor.features.join(', ')
+        : 'Nenhuma feature especial';
+
+    return `
+        <article class="admin-server-card">
+            <div class="admin-server-head">
+                <div class="admin-server-avatar">${avatar}</div>
+                <div>
+                    <strong>${escaparHTML(servidor.nome)}</strong>
+                    <span>ID ${escaparHTML(servidor.id)}</span>
+                </div>
+            </div>
+
+            <div class="admin-server-metrics">
+                <span>Membros <strong>${escaparHTML(servidor.membros ?? '--')}</strong></span>
+                <span>Canais <strong>${escaparHTML(servidor.contagens?.canais ?? canais.length)}</strong></span>
+                <span>Cargos <strong>${escaparHTML(servidor.contagens?.cargos ?? cargos.length)}</strong></span>
+                <span>Limpezas <strong>${escaparHTML(limpezas.length)}</strong></span>
+            </div>
+
+            <div class="admin-server-meta">
+                <span>Dono: ${escaparHTML(servidor.dono_nome || servidor.dono_id || '--')}</span>
+                <span>Criado: ${escaparHTML(formatarDataHora(servidor.criado_em))}</span>
+                <span>Bot entrou: ${escaparHTML(formatarDataHora(servidor.bot_entrou_em))}</span>
+                <span>Boost tier: ${escaparHTML(servidor.premium_tier ?? 0)} / boosts: ${escaparHTML(servidor.boosts ?? 0)}</span>
+                <span>Features: ${escaparHTML(features)}</span>
+            </div>
+
+            <div class="admin-permission-grid">
+                ${renderizarPermissoesAdmin(servidor.permissoes_bot)}
+            </div>
+
+            <details class="admin-details">
+                <summary>Canais (${escaparHTML(canais.length)})</summary>
+                <div class="admin-detail-list">
+                    ${canais.map(renderizarCanalAdmin).join('') || '<span>Nenhum canal encontrado.</span>'}
+                </div>
+            </details>
+
+            <details class="admin-details">
+                <summary>Cargos (${escaparHTML(cargos.length)})</summary>
+                <div class="admin-detail-list">
+                    ${cargos.map(renderizarCargoAdmin).join('') || '<span>Nenhum cargo encontrado.</span>'}
+                </div>
+            </details>
+
+            <details class="admin-details">
+                <summary>Limpezas (${escaparHTML(limpezas.length)})</summary>
+                <div class="admin-detail-list">
+                    ${limpezas.map(renderizarLimpezaAdmin).join('') || '<span>Nenhuma limpeza configurada.</span>'}
+                </div>
+            </details>
+        </article>
+    `;
+}
+
+function renderizarCanalAdmin(canal) {
+    const permissoes = canal.permissoes_bot || {};
+
+    return `
+        <div class="admin-detail-row">
+            <strong>#${escaparHTML(canal.nome)}</strong>
+            <span>${escaparHTML(canal.tipo)}${canal.categoria ? ` / ${escaparHTML(canal.categoria)}` : ''}</span>
+            <small>ID ${escaparHTML(canal.id)} | Ver: ${permissoes.ver ? 'sim' : 'nao'} | Enviar: ${permissoes.enviar ? 'sim' : 'nao'} | Limpar: ${permissoes.gerenciar_mensagens ? 'sim' : 'nao'}</small>
+        </div>
+    `;
+}
+
+function renderizarCargoAdmin(cargo) {
+    return `
+        <div class="admin-detail-row">
+            <strong>${escaparHTML(cargo.nome)}</strong>
+            <span>Posicao ${escaparHTML(cargo.posicao)} / membros ${escaparHTML(cargo.membros)}</span>
+            <small>ID ${escaparHTML(cargo.id)} | Cor ${escaparHTML(cargo.cor)} | Gerenciado: ${cargo.gerenciado ? 'sim' : 'nao'}</small>
+        </div>
+    `;
+}
+
+function renderizarLimpezaAdmin(limpeza) {
+    return `
+        <div class="admin-detail-row">
+            <strong>#${escaparHTML(limpeza.canal_nome || limpeza.canal_id || 'canal')}</strong>
+            <span>${escaparHTML(obterRotuloDias(limpeza.dias || 1))}</span>
+            <small>ID ${escaparHTML(limpeza.canal_id || '--')}</small>
+        </div>
+    `;
+}
+
+window.addEventListener('hashchange', () => {
+    if (window.location.hash === '#amz-admin') {
+        abrirAreaAdmin();
+    }
+});
+
+window.setInterval(carregarStatusPublico, 60000);

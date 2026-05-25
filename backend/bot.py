@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 
 import discord
 from discord.ext import commands
@@ -22,6 +23,9 @@ class AMZBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.slash_synced_guilds = set()
+        self.started_at = datetime.now(timezone.utc)
+        self.last_ready_at = None
+        self.last_slash_sync_at = None
 
     async def setup_hook(self):
         for extension in EXTENSIONS:
@@ -34,6 +38,7 @@ class AMZBot(commands.Bot):
                 self.tree.copy_global_to(guild=guild)
                 comandos = await self.tree.sync(guild=guild)
                 self.slash_synced_guilds.add(guild_id)
+                self.last_slash_sync_at = datetime.now(timezone.utc)
                 print(f"[BOT] {len(comandos)} slash commands sincronizados no servidor {guild_id}.")
 
     async def sync_slash_guild(self, guild_id):
@@ -44,6 +49,7 @@ class AMZBot(commands.Bot):
         self.tree.copy_global_to(guild=guild)
         comandos = await self.tree.sync(guild=guild)
         self.slash_synced_guilds.add(guild_id)
+        self.last_slash_sync_at = datetime.now(timezone.utc)
         print(f"[BOT] {len(comandos)} slash commands sincronizados no servidor {guild_id}.")
 
     async def sync_slash_connected_guilds(self):
@@ -59,6 +65,7 @@ bot = AMZBot(command_prefix=os.getenv("AMZ_COMMAND_PREFIX", "!"), intents=intent
 
 @bot.event
 async def on_ready():
+    bot.last_ready_at = datetime.now(timezone.utc)
     print(f"[{bot.user.name}] esta online e conectado ao Discord!")
     await bot.sync_slash_connected_guilds()
 

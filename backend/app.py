@@ -1,5 +1,11 @@
 import asyncio
+import base64
+import hashlib
+import hmac
+import json
 import os
+import time
+from datetime import datetime, timezone
 
 import discord
 import requests
@@ -29,6 +35,128 @@ DISCORD_API_URL = "https://discord.com/api/v10"
 DISCORD_TIMEOUT = 12
 PERMISSAO_ADMINISTRADOR = 0x8
 PERMISSAO_GERENCIAR_SERVIDOR = 0x20
+ADMIN_PASSWORD = os.getenv("AMZ_ADMIN_PASSWORD", "").strip()
+ADMIN_SESSION_SECONDS = int(os.getenv("AMZ_ADMIN_SESSION_SECONDS", "28800"))
+API_STARTED_AT = datetime.now(timezone.utc)
+
+
+def data_iso(valor):
+    if not valor:
+        return None
+
+    if isinstance(valor, datetime):
+        return valor.astimezone(timezone.utc).isoformat()
+
+    return str(valor)
+
+
+def agora_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def segundos_desde(valor):
+    if not valor:
+        return None
+
+    return max(0, int((datetime.now(timezone.utc) - valor.astimezone(timezone.utc)).total_seconds()))
+
+
+def obter_admin_secret():
+    return (
+        os.getenv("AMZ_ADMIN_SESSION_SECRET", "").strip()
+        or CLIENT_SECRET
+        or os.getenv("DISCORD_TOKEN", "").strip()
+        or ADMIN_PASSWORD
+    )
+
+
+def codificar_admin_payload(payload):
+    dados = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return base64.urlsafe_b64encode(dados).decode("ascii").rstrip("=")
+
+
+def decodificar_admin_payload(payload_b64):
+    padding = "=" * (-len(payload_b64) % 4)
+    dados = base64.urlsafe_b64decode(f"{payload_b64}{padding}".encode("ascii"))
+    return json.loads(dados.decode("utf-8"))
+
+
+def assinar_admin_payload(payload_b64):
+    secret = obter_admin_secret()
+    return hmac.new(secret.encode("utf-8"), payload_b64.encode("ascii"), hashlib.sha256).hexdigest()
+
+
+def criar_admin_token():
+    agora = int(time.time())
+    payload_b64 = codificar_admin_payload({
+        "iat": agora,
+        "exp": agora + ADMIN_SESSION_SECONDS,
+        "scope": "amz-admin",
+    })
+    assinatura = assinar_admin_payload(payload_b64)
+    return f"{payload_b64}.{assinatura}"
+
+
+def validar_admin_token(token):
+    if not token or "." not in token:
+        return False
+
+    payload_b64, assinatura = token.rsplit(".", 1)
+    assinatura_esperada = assinar_admin_payload(payload_b64)
+
+    if not hmac.compare_digest(assinatura, assinatura_esperada):
+        return False
+
+    try:
+        payload = decodificar_admin_payload(payload_b64)
+    except (ValueError, json.JSONDecodeError):
+        return False
+
+    return payload.get("scope") == "amz-admin" and int(payload.get("exp", 0)) > int(time.time())
+
+
+def validar_admin_painel():
+    if not ADMIN_PASSWORD:
+        return jsonify({
+            "status": "erro",
+            "mensagem": "Painel ADM nao configurado. Defina AMZ_ADMIN_PASSWORD no Render.",
+        }), 503
+
+    token = obter_token_autorizacao()
+
+    if not validar_admin_token(token):
+        return jsonify({"status": "erro", "mensagem": "Login ADM expirado ou invalido."}), 401
+
+    return None
+
+
+def bot_online():
+    return bot.is_ready() and not bot.is_closed()
+
+
+def status_publico_bot():
+    online = bot_online()
+    usuario = bot.user
+    started_at = getattr(bot, "started_at", API_STARTED_AT)
+    last_ready_at = getattr(bot, "last_ready_at", None)
+    last_sync_at = getattr(bot, "last_slash_sync_at", None) or last_ready_at
+
+    return {
+        "status": "sucesso",
+        "online": online,
+        "bot": {
+            "id": str(usuario.id) if usuario else None,
+            "nome": usuario.name if usuario else "AMZ Bot",
+            "display": str(usuario) if usuario else "AMZ Bot",
+        },
+        "servidores": len(bot.guilds) if online else 0,
+        "latencia_ms": round(bot.latency * 1000) if online and bot.latency is not None else None,
+        "iniciado_em": data_iso(started_at),
+        "online_ha_segundos": segundos_desde(started_at) if online else None,
+        "ultimo_ready_em": data_iso(last_ready_at),
+        "ultima_sincronizacao_em": data_iso(last_sync_at),
+        "atualizado_em": agora_iso(),
+    }
 
 
 def usuario_admin_ou_dono(guild):
@@ -279,6 +407,161 @@ def canais_texto_do_servidor(server_id):
         })
 
     return canais
+
+
+def permissoes_bot_servidor(guild):
+    membro_bot = guild.me
+
+    if not membro_bot:
+        return {}
+
+    permissoes = membro_bot.guild_permissions
+    return {
+        "administrador": permissoes.administrator,
+        "gerenciar_servidor": permissoes.manage_guild,
+        "gerenciar_mensagens": permissoes.manage_messages,
+        "ver_canais": permissoes.view_channel,
+        "enviar_mensagens": permissoes.send_messages,
+        "ler_historico": permissoes.read_message_history,
+        "gerenciar_cargos": permissoes.manage_roles,
+        "ver_auditoria": permissoes.view_audit_log,
+        "valor": str(permissoes.value),
+    }
+
+
+def permissoes_bot_canal(canal):
+    guild = getattr(canal, "guild", None)
+    membro_bot = getattr(guild, "me", None)
+
+    if not membro_bot:
+        return {}
+
+    permissoes = canal.permissions_for(membro_bot)
+    return {
+        "ver": permissoes.view_channel,
+        "enviar": permissoes.send_messages,
+        "gerenciar_mensagens": permissoes.manage_messages,
+        "ler_historico": permissoes.read_message_history,
+    }
+
+
+def montar_info_canal(canal):
+    return {
+        "id": str(canal.id),
+        "nome": canal.name,
+        "tipo": str(canal.type),
+        "categoria": canal.category.name if getattr(canal, "category", None) else None,
+        "posicao": getattr(canal, "position", None),
+        "nsfw": getattr(canal, "nsfw", False),
+        "slowmode": getattr(canal, "slowmode_delay", 0),
+        "bitrate": getattr(canal, "bitrate", None),
+        "limite_usuarios": getattr(canal, "user_limit", None),
+        "permissoes_bot": permissoes_bot_canal(canal),
+    }
+
+
+def montar_info_cargo(cargo):
+    return {
+        "id": str(cargo.id),
+        "nome": cargo.name,
+        "posicao": cargo.position,
+        "cor": str(cargo.color),
+        "membros": len(cargo.members),
+        "gerenciado": cargo.managed,
+        "mencionavel": cargo.mentionable,
+        "permissoes": str(cargo.permissions.value),
+    }
+
+
+def buscar_limpezas_sync(server_id):
+    try:
+        futuro = asyncio.run_coroutine_threadsafe(buscar_limpezas(str(server_id)), bot.loop)
+        return futuro.result(timeout=10)
+    except Exception:
+        return []
+
+
+def montar_info_servidor_admin(guild):
+    dono = guild.owner
+    canais = sorted(
+        guild.channels,
+        key=lambda canal: (
+            getattr(canal, "category", None).position if getattr(canal, "category", None) else -1,
+            getattr(canal, "position", 0),
+        ),
+    )
+    cargos = sorted(guild.roles, key=lambda cargo: cargo.position, reverse=True)
+    limpezas = buscar_limpezas_sync(guild.id)
+
+    return {
+        "id": str(guild.id),
+        "nome": guild.name,
+        "icone_url": str(guild.icon.url) if guild.icon else None,
+        "dono_id": str(guild.owner_id),
+        "dono_nome": str(dono) if dono else None,
+        "membros": guild.member_count,
+        "criado_em": data_iso(guild.created_at),
+        "bot_entrou_em": data_iso(guild.me.joined_at) if guild.me and guild.me.joined_at else None,
+        "premium_tier": guild.premium_tier,
+        "boosts": guild.premium_subscription_count,
+        "features": sorted(guild.features),
+        "limpezas_configuradas": limpezas,
+        "contagens": {
+            "canais": len(guild.channels),
+            "texto": len(guild.text_channels),
+            "voz": len(guild.voice_channels),
+            "categorias": len(guild.categories),
+            "cargos": len(guild.roles),
+            "emojis": len(guild.emojis),
+            "stickers": len(guild.stickers),
+        },
+        "permissoes_bot": permissoes_bot_servidor(guild),
+        "canais": [montar_info_canal(canal) for canal in canais],
+        "cargos": [montar_info_cargo(cargo) for cargo in cargos],
+    }
+
+
+@app.route("/api/status", methods=["GET"])
+def status_bot():
+    return jsonify(status_publico_bot()), 200
+
+
+@app.route("/api/admin/login", methods=["POST"])
+def admin_login():
+    if not ADMIN_PASSWORD:
+        return jsonify({
+            "status": "erro",
+            "mensagem": "Painel ADM nao configurado. Defina AMZ_ADMIN_PASSWORD no Render.",
+        }), 503
+
+    dados = request.json or {}
+    senha = str(dados.get("senha", ""))
+
+    if not hmac.compare_digest(senha, ADMIN_PASSWORD):
+        return jsonify({"status": "erro", "mensagem": "Senha ADM invalida."}), 401
+
+    return jsonify({
+        "status": "sucesso",
+        "token": criar_admin_token(),
+        "expira_em_segundos": ADMIN_SESSION_SECONDS,
+    }), 200
+
+
+@app.route("/api/admin/status", methods=["GET"])
+def admin_status():
+    erro = validar_admin_painel()
+
+    if erro:
+        return erro
+
+    servidores = [montar_info_servidor_admin(guild) for guild in sorted(bot.guilds, key=lambda item: item.name.lower())]
+
+    return jsonify({
+        **status_publico_bot(),
+        "admin": True,
+        "comandos_slash_sincronizados": len(getattr(bot, "slash_synced_guilds", set())),
+        "servidores": servidores,
+    }), 200
 
 
 @app.route("/api/auth/callback", methods=["POST"])
