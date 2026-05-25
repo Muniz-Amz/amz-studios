@@ -129,6 +129,35 @@ async def buscar_limpezas(server_id):
     return _limpezas_do_documento(documento)
 
 
+async def buscar_todas_limpezas():
+    """
+    Retorna todas as limpezas configuradas em todos os servidores.
+    """
+    cursor = collection.find(
+        {
+            "$or": [
+                {"limpezas.0": {"$exists": True}},
+                {"canal_id": {"$exists": True, "$ne": ""}},
+            ]
+        },
+        {"_id": 0, "id": 1, "nome": 1, "limpezas": 1, "canal_id": 1, "canal_nome": 1, "dias": 1},
+    )
+
+    servidores = []
+
+    async for documento in cursor:
+        limpezas = _limpezas_do_documento(documento)
+
+        if limpezas:
+            servidores.append({
+                "id": str(documento.get("id", "")),
+                "nome": documento.get("nome", ""),
+                "limpezas": limpezas,
+            })
+
+    return servidores
+
+
 async def remover_limpeza(server_id, canal_id):
     """
     Remove a configuracao de limpeza de um canal.
