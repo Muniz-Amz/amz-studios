@@ -26,12 +26,17 @@ def normalizar_minutos(minutos):
     except (TypeError, ValueError):
         valor = 1
 
-    return min(max(valor, 1), 60)
+    return min(max(valor, 1), 1440)
 
 
 def obter_tempo_limpeza(limpeza):
     if limpeza.get("unidade") == "minutos" or limpeza.get("minutos") is not None:
         minutos = normalizar_minutos(limpeza.get("minutos", 1))
+        if minutos >= 1440:
+            return timedelta(days=1), "1 dia"
+        if minutos >= 60 and minutos % 60 == 0:
+            horas = minutos // 60
+            return timedelta(minutes=minutos), f"{horas} hora{'s' if horas != 1 else ''}"
         return timedelta(minutes=minutos), f"{minutos} minuto{'s' if minutos != 1 else ''}"
 
     dias = normalizar_dias(limpeza.get("dias", 1))

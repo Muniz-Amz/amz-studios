@@ -4,7 +4,7 @@
 const API_URL = 'https://amz-studios-api.onrender.com';
 const DISCORD_CLIENT_ID = '1479103284064026787';
 const DISCORD_REDIRECT_PADRAO = 'https://muniz-amz.github.io/amz-studios/';
-const MAX_MINUTOS_LIMPEZA = 60;
+const MAX_MINUTOS_LIMPEZA = 1440;
 const ADMIN_TOKEN_KEY = 'amz_admin_token';
 const BOAS_VINDAS_PADRAO = {
     entrada_ativa: false,
@@ -45,12 +45,47 @@ function normalizarDiasLimpeza(dias) {
 }
 
 function gerarOpcoesMinutosLimpeza() {
-    return Array.from({ length: MAX_MINUTOS_LIMPEZA }, (_, indice) => {
-        const minutos = indice + 1;
-        const rotulo = minutos === 1 ? 'minuto' : 'minutos';
+    const opcoes = [
+        { unidade: 'minutos', valor: 30, rotulo: '30 minutos' },
+        ...Array.from({ length: 23 }, (_, indice) => {
+            const horas = indice + 1;
+            return {
+                unidade: 'minutos',
+                valor: horas * 60,
+                rotulo: `${horas} ${horas === 1 ? 'hora' : 'horas'}`
+            };
+        }),
+        ...Array.from({ length: 14 }, (_, indice) => {
+            const dias = indice + 1;
+            return {
+                unidade: 'dias',
+                valor: dias,
+                rotulo: `${dias} ${dias === 1 ? 'dia' : 'dias'}`
+            };
+        })
+    ];
 
-        return `<option value="${minutos}">${minutos} ${rotulo}</option>`;
+    return opcoes.map((opcao) => {
+        const value = `${opcao.unidade}:${opcao.valor}`;
+        return `<option value="${value}" data-unidade="${opcao.unidade}" data-valor="${opcao.valor}">${opcao.rotulo}</option>`;
     }).join('');
+}
+
+function obterTempoLimpezaSelecionado() {
+    const select = document.getElementById('minutos');
+    const option = select?.options[select.selectedIndex];
+    const unidade = option?.dataset.unidade || 'minutos';
+    const valor = Number.parseInt(option?.dataset.valor || select?.value || '30', 10);
+
+    if (!Number.isFinite(valor)) {
+        return { unidade: 'minutos', valor: 30 };
+    }
+
+    if (unidade === 'dias') {
+        return { unidade: 'dias', valor: normalizarDiasLimpeza(valor) };
+    }
+
+    return { unidade: 'minutos', valor: normalizarMinutosLimpeza(valor) };
 }
 
 function obterRedirectUriDiscord() {
@@ -190,6 +225,10 @@ function renderizarAvatarServidor(nome, iconUrl, classe = 'server-avatar') {
     return `<span class="${classe} fallback">${escaparHTML(obterIniciaisServidor(nome))}</span>`;
 }
 
+function hashAtualNormalizado() {
+    return String(window.location.hash || '').toLowerCase();
+}
+
 // ==========================================
 // FUNÇÕES DE NAVEGAÇÃO
 // ==========================================
@@ -265,7 +304,7 @@ function voltarAoInicioBot() {
     painel.classList.remove('flex');
     document.getElementById('site-principal').classList.remove('hidden');
 
-    if (window.location.hash === '#dashboard') {
+    if (hashAtualNormalizado() === '#dashboard') {
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 }
@@ -753,6 +792,14 @@ function mostrarStatusBoasVindas(mensagem, tipo = 'error') {
     statusMsg.className = `vm-status-message ${tipo}`;
 }
 
+function renderizarEstadoSelectBoasVindas(selectId, mensagem) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+
+    select.disabled = true;
+    select.innerHTML = `<option value="">${escaparHTML(mensagem)}</option>`;
+}
+
 function renderizarSelectBoasVindas(selectId, canais = [], selecionado = '') {
     const select = document.getElementById(selectId);
     if (!select) return;
@@ -761,7 +808,7 @@ function renderizarSelectBoasVindas(selectId, canais = [], selecionado = '') {
     select.disabled = !canais.length;
 
     if (!canais.length) {
-        select.innerHTML = '<option value="">Nenhum canal de texto encontrado</option>';
+        renderizarEstadoSelectBoasVindas(selectId, 'Nenhum canal de texto encontrado');
         return;
     }
 
@@ -862,12 +909,14 @@ async function carregarBoasVindasServidor() {
     const token = localStorage.getItem('discord_token');
     let config = normalizarConfigBoasVindas();
 
-    renderizarSelectBoasVindas('welcome_canal_entrada', [], '');
-    renderizarSelectBoasVindas('welcome_canal_saida', [], '');
+    renderizarEstadoSelectBoasVindas('welcome_canal_entrada', 'Carregando canais...');
+    renderizarEstadoSelectBoasVindas('welcome_canal_saida', 'Carregando canais...');
     preencherFormularioBoasVindas(config);
     conectarEventosBoasVindas();
 
     if (!serverId) {
+        renderizarEstadoSelectBoasVindas('welcome_canal_entrada', 'Servidor nao identificado');
+        renderizarEstadoSelectBoasVindas('welcome_canal_saida', 'Servidor nao identificado');
         mostrarStatusBoasVindas('Servidor nao identificado.');
         return;
     }
@@ -883,6 +932,8 @@ async function carregarBoasVindasServidor() {
     }
 
     if (!token) {
+        renderizarEstadoSelectBoasVindas('welcome_canal_entrada', 'Entre novamente com o Discord');
+        renderizarEstadoSelectBoasVindas('welcome_canal_saida', 'Entre novamente com o Discord');
         mostrarStatusBoasVindas('Sessao expirada. Entre novamente com o Discord.');
         return;
     }
@@ -916,6 +967,10 @@ async function carregarBoasVindasServidor() {
             renderizarSelectBoasVindas('welcome_canal_entrada', canais, config.canal_entrada_id);
             renderizarSelectBoasVindas('welcome_canal_saida', canais, config.canal_saida_id);
             preencherFormularioBoasVindas(config);
+            if (!canais.length) {
+                mostrarStatusBoasVindas('Nenhum canal de texto foi encontrado. Confira se o bot esta no servidor e consegue ver os canais.');
+                return;
+            }
             mostrarStatusBoasVindas('Avisos carregados.', 'success');
             return;
         }
@@ -925,9 +980,13 @@ async function carregarBoasVindasServidor() {
         }
 
         preencherFormularioBoasVindas(config);
+        renderizarEstadoSelectBoasVindas('welcome_canal_entrada', 'Canais indisponiveis');
+        renderizarEstadoSelectBoasVindas('welcome_canal_saida', 'Canais indisponiveis');
         mostrarStatusBoasVindas(resultadoCanais.mensagem || resultadoCanais.erro || 'Nao foi possivel carregar os canais.');
     } catch (erro) {
         console.error('Erro ao carregar avisos:', erro);
+        renderizarEstadoSelectBoasVindas('welcome_canal_entrada', 'Erro ao carregar canais');
+        renderizarEstadoSelectBoasVindas('welcome_canal_saida', 'Erro ao carregar canais');
         mostrarStatusBoasVindas('Erro ao conectar na API para carregar os avisos.');
     }
 }
@@ -1256,6 +1315,22 @@ function obterRotuloDias(dias) {
 
 function obterRotuloMinutos(minutos) {
     const valor = normalizarMinutosLimpeza(minutos);
+
+    if (valor >= 1440) {
+        return '1 dia';
+    }
+
+    if (valor >= 60 && valor % 60 === 0) {
+        const horas = valor / 60;
+        return `${horas} ${horas === 1 ? 'hora' : 'horas'}`;
+    }
+
+    if (valor > 60) {
+        const horas = Math.floor(valor / 60);
+        const minutosRestantes = valor % 60;
+        return `${horas}h ${minutosRestantes}min`;
+    }
+
     return `${valor} ${valor === 1 ? 'minuto' : 'minutos'}`;
 }
 
@@ -1434,7 +1509,7 @@ async function enviarConfiguracao() {
     const serverId = document.getElementById('canal_id').dataset.id;
     const canalInput = document.getElementById('canal_id').value;
     const canalNomeInput = document.getElementById('canal_nome')?.value || canalInput;
-    const minutosSelect = document.getElementById('minutos').value;
+    const tempoLimpeza = obterTempoLimpezaSelecionado();
     const statusMsg = document.getElementById('status_msg');
     const iconSync = document.getElementById('icon-sync');
     
@@ -1455,8 +1530,9 @@ async function enviarConfiguracao() {
         const limpezas = salvarLimpezaDemo(serverId, {
             canal_id: canalInput,
             canal_nome: canalNomeInput,
-            minutos: minutosSelect,
-            unidade: 'minutos',
+            ...(tempoLimpeza.unidade === 'dias'
+                ? { dias: String(tempoLimpeza.valor), unidade: 'dias' }
+                : { minutos: String(tempoLimpeza.valor), unidade: 'minutos' }),
             acao: 'excluir_mensagens',
             atualizado_em: new Date().toISOString()
         });
@@ -1473,8 +1549,10 @@ async function enviarConfiguracao() {
         nome: document.getElementById('nome-servidor-atual').innerText,
         canal_id: canalInput,
         canal_nome: canalNomeInput,
-        minutos: minutosSelect,
-        unidade: 'minutos'
+        unidade: tempoLimpeza.unidade,
+        ...(tempoLimpeza.unidade === 'dias'
+            ? { dias: String(tempoLimpeza.valor) }
+            : { minutos: String(tempoLimpeza.valor) })
     };
 
     try {
@@ -1534,7 +1612,7 @@ function inicializarAplicacao() {
 
     const urlParams = new URLSearchParams(window.location.search);
 
-    if (window.location.hash === '#amz-admin') {
+    if (hashAtualNormalizado() === '#amz-admin') {
         abrirAreaAdmin();
         return;
     }
@@ -1548,7 +1626,7 @@ function inicializarAplicacao() {
         return;
     }
 
-    if (window.location.hash === '#dashboard' || sessionStorage.getItem('amz_retorno_oauth') === 'servidores') {
+    if (hashAtualNormalizado() === '#dashboard' || sessionStorage.getItem('amz_retorno_oauth') === 'servidores') {
         sessionStorage.removeItem('amz_retorno_oauth');
         abrirListaServidores();
     }
@@ -2184,7 +2262,7 @@ function renderizarLimpezaAdmin(limpeza) {
 }
 
 window.addEventListener('hashchange', () => {
-    if (window.location.hash === '#amz-admin') {
+    if (hashAtualNormalizado() === '#amz-admin') {
         abrirAreaAdmin();
     }
 });
