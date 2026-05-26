@@ -1405,6 +1405,45 @@ section {
     gap: 14px;
 }
 
+.mod-log-event-card {
+    gap: 12px;
+}
+
+.mod-log-event-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.mod-log-event-head strong,
+.mod-log-event-channel span {
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 950;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.mod-log-event-head small {
+    display: block;
+    margin-top: 4px;
+    color: rgba(255, 255, 255, 0.38);
+    font-size: 10px;
+    line-height: 1.4;
+}
+
+.mod-log-event-head input {
+    width: 18px;
+    height: 18px;
+    accent-color: #ffffff;
+}
+
+.mod-log-event-channel {
+    display: grid;
+    gap: 8px;
+}
+
 .mod-toggle-row strong,
 .mod-field span,
 .mod-feature-grid span {
@@ -1866,6 +1905,7 @@ section {
 
     .welcome-section-heading,
     .welcome-toggle-row,
+    .mod-log-event-head,
     .advanced-control-card,
     .advanced-card-heading,
     .audit-event-main {

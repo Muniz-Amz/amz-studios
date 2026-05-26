@@ -196,6 +196,22 @@ const MODERACAO_PADRAO = {
         canal_moderacao_nome: '',
         canal_servidor_id: '',
         canal_servidor_nome: '',
+        canal_mensagens_deletadas_id: '',
+        canal_mensagens_deletadas_nome: '',
+        canal_mensagens_editadas_id: '',
+        canal_mensagens_editadas_nome: '',
+        canal_banimentos_id: '',
+        canal_banimentos_nome: '',
+        canal_desbanimentos_id: '',
+        canal_desbanimentos_nome: '',
+        canal_expulsoes_id: '',
+        canal_expulsoes_nome: '',
+        canal_castigos_id: '',
+        canal_castigos_nome: '',
+        canal_canais_id: '',
+        canal_canais_nome: '',
+        canal_cargos_id: '',
+        canal_cargos_nome: '',
         mensagens_deletadas: true,
         mensagens_editadas: true,
         banimentos: true,
@@ -368,23 +384,30 @@ const DASHBOARD_SECTIONS = {
         description: 'Ações automáticas do servidor.'
     }
 };
+const moderationLogEvents = [
+    { path: 'logs.mensagens_deletadas', channelPath: 'logs.canal_mensagens_deletadas_id', namePath: 'logs.canal_mensagens_deletadas_nome', label: 'Mensagens deletadas', hint: 'Registra mensagens apagadas.' },
+    { path: 'logs.mensagens_editadas', channelPath: 'logs.canal_mensagens_editadas_id', namePath: 'logs.canal_mensagens_editadas_nome', label: 'Mensagens editadas', hint: 'Registra mensagens alteradas.' },
+    { path: 'logs.banimentos', channelPath: 'logs.canal_banimentos_id', namePath: 'logs.canal_banimentos_nome', label: 'Banimentos', hint: 'Registra membros banidos.' },
+    { path: 'logs.desbanimentos', channelPath: 'logs.canal_desbanimentos_id', namePath: 'logs.canal_desbanimentos_nome', label: 'Desbanimentos', hint: 'Registra membros desbanidos.' },
+    { path: 'logs.expulsoes', channelPath: 'logs.canal_expulsoes_id', namePath: 'logs.canal_expulsoes_nome', label: 'Expulsoes', hint: 'Registra membros expulsos.' },
+    { path: 'logs.castigos', channelPath: 'logs.canal_castigos_id', namePath: 'logs.canal_castigos_nome', label: 'Castigos', hint: 'Registra castigos aplicados ou removidos.' },
+    { path: 'logs.canais', channelPath: 'logs.canal_canais_id', namePath: 'logs.canal_canais_nome', label: 'Canais criados/deletados', hint: 'Registra alteracoes em canais.' },
+    { path: 'logs.cargos', channelPath: 'logs.canal_cargos_id', namePath: 'logs.canal_cargos_nome', label: 'Cargos criados/deletados', hint: 'Registra alteracoes em cargos.' }
+];
 const MODERACAO_SECTIONS = {
     role: {
         label: 'Central de Moderacao',
-        description: 'Configure os canais de log e quais eventos o bot deve registrar.',
+        description: 'Configure quais eventos o bot deve registrar e para qual canal cada log sera enviado.',
         fields: [
             { type: 'toggle', path: 'logs.ativo', label: 'Ativar logs de moderacao', hint: 'Liga os registros automáticos do servidor.' },
-            { type: 'channel', path: 'logs.canal_mensagens_id', namePath: 'logs.canal_mensagens_nome', label: 'Canal de mensagens', hint: 'Mensagens apagadas e editadas.' },
-            { type: 'channel', path: 'logs.canal_moderacao_id', namePath: 'logs.canal_moderacao_nome', label: 'Canal de punicoes', hint: 'Bans, expulsões e castigos.' },
-            { type: 'channel', path: 'logs.canal_servidor_id', namePath: 'logs.canal_servidor_nome', label: 'Canal de auditoria', hint: 'Canais, cargos e alterações do servidor.' },
-            { type: 'toggle', path: 'logs.mensagens_deletadas', label: 'Logar mensagens deletadas' },
-            { type: 'toggle', path: 'logs.mensagens_editadas', label: 'Logar mensagens editadas' },
-            { type: 'toggle', path: 'logs.banimentos', label: 'Logar banimentos' },
-            { type: 'toggle', path: 'logs.desbanimentos', label: 'Logar desbanimentos' },
-            { type: 'toggle', path: 'logs.expulsoes', label: 'Logar expulsões' },
-            { type: 'toggle', path: 'logs.castigos', label: 'Logar castigos' },
-            { type: 'toggle', path: 'logs.canais', label: 'Logar canais criados/deletados' },
-            { type: 'toggle', path: 'logs.cargos', label: 'Logar cargos criados/deletados' }
+            { type: 'channel', path: 'logs.canal_mensagens_id', namePath: 'logs.canal_mensagens_nome', label: 'Padrao mensagens', hint: 'Usado quando um log de mensagem nao tiver canal especifico.' },
+            { type: 'channel', path: 'logs.canal_moderacao_id', namePath: 'logs.canal_moderacao_nome', label: 'Padrao punicoes', hint: 'Usado quando banimentos, expulsoes ou castigos nao tiverem canal especifico.' },
+            { type: 'channel', path: 'logs.canal_servidor_id', namePath: 'logs.canal_servidor_nome', label: 'Padrao servidor', hint: 'Usado quando logs de canais ou cargos nao tiverem canal especifico.' },
+            ...moderationLogEvents.map((evento) => ({
+                ...evento,
+                type: 'log-event',
+                emptyLabel: 'Usar canal padrao'
+            }))
         ]
     }
 };
@@ -1774,8 +1797,31 @@ async function salvarAutomacoesServidor() {
 
 function renderizarCampoModeracao(campo) {
     const id = idCampoModeracao(campo.path);
-    const attrs = `id="${id}" data-mod-field data-path="${escaparHTML(campo.path)}" data-type="${escaparHTML(campo.type)}"${campo.namePath ? ` data-name-path="${escaparHTML(campo.namePath)}"` : ''}`;
+    const attrs = `id="${id}" data-mod-field data-path="${escaparHTML(campo.path)}" data-type="${escaparHTML(campo.type)}"${campo.namePath ? ` data-name-path="${escaparHTML(campo.namePath)}"` : ''}${campo.emptyLabel ? ` data-empty-label="${escaparHTML(campo.emptyLabel)}"` : ''}`;
     const hint = campo.hint ? `<small>${escaparHTML(campo.hint)}</small>` : '';
+
+    if (campo.type === 'log-event') {
+        const toggleAttrs = `id="${idCampoModeracao(campo.path)}" data-mod-field data-path="${escaparHTML(campo.path)}" data-type="toggle"`;
+        const selectAttrs = `id="${idCampoModeracao(campo.channelPath)}" data-mod-field data-path="${escaparHTML(campo.channelPath)}" data-type="channel" data-name-path="${escaparHTML(campo.namePath)}" data-empty-label="${escaparHTML(campo.emptyLabel || 'Usar canal padrao')}"`;
+
+        return `
+            <article class="mod-field mod-log-event-card">
+                <div class="mod-log-event-head">
+                    <span>
+                        <strong>Logar ${escaparHTML(campo.label)}</strong>
+                        ${hint}
+                    </span>
+                    <input type="checkbox" ${toggleAttrs}>
+                </div>
+                <label class="mod-log-event-channel">
+                    <span>Canal deste log</span>
+                    <select ${selectAttrs}>
+                        <option value="">Carregando canais...</option>
+                    </select>
+                </label>
+            </article>
+        `;
+    }
 
     if (campo.type === 'toggle') {
         return `
@@ -1872,8 +1918,9 @@ function preencherCamposModeracao(canais = []) {
         }
 
         if (tipo === 'channel') {
+            const rotuloVazio = campo.dataset.emptyLabel || 'Nao definido';
             campo.innerHTML = [
-                '<option value="">Nao definido</option>',
+                `<option value="">${escaparHTML(rotuloVazio)}</option>`,
                 ...canais.map((canal) => `<option value="${escaparHTML(canal.id)}" data-channel-name="${escaparHTML(canal.nome)}">#${escaparHTML(canal.nome)}${canal.categoria ? ` - ${escaparHTML(canal.categoria)}` : ''}</option>`)
             ].join('');
             campo.value = valor || '';

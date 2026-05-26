@@ -13,6 +13,16 @@ URL_RE = re.compile(r"https?://|www\.", re.IGNORECASE)
 INVITE_RE = re.compile(r"(discord\.gg/|discord(?:app)?\.com/invite/)", re.IGNORECASE)
 SPAM_WINDOW_SECONDS = 8
 SPAM_LIMIT = 5
+LOG_EVENT_CHANNEL_KEYS = {
+    "mensagens_deletadas": "canal_mensagens_deletadas_id",
+    "mensagens_editadas": "canal_mensagens_editadas_id",
+    "banimentos": "canal_banimentos_id",
+    "desbanimentos": "canal_desbanimentos_id",
+    "expulsoes": "canal_expulsoes_id",
+    "castigos": "canal_castigos_id",
+    "canais": "canal_canais_id",
+    "cargos": "canal_cargos_id",
+}
 
 
 def texto_curto(valor, limite=900):
@@ -169,13 +179,17 @@ class ModerationCog(commands.Cog):
 
         return canal
 
-    async def canal_log(self, guild, config, tipo):
+    async def canal_log(self, guild, config, tipo, log_key=None):
         logs = config.get("logs", {})
-        canal_id = logs.get({
-            "mensagens": "canal_mensagens_id",
-            "moderacao": "canal_moderacao_id",
-            "servidor": "canal_servidor_id",
-        }.get(tipo, "canal_moderacao_id"))
+        campo_evento = LOG_EVENT_CHANNEL_KEYS.get(log_key or "")
+        canal_id = logs.get(campo_evento) if campo_evento else None
+
+        if not canal_id:
+            canal_id = logs.get({
+                "mensagens": "canal_mensagens_id",
+                "moderacao": "canal_moderacao_id",
+                "servidor": "canal_servidor_id",
+            }.get(tipo, "canal_moderacao_id"))
 
         if not canal_id:
             canal_id = logs.get("canal_moderacao_id") or logs.get("canal_mensagens_id") or logs.get("canal_servidor_id")
@@ -217,7 +231,7 @@ class ModerationCog(commands.Cog):
         except Exception as erro:
             print(f"[AUDITORIA] Falha ao registrar historico em {guild.id}: {erro}")
 
-    async def enviar_log(self, guild, config, tipo, titulo, descricao, color=None, fields=None, event_id=None, responsavel=None):
+    async def enviar_log(self, guild, config, tipo, titulo, descricao, color=None, fields=None, event_id=None, responsavel=None, log_key=None):
         logs = config.get("logs", {})
         usar_auditoria = bool(event_id and config.get("auditoria", {}).get("enabled"))
 
@@ -226,7 +240,7 @@ class ModerationCog(commands.Cog):
         else:
             if tipo == "auditoria" or not logs.get("ativo"):
                 return
-            canal = await self.canal_log(guild, config, tipo)
+            canal = await self.canal_log(guild, config, tipo, log_key)
 
         if not canal:
             if usar_auditoria:
@@ -433,6 +447,7 @@ class ModerationCog(commands.Cog):
             [("Conteudo", message.content or "--", False), ("Anexos", anexos, False)],
             event_id="mensagem_apagada",
             responsavel=message.author,
+            log_key="mensagens_deletadas",
         )
 
     @commands.Cog.listener()
@@ -454,6 +469,7 @@ class ModerationCog(commands.Cog):
             [("Antes", before.content or "--", False), ("Depois", after.content or "--", False)],
             event_id="mensagem_editada",
             responsavel=before.author,
+            log_key="mensagens_editadas",
         )
 
     @commands.Cog.listener()
@@ -461,7 +477,7 @@ class ModerationCog(commands.Cog):
         config = await self.obter_config(guild)
         if not self.auditoria_ativa_ou_log_legado(config, "banimentos"):
             return
-        await self.enviar_log(guild, config, "moderacao", "Membro banido", f"{user} (`{user.id}`)", discord.Color.dark_red(), event_id="banimentos", responsavel=user)
+        await self.enviar_log(guild, config, "moderacao", "Membro banido", f"{user} (`{user.id}`)", discord.Color.dark_red(), event_id="banimentos", responsavel=user, log_key="banimentos")
 
     @commands.Cog.listener()
     async def on_member_remove(self, member):
@@ -488,6 +504,7 @@ class ModerationCog(commands.Cog):
             ],
             event_id="expulsoes",
             responsavel=kick.user,
+            log_key="expulsoes",
         )
 
     @commands.Cog.listener()
@@ -495,7 +512,7 @@ class ModerationCog(commands.Cog):
         config = await self.obter_config(guild)
         if not self.auditoria_ativa_ou_log_legado(config, "desbanimentos"):
             return
-        await self.enviar_log(guild, config, "moderacao", "Membro desbanido", f"{user} (`{user.id}`)", discord.Color.green(), event_id="remocao_punicoes", responsavel=user)
+        await self.enviar_log(guild, config, "moderacao", "Membro desbanido", f"{user} (`{user.id}`)", discord.Color.green(), event_id="remocao_punicoes", responsavel=user, log_key="desbanimentos")
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
@@ -525,7 +542,7 @@ class ModerationCog(commands.Cog):
             if self.auditoria_ativa_ou_log_legado(config, "castigos"):
                 estado = "Castigo aplicado" if after.timed_out_until else "Castigo removido"
                 valor = after.timed_out_until.isoformat() if after.timed_out_until else "sem castigo"
-                await self.enviar_log(after.guild, config, "moderacao", estado, f"{after} (`{after.id}`)\nAte: {valor}", discord.Color.orange(), event_id="silenciamentos" if after.timed_out_until else "remocao_punicoes", responsavel=after)
+                await self.enviar_log(after.guild, config, "moderacao", estado, f"{after} (`{after.id}`)\nAte: {valor}", discord.Color.orange(), event_id="silenciamentos" if after.timed_out_until else "remocao_punicoes", responsavel=after, log_key="castigos")
 
         antes = {role.id: role for role in before.roles}
         depois = {role.id: role for role in after.roles}
@@ -546,19 +563,20 @@ class ModerationCog(commands.Cog):
                 ],
                 event_id="cargo_usuario",
                 responsavel=after,
+                log_key="cargos",
             )
 
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel):
         config = await self.obter_config(channel.guild)
         if self.auditoria_ativa_ou_log_legado(config, "canais"):
-            await self.enviar_log(channel.guild, config, "servidor", "Canal criado", f"#{channel.name} (`{channel.id}`)", discord.Color.green(), event_id="canal_alterado")
+            await self.enviar_log(channel.guild, config, "servidor", "Canal criado", f"#{channel.name} (`{channel.id}`)", discord.Color.green(), event_id="canal_alterado", log_key="canais")
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel):
         config = await self.obter_config(channel.guild)
         if self.auditoria_ativa_ou_log_legado(config, "canais"):
-            await self.enviar_log(channel.guild, config, "servidor", "Canal deletado", f"#{channel.name} (`{channel.id}`)", discord.Color.red(), event_id="canal_alterado")
+            await self.enviar_log(channel.guild, config, "servidor", "Canal deletado", f"#{channel.name} (`{channel.id}`)", discord.Color.red(), event_id="canal_alterado", log_key="canais")
 
     @commands.Cog.listener()
     async def on_guild_channel_update(self, before, after):
@@ -584,19 +602,20 @@ class ModerationCog(commands.Cog):
                 discord.Color.gold(),
                 [("Mudancas", "\n".join(mudancas), False)],
                 event_id="permissoes_alteradas" if any("Permissoes" in item for item in mudancas) else "canal_alterado",
+                log_key="canais",
             )
 
     @commands.Cog.listener()
     async def on_guild_role_create(self, role):
         config = await self.obter_config(role.guild)
         if self.auditoria_ativa_ou_log_legado(config, "cargos"):
-            await self.enviar_log(role.guild, config, "servidor", "Cargo criado", f"{role.name} (`{role.id}`)", discord.Color.green(), event_id="cargo_alterado")
+            await self.enviar_log(role.guild, config, "servidor", "Cargo criado", f"{role.name} (`{role.id}`)", discord.Color.green(), event_id="cargo_alterado", log_key="cargos")
 
     @commands.Cog.listener()
     async def on_guild_role_delete(self, role):
         config = await self.obter_config(role.guild)
         if self.auditoria_ativa_ou_log_legado(config, "cargos"):
-            await self.enviar_log(role.guild, config, "servidor", "Cargo deletado", f"{role.name} (`{role.id}`)", discord.Color.red(), event_id="cargo_alterado")
+            await self.enviar_log(role.guild, config, "servidor", "Cargo deletado", f"{role.name} (`{role.id}`)", discord.Color.red(), event_id="cargo_alterado", log_key="cargos")
 
     @commands.Cog.listener()
     async def on_guild_role_update(self, before, after):
@@ -620,6 +639,7 @@ class ModerationCog(commands.Cog):
                 discord.Color.gold(),
                 [("Mudancas", "\n".join(mudancas), False)],
                 event_id="permissoes_alteradas" if any("Permissoes" in item for item in mudancas) else "cargo_alterado",
+                log_key="cargos",
             )
 
     async def enviar_log_voz(self, guild, config, event_id, titulo, descricao, fields, responsavel=None):

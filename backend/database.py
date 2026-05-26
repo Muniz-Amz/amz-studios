@@ -95,6 +95,16 @@ AUTOMACOES_PADRAO = [
     {"id": "memberGoalNotice", "title": "Aviso por meta de membros", "description": "Envia uma mensagem automatica quando o servidor atingir uma quantidade de membros.", "enabled": False, "type": "member-goal", "values": {"memberCount": 100, "channelId": "", "channelIdName": "", "message": ""}},
 ]
 DETECCOES_AUTO_RESPOSTA = {"contains", "exact", "startsWith", "endsWith"}
+LOG_EVENT_CHANNEL_FIELDS = (
+    ("canal_mensagens_deletadas_id", "canal_mensagens_deletadas_nome"),
+    ("canal_mensagens_editadas_id", "canal_mensagens_editadas_nome"),
+    ("canal_banimentos_id", "canal_banimentos_nome"),
+    ("canal_desbanimentos_id", "canal_desbanimentos_nome"),
+    ("canal_expulsoes_id", "canal_expulsoes_nome"),
+    ("canal_castigos_id", "canal_castigos_nome"),
+    ("canal_canais_id", "canal_canais_nome"),
+    ("canal_cargos_id", "canal_cargos_nome"),
+)
 PADRAO_MODERACAO = {
     "logs": {
         "ativo": False,
@@ -104,6 +114,11 @@ PADRAO_MODERACAO = {
         "canal_moderacao_nome": "",
         "canal_servidor_id": "",
         "canal_servidor_nome": "",
+        **{
+            campo: ""
+            for par_campos in LOG_EVENT_CHANNEL_FIELDS
+            for campo in par_campos
+        },
         "mensagens_deletadas": True,
         "mensagens_editadas": True,
         "banimentos": True,
@@ -254,6 +269,16 @@ def _normalizar_bool(valor):
 def _limitar_texto(valor, limite, padrao=""):
     texto = str(valor if valor is not None else padrao).strip()
     return texto[:limite]
+
+
+def _normalizar_canais_eventos_log(logs):
+    canais = {}
+
+    for campo_id, campo_nome in LOG_EVENT_CHANNEL_FIELDS:
+        canais[campo_id] = _limitar_texto(logs.get(campo_id), 32)
+        canais[campo_nome] = _limitar_texto(logs.get(campo_nome), 120)
+
+    return canais
 
 
 def _normalizar_cor(cor, padrao):
@@ -537,6 +562,7 @@ def _normalizar_moderacao(dados):
             "canal_moderacao_nome": _limitar_texto(logs.get("canal_moderacao_nome"), 120),
             "canal_servidor_id": _limitar_texto(logs.get("canal_servidor_id"), 32),
             "canal_servidor_nome": _limitar_texto(logs.get("canal_servidor_nome"), 120),
+            **_normalizar_canais_eventos_log(logs),
             "mensagens_deletadas": _normalizar_bool(logs.get("mensagens_deletadas")),
             "mensagens_editadas": _normalizar_bool(logs.get("mensagens_editadas")),
             "banimentos": _normalizar_bool(logs.get("banimentos")),
