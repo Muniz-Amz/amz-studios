@@ -2,23 +2,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
+from security.discord_permissions import usuario_e_admin_ou_dono
 from services.cleanup_service import INTERVALO_LIMPEZA_MINUTOS, executar_limpezas
 
 
 MAX_LIMPAR_MENSAGENS = 1000
-
-
-def usuario_e_admin_ou_dono(interaction):
-    guild = interaction.guild
-    usuario = interaction.user
-
-    if not guild or not usuario:
-        return False
-
-    if usuario.id == guild.owner_id:
-        return True
-
-    return getattr(usuario.guild_permissions, "administrator", False)
 
 
 class CleanupCog(commands.Cog):
@@ -54,7 +42,7 @@ class CleanupCog(commands.Cog):
 
         bot_permissions = channel.permissions_for(guild.me)
 
-        if not usuario_e_admin_ou_dono(interaction):
+        if not usuario_e_admin_ou_dono(guild, interaction.user):
             return None, "Apenas o dono do servidor ou usuarios com `Administrador` podem usar `/limpar`."
 
         if not bot_permissions.manage_messages or not bot_permissions.read_message_history:

@@ -118,26 +118,42 @@ def montar_fallback_texto(conteudo, embed, imagem_url):
     return "\n".join(parte for parte in partes if parte).strip()[:1900]
 
 
-async def enviar_aviso_membro(member, tipo):
+def resultado_aviso(detalhado, ok, mensagem):
+    return (ok, mensagem) if detalhado else ok
+
+
+async def enviar_aviso_membro(member, tipo, detalhado=False):
     campos = TIPOS_AVISO.get(tipo)
 
     if not campos or not member.guild:
-        return False
+        return resultado_aviso(detalhado, False, "Tipo de aviso invalido ou membro sem servidor.")
 
     config = await buscar_boas_vindas(str(member.guild.id))
 
     if not config.get(campos["ativo"]):
-        return False
+        return resultado_aviso(detalhado, False, f"Aviso de {tipo} esta desativado no painel.")
 
-    canal = await obter_canal_texto(member.guild, config.get(campos["canal_id"]))
+    canal_id = config.get(campos["canal_id"])
 
-    if not canal or not member.guild.me:
-        return False
+    if not canal_id:
+        return resultado_aviso(detalhado, False, f"Nenhum canal de {tipo} foi salvo no painel.")
+
+    canal = await obter_canal_texto(member.guild, canal_id)
+
+    if not canal:
+        return resultado_aviso(detalhado, False, f"Canal de {tipo} nao encontrado ou nao e canal de texto.")
+
+    if not member.guild.me:
+        return resultado_aviso(detalhado, False, "Nao consegui identificar o cargo do bot neste servidor.")
 
     permissoes = canal.permissions_for(member.guild.me)
 
     if not permissoes.view_channel or not permissoes.send_messages:
-        return False
+        return resultado_aviso(
+            detalhado,
+            False,
+            f"O bot precisa de `Ver canal` e `Enviar mensagens` em {canal.mention}.",
+        )
 
     conteudo = formatar_variaveis(config.get(campos["conteudo"]), member)
     embed = montar_embed(member, config, campos)
@@ -151,7 +167,8 @@ async def enviar_aviso_membro(member, tipo):
             if not texto:
                 texto = f"{member.display_name} - {member.guild.name}"
             await canal.send(content=texto or None, allowed_mentions=allowed_mentions)
-        return True
+        aviso_embed = "" if permissoes.embed_links else " Sem `Embed Links`, enviei como texto simples."
+        return resultado_aviso(detalhado, True, f"Aviso de {tipo} enviado em {canal.mention}.{aviso_embed}")
     except discord.HTTPException as erro:
         print(f"[WELCOME] Falha ao enviar aviso de {tipo} em {member.guild.id}: {erro}")
-        return False
+        return resultado_aviso(detalhado, False, f"Discord recusou o envio do aviso: `{erro}`")

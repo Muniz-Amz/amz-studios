@@ -5,6 +5,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from database import status_banco_dados
+from security.discord_permissions import usuario_e_admin_ou_dono
 
 
 COMANDOS_HELP = {
@@ -15,6 +16,7 @@ COMANDOS_HELP = {
     ],
     "Moderacao": [
         ("/limpar quantidade", "Apaga de 1 a 1000 mensagens recentes do canal atual."),
+        ("/testaravisos tipo", "Envia um teste do aviso de entrada ou saida no canal configurado."),
     ],
     "Midia": [
         ("/gifimg arquivo", "Transforma uma imagem enviada em GIF."),
@@ -23,16 +25,6 @@ COMANDOS_HELP = {
         ("/midialimites", "Mostra os limites de conversao do bot."),
     ],
 }
-
-
-def usuario_e_admin_ou_dono(guild, usuario):
-    if not guild or not usuario:
-        return False
-
-    if usuario.id == guild.owner_id:
-        return True
-
-    return getattr(usuario.guild_permissions, "administrator", False)
 
 
 def formatar_numero(valor):
