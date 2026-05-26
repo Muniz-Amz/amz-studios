@@ -20,10 +20,12 @@ from bot import bot
 from database import (
     buscar_boas_vindas,
     buscar_limpezas,
+    buscar_moderacao,
     remover_limpeza,
     salvar_boas_vindas,
     salvar_config,
     salvar_limpeza,
+    salvar_moderacao,
     status_banco_dados,
 )
 
@@ -421,6 +423,27 @@ def canais_texto_do_servidor(server_id):
     return canais
 
 
+def cargos_do_servidor(server_id):
+    guild = bot.get_guild(int(server_id))
+
+    if not guild:
+        return None
+
+    cargos = []
+    for cargo in sorted(guild.roles, key=lambda item: item.position, reverse=True):
+        if cargo.is_default():
+            continue
+        cargos.append({
+            "id": str(cargo.id),
+            "nome": cargo.name,
+            "posicao": cargo.position,
+            "cor": str(cargo.color),
+            "gerenciado": cargo.managed,
+        })
+
+    return cargos
+
+
 def permissoes_bot_servidor(guild):
     membro_bot = guild.me
 
@@ -767,6 +790,14 @@ def buscar_boas_vindas_sync(server_id):
         return {}
 
 
+def buscar_moderacao_sync(server_id):
+    try:
+        futuro = asyncio.run_coroutine_threadsafe(buscar_moderacao(str(server_id)), bot.loop)
+        return futuro.result(timeout=10)
+    except Exception:
+        return {}
+
+
 def valor_booleano(valor):
     if isinstance(valor, bool):
         return valor
@@ -925,6 +956,7 @@ def montar_info_servidor_admin(guild):
     cargos = sorted(guild.roles, key=lambda cargo: cargo.position, reverse=True)
     limpezas = buscar_limpezas_sync(guild.id)
     boas_vindas = buscar_boas_vindas_sync(guild.id)
+    moderacao = buscar_moderacao_sync(guild.id)
 
     return {
         "id": str(guild.id),
@@ -940,6 +972,7 @@ def montar_info_servidor_admin(guild):
         "features": sorted(guild.features),
         "limpezas_configuradas": limpezas,
         "boas_vindas_config": boas_vindas,
+        "moderacao_config": moderacao,
         "contagens": {
             "canais": len(guild.channels),
             "texto": len(guild.text_channels),
@@ -1242,6 +1275,30 @@ def salvar_config_boas_vindas():
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
 
 
+@app.route("/api/config/moderacao", methods=["POST"])
+def salvar_config_moderacao():
+    dados = request.json or {}
+    server_id = dados.get("id")
+
+    if not server_id:
+        return jsonify({"status": "erro", "mensagem": "ID do servidor invalido."}), 400
+
+    erro = validar_admin_requisicao(server_id)
+    if erro:
+        return erro
+
+    try:
+        futuro = asyncio.run_coroutine_threadsafe(salvar_moderacao(server_id, dados), bot.loop)
+        config = futuro.result(timeout=15)
+        return jsonify({
+            "status": "sucesso",
+            "mensagem": "Moderacao salva!",
+            "moderacao": config,
+        }), 200
+    except Exception as e:
+        return jsonify({"status": "erro", "mensagem": str(e)}), 500
+
+
 @app.route("/api/servidores/<server_id>/canais", methods=["GET"])
 def listar_canais_servidor(server_id):
     if not server_id:
@@ -1262,6 +1319,26 @@ def listar_canais_servidor(server_id):
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
 
 
+@app.route("/api/servidores/<server_id>/cargos", methods=["GET"])
+def listar_cargos_servidor(server_id):
+    if not server_id:
+        return jsonify({"status": "erro", "mensagem": "ID do servidor invalido."}), 400
+
+    erro = validar_admin_requisicao(server_id)
+    if erro:
+        return erro
+
+    try:
+        cargos = cargos_do_servidor(server_id)
+
+        if cargos is None:
+            return jsonify({"status": "erro", "mensagem": "Servidor nao encontrado pelo bot."}), 404
+
+        return jsonify({"status": "sucesso", "cargos": cargos}), 200
+    except Exception as e:
+        return jsonify({"status": "erro", "mensagem": str(e)}), 500
+
+
 @app.route("/api/config/<server_id>/boas-vindas", methods=["GET"])
 def listar_config_boas_vindas(server_id):
     if not server_id:
@@ -1275,6 +1352,23 @@ def listar_config_boas_vindas(server_id):
         futuro = asyncio.run_coroutine_threadsafe(buscar_boas_vindas(server_id), bot.loop)
         config = futuro.result(timeout=15)
         return jsonify({"status": "sucesso", "boas_vindas": config}), 200
+    except Exception as e:
+        return jsonify({"status": "erro", "mensagem": str(e)}), 500
+
+
+@app.route("/api/config/<server_id>/moderacao", methods=["GET"])
+def listar_config_moderacao(server_id):
+    if not server_id:
+        return jsonify({"status": "erro", "mensagem": "ID do servidor invalido."}), 400
+
+    erro = validar_admin_requisicao(server_id)
+    if erro:
+        return erro
+
+    try:
+        futuro = asyncio.run_coroutine_threadsafe(buscar_moderacao(server_id), bot.loop)
+        config = futuro.result(timeout=15)
+        return jsonify({"status": "sucesso", "moderacao": config}), 200
     except Exception as e:
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
 

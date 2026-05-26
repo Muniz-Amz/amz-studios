@@ -20,8 +20,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    <link rel="stylesheet" href="style.css?v=15">
-    <link rel="stylesheet" href="/amz-studios/style.css?v=15">
+    <link rel="stylesheet" href="style.css?v=16">
+    <link rel="stylesheet" href="/amz-studios/style.css?v=16">
 </head>
 <body class="flex flex-col min-h-screen overflow-x-hidden bg-black">
 
@@ -164,21 +164,24 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                         <nav class="vm-sidebar-nav" aria-label="Configuracoes do servidor">
                             <button type="button" class="vm-sidebar-link active" data-dashboard-section="setup" onclick="selecionarSecaoDashboard('setup')">Limpeza</button>
                             <button type="button" class="vm-sidebar-link" data-dashboard-section="server" onclick="selecionarSecaoDashboard('server')">Entrada e Saida</button>
-                            <button type="button" class="vm-sidebar-link" data-dashboard-section="role" onclick="selecionarSecaoDashboard('role')">Role Toggles</button>
-                            <button type="button" class="vm-sidebar-link" data-dashboard-section="misc" onclick="selecionarSecaoDashboard('misc')">Misc</button>
-                            <button type="button" class="vm-sidebar-link" data-dashboard-section="bot" onclick="selecionarSecaoDashboard('bot')">Bot Profile</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="role" onclick="selecionarSecaoDashboard('role')">Moderação</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="audit" onclick="selecionarSecaoDashboard('audit')">Auditoria</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="security" onclick="selecionarSecaoDashboard('security')">Segurança</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="automations" onclick="selecionarSecaoDashboard('automations')">Automações</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="misc" onclick="selecionarSecaoDashboard('misc')">AutoMod</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="bot" onclick="selecionarSecaoDashboard('bot')">Perfil do Bot</button>
                             <button type="button" class="vm-sidebar-link" data-dashboard-section="interface" onclick="selecionarSecaoDashboard('interface')">Interface</button>
-                            <button type="button" class="vm-sidebar-link" data-dashboard-section="blacklist" onclick="selecionarSecaoDashboard('blacklist')">Blacklisted Words</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="blacklist" onclick="selecionarSecaoDashboard('blacklist')">Blacklist</button>
                         </nav>
 
                         <div class="vm-sidebar-divider"></div>
 
                         <div class="vm-sidebar-group">
                             <p class="vm-sidebar-label">PERSONAL SETTINGS</p>
-                            <button type="button" class="vm-sidebar-link active-soft" data-dashboard-section="global" onclick="selecionarSecaoDashboard('global')">Global Profile</button>
+                            <button type="button" class="vm-sidebar-link active-soft" data-dashboard-section="global" onclick="selecionarSecaoDashboard('global')">Permissões</button>
                             <button type="button" class="vm-sidebar-link muted" data-dashboard-section="profiles" onclick="selecionarSecaoDashboard('profiles')">
-                                Server Profiles
-                                <small>Coming Soon</small>
+                                Backups
+                                <small>Perfis</small>
                             </button>
                         </div>
 
@@ -187,7 +190,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                         <div class="vm-sidebar-group">
                             <p class="vm-sidebar-label">PREMIUM</p>
                             <button type="button" class="vm-upgrade-link" data-dashboard-section="upgrade" onclick="selecionarSecaoDashboard('upgrade')">
-                                Upgrade
+                                Recursos
                                 <i class="ph ph-diamond"></i>
                             </button>
                         </div>
@@ -235,45 +238,80 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                                 </span>
                             </button>
                             <button type="button" class="vm-dashboard-card" data-dashboard-section="role" onclick="selecionarSecaoDashboard('role')">
-                                <i class="ph ph-toggle-left"></i>
+                                <i class="ph ph-shield-check"></i>
                                 <span>
-                                    <strong>Role Toggles</strong>
-                                    <small>Permissoes por cargo</small>
+                                    <strong>Moderação</strong>
+                                    <small>Logs e punições</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="audit" onclick="selecionarSecaoDashboard('audit')">
+                                <i class="ph ph-clipboard-text"></i>
+                                <span>
+                                    <strong>AUDITORIA</strong>
+                                    <small>Logs personalizados por canal</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="security" onclick="selecionarSecaoDashboard('security')">
+                                <i class="ph ph-shield-warning"></i>
+                                <span>
+                                    <strong>SEGURANÇA</strong>
+                                    <small>Anti raid e proteção</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="automations" onclick="selecionarSecaoDashboard('automations')">
+                                <i class="ph ph-lightning"></i>
+                                <span>
+                                    <strong>AUTOMAÇÕES</strong>
+                                    <small>Ações automáticas do servidor</small>
                                 </span>
                             </button>
                             <button type="button" class="vm-dashboard-card" data-dashboard-section="misc" onclick="selecionarSecaoDashboard('misc')">
-                                <i class="ph ph-list-bullets"></i>
+                                <i class="ph ph-funnel"></i>
                                 <span>
-                                    <strong>Misc</strong>
-                                    <small>Opcoes adicionais</small>
+                                    <strong>AutoMod</strong>
+                                    <small>Filtros e anti-spam</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="blacklist" onclick="selecionarSecaoDashboard('blacklist')">
+                                <i class="ph ph-prohibit"></i>
+                                <span>
+                                    <strong>Blacklist</strong>
+                                    <small>Palavras e imunidades</small>
                                 </span>
                             </button>
                             <button type="button" class="vm-dashboard-card" data-dashboard-section="bot" onclick="selecionarSecaoDashboard('bot')">
-                                <i class="ph ph-user-circle"></i>
+                                <i class="ph ph-robot"></i>
                                 <span>
-                                    <strong>Bot Profile</strong>
-                                    <small>Aparencia e comportamento</small>
+                                    <strong>Perfil do Bot</strong>
+                                    <small>Menção e aparência</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="interface" onclick="selecionarSecaoDashboard('interface')">
+                                <i class="ph ph-layout"></i>
+                                <span>
+                                    <strong>Interface</strong>
+                                    <small>Visual do painel</small>
                                 </span>
                             </button>
                             <button type="button" class="vm-dashboard-card" data-dashboard-section="global" onclick="selecionarSecaoDashboard('global')">
-                                <i class="ph ph-user"></i>
+                                <i class="ph ph-key"></i>
                                 <span>
-                                    <strong>Global Profile</strong>
-                                    <small>Preferencias pessoais</small>
+                                    <strong>Permissões</strong>
+                                    <small>Cargos da equipe</small>
                                 </span>
                             </button>
-                            <button type="button" class="vm-dashboard-card disabled" data-dashboard-section="profiles" onclick="selecionarSecaoDashboard('profiles')">
-                                <i class="ph ph-user-square"></i>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="profiles" onclick="selecionarSecaoDashboard('profiles')">
+                                <i class="ph ph-archive"></i>
                                 <span>
-                                    <strong>Server Profiles</strong>
-                                    <small>Coming Soon</small>
+                                    <strong>Backups</strong>
+                                    <small>Perfis do servidor</small>
                                 </span>
                             </button>
                             <button type="button" class="vm-dashboard-card" data-dashboard-section="upgrade" onclick="selecionarSecaoDashboard('upgrade')">
                                 <i class="ph ph-diamond"></i>
                                 <span>
-                                    <strong>Upgrade</strong>
-                                    <small>Recursos premium</small>
+                                    <strong>Recursos</strong>
+                                    <small>Pacote completo</small>
                                 </span>
                             </button>
                         </div>
@@ -441,7 +479,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
 
     <script>
         const amzScript = document.createElement('script');
-        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=20' : 'script.js?v=20';
+        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=21' : 'script.js?v=21';
         document.body.appendChild(amzScript);
     </script>
 </body>

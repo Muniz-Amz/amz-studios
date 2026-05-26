@@ -1345,6 +1345,470 @@ section {
     color: rgba(255, 255, 255, 0.36);
 }
 
+.mod-config-panel {
+    display: grid;
+    gap: 18px;
+}
+
+.mod-intro {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #050505;
+    padding: 16px;
+}
+
+.mod-intro strong {
+    display: block;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 950;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.mod-intro span {
+    display: block;
+    margin-top: 6px;
+    color: rgba(255, 255, 255, 0.46);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.mod-field-grid,
+.mod-feature-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.mod-field,
+.mod-toggle-row,
+.mod-feature-grid span {
+    min-height: 70px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #000000;
+    padding: 14px;
+}
+
+.mod-field {
+    display: grid;
+    gap: 8px;
+}
+
+.mod-field-wide {
+    grid-column: span 2;
+}
+
+.mod-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.mod-toggle-row strong,
+.mod-field span,
+.mod-feature-grid span {
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 950;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.mod-field small,
+.mod-toggle-row small {
+    display: block;
+    margin-top: 4px;
+    color: rgba(255, 255, 255, 0.38);
+    font-size: 10px;
+    line-height: 1.4;
+}
+
+.mod-field input,
+.mod-field select,
+.mod-field textarea {
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: #050505;
+    color: #ffffff;
+    padding: 10px;
+    font-size: 12px;
+    outline: none;
+}
+
+.mod-field textarea {
+    resize: vertical;
+    min-height: 130px;
+}
+
+.mod-toggle-row input {
+    width: 18px;
+    height: 18px;
+    accent-color: #ffffff;
+}
+
+.advanced-config-page {
+    display: grid;
+    gap: 18px;
+}
+
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.summary-grid article {
+    min-height: 82px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #000000;
+    padding: 14px;
+    display: grid;
+    align-content: space-between;
+    gap: 10px;
+}
+
+.summary-grid span {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.summary-grid strong {
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 950;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+.advanced-control-grid,
+.security-option-grid,
+.automation-option-grid,
+.audit-event-grid {
+    display: grid;
+    gap: 12px;
+}
+
+.advanced-control-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 0.82fr);
+}
+
+.security-option-grid,
+.automation-option-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.audit-event-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.advanced-control-card,
+.audit-event-card,
+.security-option-card,
+.automation-option-card,
+.automation-rule-editor {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #000000;
+    padding: 14px;
+}
+
+.advanced-control-card {
+    min-height: 86px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.advanced-control-card strong,
+.advanced-card-heading strong,
+.audit-event-main strong,
+.advanced-section-heading strong {
+    display: block;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 950;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.advanced-control-card span,
+.advanced-card-heading p,
+.audit-event-main p,
+.advanced-section-heading p,
+.audit-group-note {
+    display: block;
+    margin-top: 5px;
+    color: rgba(255, 255, 255, 0.42);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.advanced-section,
+.audit-event-group {
+    display: grid;
+    gap: 12px;
+}
+
+.advanced-section-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding-top: 4px;
+}
+
+.advanced-section-heading i {
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    display: grid;
+    place-items: center;
+    color: #ffffff;
+    font-size: 17px;
+}
+
+.advanced-card-heading,
+.audit-event-main {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.advanced-field-grid,
+.automation-rule-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.advanced-field,
+.advanced-toggle-inline {
+    display: grid;
+    gap: 8px;
+}
+
+.advanced-field-wide,
+.automation-option-card-wide {
+    grid-column: span 2;
+}
+
+.advanced-field span,
+.advanced-toggle-inline span {
+    color: rgba(255, 255, 255, 0.42);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.advanced-field input,
+.advanced-field select,
+.advanced-field textarea,
+.automation-rule-form input,
+.automation-rule-form select,
+.automation-rule-form textarea {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #050505;
+    color: #ffffff;
+    outline: none;
+    padding: 10px;
+    font-size: 12px;
+}
+
+.advanced-field textarea,
+.automation-rule-form textarea {
+    min-height: 96px;
+    resize: vertical;
+    line-height: 1.45;
+}
+
+.advanced-field select[multiple] {
+    min-height: 118px;
+}
+
+.advanced-field input:focus,
+.advanced-field select:focus,
+.advanced-field textarea:focus,
+.automation-rule-form input:focus,
+.automation-rule-form select:focus,
+.automation-rule-form textarea:focus {
+    border-color: rgba(255, 255, 255, 0.72);
+}
+
+.toggle-switch {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.toggle-switch input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.toggle-switch span {
+    display: block;
+    width: 44px;
+    height: 24px;
+    margin: 0;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: #101010;
+    position: relative;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.toggle-switch span::after {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    top: 3px;
+    left: 4px;
+    background: rgba(255, 255, 255, 0.42);
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.toggle-switch input:checked + span {
+    background: #ffffff;
+    border-color: #ffffff;
+}
+
+.toggle-switch input:checked + span::after {
+    background: #000000;
+    transform: translateX(18px);
+}
+
+.audit-detail-list {
+    margin: 12px 0 0;
+    padding: 10px 12px 10px 26px;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.48);
+    font-size: 10px;
+    line-height: 1.6;
+}
+
+.audit-history-list,
+.automation-rule-list {
+    display: grid;
+    gap: 10px;
+}
+
+.audit-history-item,
+.automation-rule-item {
+    min-height: 68px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #000000;
+    padding: 12px;
+    display: grid;
+    grid-template-columns: minmax(120px, 1.2fr) minmax(90px, 1fr) minmax(90px, 1fr) minmax(90px, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+}
+
+.automation-rule-item {
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+
+.audit-history-item strong,
+.automation-rule-item strong {
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 950;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.audit-history-item span,
+.automation-rule-item span,
+.automation-rule-item p {
+    color: rgba(255, 255, 255, 0.42);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+
+.automation-rule-item p {
+    margin-top: 4px;
+}
+
+.audit-history-item em,
+.automation-rule-item em {
+    justify-self: end;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 6px 8px;
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 950;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.audit-history-item em.sent,
+.automation-rule-item em.sent {
+    color: #71ff96;
+}
+
+.audit-history-item em.failed,
+.automation-rule-item em.failed {
+    color: #ff7676;
+}
+
+.advanced-empty {
+    min-height: 64px;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.36);
+    display: grid;
+    place-items: center;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.automation-rule-actions {
+    grid-column: span 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.automation-rule-actions button,
+.automation-rule-item button {
+    min-height: 38px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: #ffffff;
+    color: #000000;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 9px;
+    font-weight: 950;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+}
+
+.automation-rule-actions button:hover,
+.automation-rule-item button:hover {
+    background: #050505;
+    color: #ffffff;
+}
+
 @media (max-width: 900px) {
     .vm-form-grid {
         grid-template-columns: 1fr;
@@ -1354,8 +1818,24 @@ section {
     .welcome-toggle-grid,
     .welcome-channel-grid,
     .welcome-form-grid,
-    .welcome-preview-grid {
+    .welcome-preview-grid,
+    .mod-field-grid,
+    .mod-feature-grid,
+    .summary-grid,
+    .advanced-control-grid,
+    .security-option-grid,
+    .automation-option-grid,
+    .audit-event-grid,
+    .advanced-field-grid,
+    .automation-rule-form {
         grid-template-columns: 1fr;
+    }
+
+    .mod-field-wide,
+    .advanced-field-wide,
+    .automation-option-card-wide,
+    .automation-rule-actions {
+        grid-column: auto;
     }
 
     .welcome-vars {
@@ -1385,7 +1865,10 @@ section {
     }
 
     .welcome-section-heading,
-    .welcome-toggle-row {
+    .welcome-toggle-row,
+    .advanced-control-card,
+    .advanced-card-heading,
+    .audit-event-main {
         align-items: stretch;
         flex-direction: column;
     }
@@ -1394,6 +1877,18 @@ section {
         width: 100%;
         justify-content: space-between;
         white-space: normal;
+    }
+
+    .audit-history-item,
+    .automation-rule-item {
+        grid-template-columns: 1fr;
+    }
+
+    .audit-history-item em,
+    .automation-rule-item em,
+    .automation-rule-item button {
+        justify-self: stretch;
+        width: 100%;
     }
 }
 

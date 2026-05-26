@@ -38,6 +38,221 @@ const BOAS_VINDAS_PADRAO = {
     saida_mostrar_avatar: true
 };
 const VARIAVEIS_BOAS_VINDAS = ['{mention}', '{user}', '{username}', '{user_tag}', '{id}', '{server}', '{server_upper}', '{member_count}', '{member_number}', '{leave_action}', '{audit_action}', '{leave_reason}', '{moderator}', '{moderator_tag}'];
+const voiceAuditLogTemplate = {
+    eventType: '',
+    responsibleUserId: '',
+    responsibleUserName: '',
+    affectedUserId: '',
+    affectedUserName: '',
+    sourceVoiceChannel: '',
+    targetVoiceChannel: '',
+    voiceChannel: '',
+    action: '',
+    dateTime: ''
+};
+const auditGroups = [
+    { id: 'moderacao', title: 'Moderação', icon: 'ph-gavel' },
+    { id: 'voz', title: 'Voz / Calls', icon: 'ph-speaker-high' },
+    { id: 'mensagens', title: 'Mensagens', icon: 'ph-chat-circle-text' },
+    { id: 'cargos', title: 'Cargos e permissões', icon: 'ph-identification-card' },
+    { id: 'servidor', title: 'Servidor', icon: 'ph-tree-structure' },
+    { id: 'seguranca', title: 'Segurança', icon: 'ph-shield-warning' },
+    { id: 'bot_dashboard', title: 'Bot / Dashboard', icon: 'ph-robot' }
+];
+const auditEvents = [
+    { id: 'banimentos', title: 'Banimentos', description: 'Registra quando um usuário é banido do servidor.', enabled: true, channelId: null, group: 'moderacao' },
+    { id: 'expulsoes', title: 'Expulsões', description: 'Registra quando um usuário é expulso do servidor.', enabled: true, channelId: null, group: 'moderacao' },
+    { id: 'advertencias', title: 'Advertências', description: 'Registra quando um usuário recebe uma advertência.', enabled: true, channelId: null, group: 'moderacao' },
+    { id: 'silenciamentos', title: 'Silenciamentos', description: 'Registra quando um usuário é silenciado ou tem o silêncio removido.', enabled: true, channelId: null, group: 'moderacao' },
+    { id: 'remocao_punicoes', title: 'Remoção de punições', description: 'Registra quando uma punição é removida de um usuário.', enabled: true, channelId: null, group: 'moderacao' },
+    { id: 'voz_entrada', title: 'Usuário entrou em call', description: 'Registra quando um usuário entra em um canal de voz.', enabled: true, channelId: null, group: 'voz', logDetails: ['Usuário', 'Canal de voz', 'Data e horário'], logTemplate: { ...voiceAuditLogTemplate, eventType: 'voice_join' } },
+    { id: 'voz_saida', title: 'Usuário saiu da call', description: 'Registra quando um usuário sai de um canal de voz.', enabled: true, channelId: null, group: 'voz', logDetails: ['Usuário', 'Canal de voz', 'Data e horário'], logTemplate: { ...voiceAuditLogTemplate, eventType: 'voice_leave' } },
+    { id: 'voz_movido', title: 'Usuário movido de call', description: 'Registra quando um usuário é movido de um canal de voz para outro.', enabled: true, channelId: null, group: 'voz', logDetails: ['Quem moveu o usuário', 'Qual usuário foi movido', 'Canal de voz de origem', 'Canal de voz de destino', 'Data e horário da ação', 'ID do responsável', 'ID do usuário afetado'], logTemplate: { ...voiceAuditLogTemplate, eventType: 'voice_move' } },
+    { id: 'voz_mute', title: 'Usuário mutado/desmutado na call', description: 'Registra quando um usuário é mutado ou desmutado em um canal de voz.', enabled: true, channelId: null, group: 'voz', logDetails: ['Quem executou a ação', 'Quem foi afetado', 'Canal de voz', 'Tipo da ação', 'Data e horário', 'ID do responsável', 'ID do usuário afetado'], logTemplate: { ...voiceAuditLogTemplate, eventType: 'voice_mute' } },
+    { id: 'voz_deafen', title: 'Usuário ensurdecido/desensurdecido na call', description: 'Registra quando um usuário é ensurdecido ou desensurdecido em um canal de voz.', enabled: true, channelId: null, group: 'voz', logDetails: ['Quem executou a ação', 'Quem foi afetado', 'Canal de voz', 'Tipo da ação', 'Data e horário', 'ID do responsável', 'ID do usuário afetado'], logTemplate: { ...voiceAuditLogTemplate, eventType: 'voice_deafen' } },
+    { id: 'voz_desconectado', title: 'Usuário desconectado da call', description: 'Registra quando um usuário é desconectado de um canal de voz por outra pessoa.', enabled: true, channelId: null, group: 'voz', logDetails: ['Quem desconectou', 'Quem foi desconectado', 'Canal de voz', 'Data e horário', 'ID do responsável', 'ID do usuário afetado'], logTemplate: { ...voiceAuditLogTemplate, eventType: 'voice_disconnect' } },
+    { id: 'mensagem_apagada', title: 'Mensagem apagada', description: 'Registra quando uma mensagem é apagada.', enabled: true, channelId: null, group: 'mensagens' },
+    { id: 'mensagem_editada', title: 'Mensagem editada', description: 'Registra quando uma mensagem é editada.', enabled: true, channelId: null, group: 'mensagens' },
+    { id: 'mensagem_fixada', title: 'Mensagem fixada/desfixada', description: 'Registra quando uma mensagem é fixada ou desfixada.', enabled: true, channelId: null, group: 'mensagens' },
+    { id: 'links_suspeitos_bloqueados', title: 'Links suspeitos bloqueados', description: 'Registra quando um link suspeito é bloqueado.', enabled: true, channelId: null, group: 'mensagens' },
+    { id: 'spam_detectado', title: 'Spam detectado', description: 'Registra quando uma possível ação de spam é detectada.', enabled: true, channelId: null, group: 'mensagens' },
+    { id: 'cargo_alterado', title: 'Cargo criado/editado/deletado', description: 'Registra alterações em cargos do servidor.', enabled: true, channelId: null, group: 'cargos' },
+    { id: 'cargo_usuario', title: 'Cargo adicionado/removido de usuário', description: 'Registra quando cargos são adicionados ou removidos de usuários.', enabled: true, channelId: null, group: 'cargos' },
+    { id: 'permissoes_alteradas', title: 'Permissões alteradas', description: 'Registra alterações em permissões do servidor.', enabled: true, channelId: null, group: 'cargos' },
+    { id: 'canal_alterado', title: 'Canal criado/editado/deletado', description: 'Registra alterações em canais do servidor.', enabled: true, channelId: null, group: 'servidor' },
+    { id: 'convite_alterado', title: 'Convite criado/deletado', description: 'Registra criação ou remoção de convites.', enabled: true, channelId: null, group: 'servidor' },
+    { id: 'emoji_sticker_alterado', title: 'Emoji/sticker criado/editado/deletado', description: 'Registra alterações em emojis e stickers.', enabled: true, channelId: null, group: 'servidor' },
+    { id: 'config_servidor_alterada', title: 'Alterações nas configurações do servidor', description: 'Registra mudanças nas configurações gerais do servidor.', enabled: true, channelId: null, group: 'servidor' },
+    { id: 'raid_detectada', title: 'Raid detectada', description: 'Registra quando uma possível raid é detectada.', enabled: true, channelId: null, group: 'seguranca' },
+    { id: 'lockdown_alterado', title: 'Lockdown ativado/desativado', description: 'Registra quando o modo lockdown é ativado ou desativado.', enabled: true, channelId: null, group: 'seguranca' },
+    { id: 'bot_desconhecido_bloqueado', title: 'Bot desconhecido bloqueado', description: 'Registra quando um bot não autorizado é bloqueado.', enabled: true, channelId: null, group: 'seguranca' },
+    { id: 'conta_suspeita_bloqueada', title: 'Conta suspeita bloqueada', description: 'Registra quando uma conta suspeita é bloqueada.', enabled: true, channelId: null, group: 'seguranca' },
+    { id: 'comando_usado', title: 'Comando usado', description: 'Registra quando um comando do bot é usado.', enabled: true, channelId: null, group: 'bot_dashboard' },
+    { id: 'erro_bot', title: 'Erro do bot', description: 'Registra erros internos do bot.', enabled: true, channelId: null, group: 'bot_dashboard' },
+    { id: 'dashboard_config_alterada', title: 'Configuração alterada no dashboard', description: 'Registra alterações feitas no dashboard.', enabled: true, channelId: null, group: 'bot_dashboard' },
+    { id: 'modulo_alterado', title: 'Módulo ativado/desativado', description: 'Registra quando um módulo é ativado ou desativado.', enabled: true, channelId: null, group: 'bot_dashboard' }
+];
+const securityOptions = [
+    { id: 'antiRaid', title: 'Anti Raid', description: 'Anti raid e proteção contra abuso em massa.', enabled: false, type: 'section' }
+];
+const antiRaidSettings = [
+    { id: 'enableAntiRaid', title: 'Ativar Anti Raid', description: 'Ativa ou desativa o sistema geral de Anti Raid.', enabled: false, type: 'toggle', value: false },
+    { id: 'massJoinBlock', title: 'Bloquear entrada em massa', description: 'Bloqueia entrada de muitos usuários em um curto período.', enabled: true, type: 'threshold', value: 5, fields: [{ id: 'maxUsers', label: 'Número máximo de usuários', type: 'number', value: 5, min: 1, max: 100 }, { id: 'timeWindowSeconds', label: 'Tempo em segundos', type: 'number', value: 10, min: 1, max: 3600 }] },
+    { id: 'accountMinAge', title: 'Idade mínima da conta', description: 'Bloqueia contas criadas recentemente.', enabled: true, type: 'number', value: 7, fields: [{ id: 'minimumDays', label: 'Número de dias mínimos', type: 'number', value: 7, min: 0, max: 3650 }] },
+    { id: 'sensitivity', title: 'Sensibilidade', description: 'Define o nível de rigidez da proteção Anti Raid.', enabled: true, type: 'select', value: 'Média', fields: [{ id: 'level', label: 'Sensibilidade', type: 'select', value: 'Média', options: ['Baixa', 'Média', 'Alta', 'Extrema'] }] },
+    { id: 'automaticAction', title: 'Ação automática', description: 'Define qual ação será executada automaticamente quando uma ameaça for detectada.', enabled: true, type: 'select', value: 'Apenas alertar', fields: [{ id: 'action', label: 'Ação automática', type: 'select', value: 'Apenas alertar', options: ['Apenas alertar', 'Silenciar', 'Expulsar', 'Banir', 'Colocar em verificação'] }] },
+    { id: 'lockdownMode', title: 'Modo Lockdown', description: 'Trava o servidor automaticamente durante uma raid.', enabled: false, type: 'toggle', value: false },
+    { id: 'lockdownTime', title: 'Tempo de Lockdown', description: 'Define por quanto tempo o servidor ficará em lockdown.', enabled: true, type: 'number', value: 10, fields: [{ id: 'minutes', label: 'Tempo em minutos', type: 'number', value: 10, min: 1, max: 1440 }] },
+    { id: 'blockUnknownBots', title: 'Bloquear bots desconhecidos', description: 'Impede a entrada de bots não autorizados no servidor.', enabled: true, type: 'toggle', value: true },
+    { id: 'notifyAdmins', title: 'Notificar administradores', description: 'Envia alerta para administradores quando uma raid for detectada.', enabled: true, type: 'toggle', value: true },
+    { id: 'securityLogChannel', title: 'Canal de logs', description: 'Define o canal onde os alertas e logs de segurança serão enviados.', enabled: true, type: 'channel', value: '', fields: [{ id: 'channelId', label: 'Canal de logs', type: 'channel', value: '' }] },
+    { id: 'suspiciousLinks', title: 'Bloquear links suspeitos', description: 'Detecta e bloqueia links suspeitos enviados no servidor.', enabled: true, type: 'links', value: 'Apagar e alertar', fields: [{ id: 'action', label: 'Ação para links suspeitos', type: 'select', value: 'Apagar e alertar', options: ['Apenas apagar mensagem', 'Apagar e alertar', 'Silenciar usuário', 'Expulsar usuário', 'Banir usuário'] }, { id: 'whitelistDomains', label: 'Lista branca de domínios permitidos', type: 'textarea-list', value: [] }, { id: 'blacklistDomains', label: 'Lista negra de domínios bloqueados', type: 'textarea-list', value: [] }] }
+];
+const automationSettings = [
+    { id: 'autoRole', title: 'Auto cargo', description: 'Define cargos automáticos para novos membros ao entrarem no servidor.', enabled: false, type: 'role', fields: [{ id: 'roleId', label: 'Cargo', type: 'role', value: '' }] },
+    { id: 'autoResponse', title: 'Auto resposta', description: 'Responde automaticamente quando uma palavra-chave for detectada.', enabled: false, type: 'auto-response', fields: [] },
+    { id: 'scheduledMessage', title: 'Mensagem agendada', description: 'Envia mensagens automáticas em horários definidos.', enabled: false, type: 'scheduled-message', fields: [{ id: 'channelId', label: 'Canal', type: 'channel', value: '' }, { id: 'message', label: 'Mensagem', type: 'textarea', value: '' }, { id: 'schedule', label: 'Data ou intervalo', type: 'text', value: '' }] },
+    { id: 'autoReaction', title: 'Auto reação', description: 'Adiciona reações automaticamente em mensagens de canais específicos.', enabled: false, type: 'reaction', fields: [{ id: 'channelId', label: 'Canal', type: 'channel', value: '' }, { id: 'emoji', label: 'Emoji', type: 'text', value: '' }] },
+    { id: 'autoThread', title: 'Auto thread', description: 'Cria threads automaticamente em canais configurados.', enabled: false, type: 'thread', fields: [{ id: 'channelId', label: 'Canal', type: 'channel', value: '' }, { id: 'threadName', label: 'Nome padrão da thread', type: 'text', value: '' }] },
+    { id: 'ruleCleanup', title: 'Auto limpeza por regra', description: 'Remove mensagens automaticamente de acordo com regras configuradas.', enabled: false, type: 'cleanup-rule', fields: [{ id: 'channelId', label: 'Canal', type: 'channel', value: '' }, { id: 'ruleType', label: 'Tipo de regra', type: 'select', value: 'Mensagens antigas', options: ['Mensagens antigas', 'Limite de quantidade', 'Links', 'Convites', 'Palavras bloqueadas'] }, { id: 'amountOrTime', label: 'Tempo ou quantidade', type: 'text', value: '' }] },
+    { id: 'commandChannelBlock', title: 'Bloqueio de comandos por canal', description: 'Impede o uso de comandos em canais não permitidos.', enabled: false, type: 'blocked-channels', fields: [{ id: 'blockedChannelIds', label: 'Canais bloqueados', type: 'channel-multi', value: [] }] },
+    { id: 'memberGoalNotice', title: 'Aviso por meta de membros', description: 'Envia uma mensagem automática quando o servidor atingir uma quantidade de membros.', enabled: false, type: 'member-goal', fields: [{ id: 'memberCount', label: 'Número de membros', type: 'number', value: 100, min: 1, max: 10000000 }, { id: 'channelId', label: 'Canal de aviso', type: 'channel', value: '' }, { id: 'message', label: 'Mensagem', type: 'textarea', value: '' }] }
+];
+const autoResponseDetectionTypes = [
+    { value: 'contains', label: 'Contém a palavra' },
+    { value: 'exact', label: 'Palavra exata' },
+    { value: 'startsWith', label: 'Começa com' },
+    { value: 'endsWith', label: 'Termina com' }
+];
+
+function criarValoresCamposPadrao(campos = []) {
+    return campos.reduce((valores, campo) => {
+        valores[campo.id] = JSON.parse(JSON.stringify(campo.value ?? ''));
+        return valores;
+    }, {});
+}
+
+function criarAuditoriaPadrao() {
+    return {
+        enabled: false,
+        defaultChannelId: '',
+        defaultChannelName: '',
+        lastEvent: '',
+        events: auditEvents.map((evento) => ({
+            id: evento.id,
+            title: evento.title,
+            description: evento.description,
+            enabled: evento.enabled,
+            channelId: evento.channelId || '',
+            channelName: '',
+            group: evento.group
+        })),
+        history: []
+    };
+}
+
+function criarSegurancaPadrao() {
+    return {
+        options: securityOptions.map((opcao) => ({ ...opcao })),
+        antiRaid: {
+            lastThreat: '',
+            totalAutomaticActions: 0,
+            suspiciousLinksBlocked: 0,
+            usersBlockedByRaid: 0,
+            settings: antiRaidSettings.map((opcao) => ({
+                id: opcao.id,
+                title: opcao.title,
+                description: opcao.description,
+                enabled: opcao.enabled,
+                type: opcao.type,
+                value: JSON.parse(JSON.stringify(opcao.value ?? '')),
+                values: criarValoresCamposPadrao(opcao.fields)
+            }))
+        }
+    };
+}
+
+function criarAutomacoesPadrao() {
+    return {
+        lastExecution: '',
+        options: automationSettings.map((opcao) => ({
+            id: opcao.id,
+            title: opcao.title,
+            description: opcao.description,
+            enabled: opcao.enabled,
+            type: opcao.type,
+            value: JSON.parse(JSON.stringify(opcao.value ?? '')),
+            values: criarValoresCamposPadrao(opcao.fields)
+        })),
+        autoResponses: []
+    };
+}
+const MODERACAO_PADRAO = {
+    logs: {
+        ativo: false,
+        canal_mensagens_id: '',
+        canal_mensagens_nome: '',
+        canal_moderacao_id: '',
+        canal_moderacao_nome: '',
+        canal_servidor_id: '',
+        canal_servidor_nome: '',
+        mensagens_deletadas: true,
+        mensagens_editadas: true,
+        banimentos: true,
+        desbanimentos: true,
+        expulsoes: true,
+        castigos: true,
+        canais: true,
+        cargos: true
+    },
+    automod: {
+        ativo: false,
+        bloquear_links: false,
+        bloquear_convites: true,
+        bloquear_palavras: true,
+        anti_spam: true,
+        anti_caps: false,
+        max_mencoes: 6,
+        max_caps_percent: 85,
+        castigo_minutos: 10,
+        apagar_mensagem: true,
+        avisar_usuario: true,
+        castigar_usuario: false
+    },
+    blacklist: {
+        palavras: [],
+        canais_ignorados: [],
+        cargos_imunes: []
+    },
+    permissoes: {
+        cargos_admin: [],
+        cargos_moderador: [],
+        permitir_ban: true,
+        permitir_expulsar: true,
+        permitir_castigar: true,
+        permitir_limpar: true
+    },
+    bot_profile: {
+        responder_mencao: true,
+        dashboard_url: 'https://muniz-amz.github.io/amz-studios/#dashboard',
+        cor_principal: '#ffffff',
+        rodape: 'AMZ Studios'
+    },
+    interface: {
+        modo_compacto: false,
+        mostrar_ids: true,
+        mostrar_avancado: true
+    },
+    profiles: {
+        backup_automatico: false,
+        ultimo_backup: ''
+    },
+    auditoria: criarAuditoriaPadrao(),
+    seguranca: criarSegurancaPadrao(),
+    automacoes: criarAutomacoesPadrao()
+};
+let moderacaoAtual = JSON.parse(JSON.stringify(MODERACAO_PADRAO));
+let automacaoRegraEditandoId = '';
 
 function normalizarMinutosLimpeza(minutos) {
     const valor = Number.parseInt(minutos, 10);
@@ -166,7 +381,7 @@ function limparSessaoDiscord() {
 }
 
 function estaEmArquivoLocal() {
-    return window.location.protocol === 'file:';
+    return window.location.protocol === 'file:' || ['localhost', '127.0.0.1'].includes(window.location.hostname);
 }
 
 const DASHBOARD_SECTIONS = {
@@ -179,36 +394,139 @@ const DASHBOARD_SECTIONS = {
         description: 'Configure boas-vindas, saida, canal, mensagem e imagem/GIF.'
     },
     role: {
-        title: 'Role Toggles',
-        description: 'Controle recursos por cargo.'
+        title: 'Moderação',
+        description: 'Logs, punicoes, auditoria e seguranca.'
+    },
+    audit: {
+        title: 'Auditoria',
+        description: 'Logs personalizados por canal.'
+    },
+    security: {
+        title: 'Segurança',
+        description: 'Anti raid e proteção.'
+    },
+    automations: {
+        title: 'Automações',
+        description: 'Ações automáticas do servidor.'
     },
     misc: {
-        title: 'Misc',
-        description: 'Opcoes extras do servidor.'
+        title: 'AutoMod',
+        description: 'Filtros contra links, spam, convites e caps.'
     },
     bot: {
-        title: 'Bot Profile',
-        description: 'Ajustes de aparencia e comportamento.'
+        title: 'Perfil do Bot',
+        description: 'Resposta por mencao, cor e link do dashboard.'
     },
     interface: {
         title: 'Interface',
         description: 'Preferencias visuais do painel.'
     },
     blacklist: {
-        title: 'Blacklisted Words',
-        description: 'Filtro de palavras bloqueadas.'
+        title: 'Blacklist',
+        description: 'Palavras, canais ignorados e cargos imunes.'
     },
     global: {
-        title: 'Global Profile',
-        description: 'Preferencias pessoais da conta.'
+        title: 'Permissoes',
+        description: 'Cargos e poderes de moderacao.'
     },
     profiles: {
-        title: 'Server Profiles',
-        description: 'Coming Soon'
+        title: 'Backups',
+        description: 'Perfis e exportacao das configuracoes.'
     },
     upgrade: {
-        title: 'Upgrade',
-        description: 'Recursos premium do AMZ Bot.'
+        title: 'Recursos',
+        description: 'Resumo do pacote de moderacao.'
+    }
+};
+const MODERACAO_SECTIONS = {
+    role: {
+        label: 'Central de Moderacao',
+        description: 'Configure os canais de log e quais eventos o bot deve registrar.',
+        fields: [
+            { type: 'toggle', path: 'logs.ativo', label: 'Ativar logs de moderacao', hint: 'Liga os registros automáticos do servidor.' },
+            { type: 'channel', path: 'logs.canal_mensagens_id', namePath: 'logs.canal_mensagens_nome', label: 'Canal de mensagens', hint: 'Mensagens apagadas e editadas.' },
+            { type: 'channel', path: 'logs.canal_moderacao_id', namePath: 'logs.canal_moderacao_nome', label: 'Canal de punicoes', hint: 'Bans, expulsões, castigos e AutoMod.' },
+            { type: 'channel', path: 'logs.canal_servidor_id', namePath: 'logs.canal_servidor_nome', label: 'Canal de auditoria', hint: 'Canais, cargos e alterações do servidor.' },
+            { type: 'toggle', path: 'logs.mensagens_deletadas', label: 'Logar mensagens deletadas' },
+            { type: 'toggle', path: 'logs.mensagens_editadas', label: 'Logar mensagens editadas' },
+            { type: 'toggle', path: 'logs.banimentos', label: 'Logar banimentos' },
+            { type: 'toggle', path: 'logs.desbanimentos', label: 'Logar desbanimentos' },
+            { type: 'toggle', path: 'logs.expulsoes', label: 'Logar expulsões' },
+            { type: 'toggle', path: 'logs.castigos', label: 'Logar castigos' },
+            { type: 'toggle', path: 'logs.canais', label: 'Logar canais criados/deletados' },
+            { type: 'toggle', path: 'logs.cargos', label: 'Logar cargos criados/deletados' }
+        ]
+    },
+    misc: {
+        label: 'AutoMod',
+        description: 'Filtros automáticos para apagar mensagens problemáticas e punir abuso.',
+        fields: [
+            { type: 'toggle', path: 'automod.ativo', label: 'Ativar AutoMod' },
+            { type: 'toggle', path: 'automod.bloquear_convites', label: 'Bloquear convites Discord' },
+            { type: 'toggle', path: 'automod.bloquear_links', label: 'Bloquear links' },
+            { type: 'toggle', path: 'automod.bloquear_palavras', label: 'Bloquear palavras da blacklist' },
+            { type: 'toggle', path: 'automod.anti_spam', label: 'Anti-spam/flood' },
+            { type: 'toggle', path: 'automod.anti_caps', label: 'Anti-caps lock' },
+            { type: 'number', path: 'automod.max_mencoes', label: 'Máximo de menções', min: 1, max: 50 },
+            { type: 'number', path: 'automod.max_caps_percent', label: 'Percentual de caps', min: 1, max: 100 },
+            { type: 'number', path: 'automod.castigo_minutos', label: 'Castigo em minutos', min: 1, max: 10080 },
+            { type: 'toggle', path: 'automod.apagar_mensagem', label: 'Apagar mensagem detectada' },
+            { type: 'toggle', path: 'automod.avisar_usuario', label: 'Avisar usuário no canal' },
+            { type: 'toggle', path: 'automod.castigar_usuario', label: 'Castigar usuário automaticamente' }
+        ]
+    },
+    blacklist: {
+        label: 'Blacklist',
+        description: 'Listas usadas pelo AutoMod. Separe itens por linha.',
+        fields: [
+            { type: 'textarea-list', path: 'blacklist.palavras', label: 'Palavras bloqueadas', hint: 'Uma palavra/termo por linha.' },
+            { type: 'textarea-list', path: 'blacklist.canais_ignorados', label: 'IDs de canais ignorados', hint: 'Canais onde o AutoMod não atua.' },
+            { type: 'textarea-list', path: 'blacklist.cargos_imunes', label: 'IDs de cargos imunes', hint: 'Cargos ignorados pelo AutoMod.' }
+        ]
+    },
+    bot: {
+        label: 'Perfil do Bot',
+        description: 'Controla como o bot responde quando é mencionado.',
+        fields: [
+            { type: 'toggle', path: 'bot_profile.responder_mencao', label: 'Responder quando marcarem o bot' },
+            { type: 'text', path: 'bot_profile.dashboard_url', label: 'Link do dashboard' },
+            { type: 'color', path: 'bot_profile.cor_principal', label: 'Cor dos embeds' },
+            { type: 'text', path: 'bot_profile.rodape', label: 'Rodapé dos embeds' }
+        ]
+    },
+    interface: {
+        label: 'Interface',
+        description: 'Preferências de visualização para o painel.',
+        fields: [
+            { type: 'toggle', path: 'interface.modo_compacto', label: 'Modo compacto' },
+            { type: 'toggle', path: 'interface.mostrar_ids', label: 'Mostrar IDs técnicos' },
+            { type: 'toggle', path: 'interface.mostrar_avancado', label: 'Mostrar opções avançadas' }
+        ]
+    },
+    global: {
+        label: 'Permissoes por Cargo',
+        description: 'Defina IDs de cargos e quais ações ficam liberadas para a moderação.',
+        fields: [
+            { type: 'textarea-list', path: 'permissoes.cargos_admin', label: 'Cargos administradores', hint: 'IDs de cargos com acesso total.' },
+            { type: 'textarea-list', path: 'permissoes.cargos_moderador', label: 'Cargos moderadores', hint: 'IDs de cargos de moderação.' },
+            { type: 'toggle', path: 'permissoes.permitir_ban', label: 'Permitir banimento' },
+            { type: 'toggle', path: 'permissoes.permitir_expulsar', label: 'Permitir expulsão' },
+            { type: 'toggle', path: 'permissoes.permitir_castigar', label: 'Permitir castigo' },
+            { type: 'toggle', path: 'permissoes.permitir_limpar', label: 'Permitir limpeza manual' }
+        ]
+    },
+    profiles: {
+        label: 'Backups e Perfis',
+        description: 'Base para salvar perfis de configuração do servidor.',
+        fields: [
+            { type: 'toggle', path: 'profiles.backup_automatico', label: 'Backup automático' },
+            { type: 'text', path: 'profiles.ultimo_backup', label: 'Último backup', disabled: true }
+        ]
+    },
+    upgrade: {
+        label: 'Recursos do Bot',
+        description: 'Pacote atual de ferramentas configuradas no AMZ Bot.',
+        fields: []
     }
 };
 
@@ -627,35 +945,1231 @@ function selecionarSecaoDashboard(secao = 'setup') {
         return;
     }
 
-    painelSecao.innerHTML = `
-        <div class="vm-panel-heading">
-            <span>${escaparHTML(info.title)}</span>
-            <strong>${escaparHTML(serverName)}</strong>
-        </div>
-        <div class="vm-placeholder-panel">
-            <p>${escaparHTML(info.description)}</p>
-            <div class="vm-toggle-list">
-                <label class="vm-toggle-row">
-                    <span>
-                        <strong>Status</strong>
-                        <small>Modulo em preparacao</small>
-                    </span>
-                    <input type="checkbox" disabled>
-                </label>
-                <label class="vm-toggle-row">
-                    <span>
-                        <strong>Permissao</strong>
-                        <small>Aguardando integracao</small>
-                    </span>
-                    <input type="checkbox" disabled>
-                </label>
-            </div>
-        </div>
-    `;
+    if (secao === 'audit') {
+        painelSecao.innerHTML = AuditPage(serverName);
+        carregarModeracaoServidor(secao);
+        return;
+    }
+
+    if (secao === 'security') {
+        painelSecao.innerHTML = SecurityPage(serverName);
+        carregarModeracaoServidor(secao);
+        return;
+    }
+
+    if (secao === 'automations') {
+        automacaoRegraEditandoId = '';
+        painelSecao.innerHTML = AutomationsPage(serverName);
+        carregarModeracaoServidor(secao);
+        return;
+    }
+
+    painelSecao.innerHTML = renderizarPainelModeracao(secao, serverName || info.title);
+    carregarModeracaoServidor(secao);
 }
 
 function renderizarVariaveisBoasVindas() {
     return VARIAVEIS_BOAS_VINDAS.map((variavel) => `<code>${escaparHTML(variavel)}</code>`).join('');
+}
+
+function clonarConfig(valor) {
+    return JSON.parse(JSON.stringify(valor));
+}
+
+function mesclarConfig(base, extra) {
+    const saida = clonarConfig(base);
+
+    Object.entries(extra || {}).forEach(([chave, valor]) => {
+        if (valor && typeof valor === 'object' && !Array.isArray(valor) && saida[chave] && typeof saida[chave] === 'object' && !Array.isArray(saida[chave])) {
+            saida[chave] = mesclarConfig(saida[chave], valor);
+            return;
+        }
+
+        saida[chave] = valor;
+    });
+
+    return saida;
+}
+
+function obterValorPath(objeto, path) {
+    return String(path || '').split('.').reduce((atual, parte) => atual?.[parte], objeto);
+}
+
+function definirValorPath(objeto, path, valor) {
+    const partes = String(path || '').split('.');
+    let atual = objeto;
+
+    partes.slice(0, -1).forEach((parte) => {
+        if (!atual[parte] || typeof atual[parte] !== 'object') atual[parte] = {};
+        atual = atual[parte];
+    });
+
+    atual[partes[partes.length - 1]] = valor;
+}
+
+function idCampoModeracao(path) {
+    return `mod_${String(path).replace(/[^a-zA-Z0-9]/g, '_')}`;
+}
+
+function listaParaTexto(valor) {
+    return Array.isArray(valor) ? valor.join('\n') : String(valor || '');
+}
+
+function textoParaLista(valor) {
+    return String(valor || '')
+        .split(/\r?\n|,/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
+function mapaPorId(lista = []) {
+    return new Map((Array.isArray(lista) ? lista : []).map((item) => [item.id, item]));
+}
+
+function normalizarAuditoriaLocal(auditoria = {}) {
+    const eventosSalvos = mapaPorId(auditoria.events || auditoria.eventos);
+
+    return {
+        enabled: Boolean(auditoria.enabled ?? auditoria.ativo),
+        defaultChannelId: auditoria.defaultChannelId || auditoria.default_channel_id || auditoria.canal_padrao_id || '',
+        defaultChannelName: auditoria.defaultChannelName || auditoria.default_channel_name || auditoria.canal_padrao_nome || '',
+        lastEvent: auditoria.lastEvent || auditoria.last_event || auditoria.ultimo_evento || '',
+        events: auditEvents.map((evento) => {
+            const salvo = eventosSalvos.get(evento.id) || {};
+            return {
+                id: evento.id,
+                title: evento.title,
+                description: evento.description,
+                enabled: Boolean(salvo.enabled ?? salvo.ativo ?? evento.enabled),
+                channelId: salvo.channelId || salvo.channel_id || '',
+                channelName: salvo.channelName || salvo.channel_name || '',
+                group: evento.group
+            };
+        }),
+        history: Array.isArray(auditoria.history || auditoria.historico)
+            ? (auditoria.history || auditoria.historico).slice(0, 20)
+            : []
+    };
+}
+
+function normalizarOpcoesComCampos(opcoesBase, opcoesSalvas = []) {
+    const salvas = mapaPorId(opcoesSalvas);
+
+    return opcoesBase.map((opcao) => {
+        const salva = salvas.get(opcao.id) || {};
+        return {
+            id: opcao.id,
+            title: opcao.title,
+            description: opcao.description,
+            enabled: Boolean(salva.enabled ?? salva.ativo ?? opcao.enabled),
+            type: opcao.type,
+            value: salva.value ?? opcao.value ?? '',
+            values: {
+                ...criarValoresCamposPadrao(opcao.fields),
+                ...(salva.values || {})
+            }
+        };
+    });
+}
+
+function normalizarSegurancaLocal(seguranca = {}) {
+    const antiRaid = seguranca.antiRaid || seguranca.anti_raid || {};
+
+    return {
+        options: normalizarOpcoesComCampos(securityOptions, seguranca.options),
+        antiRaid: {
+            lastThreat: antiRaid.lastThreat || antiRaid.last_threat || '',
+            totalAutomaticActions: Number.parseInt(antiRaid.totalAutomaticActions ?? antiRaid.total_automatic_actions ?? 0, 10) || 0,
+            suspiciousLinksBlocked: Number.parseInt(antiRaid.suspiciousLinksBlocked ?? antiRaid.suspicious_links_blocked ?? 0, 10) || 0,
+            usersBlockedByRaid: Number.parseInt(antiRaid.usersBlockedByRaid ?? antiRaid.users_blocked_by_raid ?? 0, 10) || 0,
+            settings: normalizarOpcoesComCampos(antiRaidSettings, antiRaid.settings)
+        }
+    };
+}
+
+function normalizarAutomacoesLocal(automacoes = {}) {
+    return {
+        lastExecution: automacoes.lastExecution || automacoes.last_execution || '',
+        options: normalizarOpcoesComCampos(automationSettings, automacoes.options),
+        autoResponses: Array.isArray(automacoes.autoResponses || automacoes.auto_responses)
+            ? (automacoes.autoResponses || automacoes.auto_responses).map((regra) => ({
+                id: regra.id || `auto-response-${Date.now()}`,
+                enabled: Boolean(regra.enabled ?? regra.ativo),
+                keyword: regra.keyword || regra.palavra_chave || '',
+                response: regra.response || regra.resposta || '',
+                channelId: regra.channelId || regra.channel_id || '',
+                channelName: regra.channelName || regra.channel_name || '',
+                detectionType: regra.detectionType || regra.detection_type || 'contains',
+                cooldownSeconds: Number.parseInt(regra.cooldownSeconds ?? regra.cooldown_seconds ?? 30, 10) || 0,
+                ignoreStaff: Boolean(regra.ignoreStaff ?? regra.ignore_staff),
+                deleteAfterSeconds: Number.parseInt(regra.deleteAfterSeconds ?? regra.delete_after_seconds ?? 0, 10) || 0
+            }))
+            : []
+    };
+}
+
+function normalizarModeracaoLocal(config = {}) {
+    const normalizada = mesclarConfig(MODERACAO_PADRAO, config || {});
+    normalizada.auditoria = normalizarAuditoriaLocal(normalizada.auditoria);
+    normalizada.seguranca = normalizarSegurancaLocal(normalizada.seguranca);
+    normalizada.automacoes = normalizarAutomacoesLocal(normalizada.automacoes);
+    return normalizada;
+}
+
+function ToggleSwitch(id, checked = false, attrs = '') {
+    return `
+        <label class="toggle-switch">
+            <input type="checkbox" id="${escaparHTML(id)}" ${attrs} ${checked ? 'checked' : ''}>
+            <span></span>
+        </label>
+    `;
+}
+
+function ChannelSelect({ id, attrs = '', multiple = false } = {}) {
+    return `
+        <select id="${escaparHTML(id)}" ${attrs} ${multiple ? 'multiple' : ''}>
+            <option value="">Carregando canais...</option>
+        </select>
+    `;
+}
+
+function RoleSelect({ id, attrs = '' } = {}) {
+    return `
+        <select id="${escaparHTML(id)}" ${attrs}>
+            <option value="">Carregando cargos...</option>
+        </select>
+    `;
+}
+
+function preencherChannelSelect(select, canais = [], selecionado = '', permitirVazio = true) {
+    if (!select) return;
+
+    const valores = select.multiple
+        ? new Set(Array.isArray(selecionado) ? selecionado.map(String) : textoParaLista(selecionado))
+        : new Set([String(selecionado || '')]);
+
+    const opcoes = [
+        permitirVazio && !select.multiple ? '<option value="">Nao definido</option>' : '',
+        ...canais.map((canal) => `<option value="${escaparHTML(canal.id)}" data-channel-name="${escaparHTML(canal.nome)}">#${escaparHTML(canal.nome)}${canal.categoria ? ` - ${escaparHTML(canal.categoria)}` : ''}</option>`)
+    ].filter(Boolean);
+
+    select.innerHTML = opcoes.length ? opcoes.join('') : '<option value="">Nenhum canal encontrado</option>';
+
+    Array.from(select.options).forEach((option) => {
+        option.selected = valores.has(option.value);
+    });
+}
+
+function preencherRoleSelect(select, cargos = [], selecionado = '') {
+    if (!select) return;
+
+    select.innerHTML = [
+        '<option value="">Nao definido</option>',
+        ...cargos.map((cargo) => `<option value="${escaparHTML(cargo.id)}" data-role-name="${escaparHTML(cargo.nome)}">${escaparHTML(cargo.nome)}</option>`)
+    ].join('');
+    select.value = selecionado || '';
+}
+
+function obterNomeSelecionado(select, datasetKey) {
+    const option = select?.options?.[select.selectedIndex];
+    return option?.dataset?.[datasetKey] || '';
+}
+
+function obterSetting(lista = [], id) {
+    return (Array.isArray(lista) ? lista : []).find((item) => item.id === id) || {};
+}
+
+function valorCampoConfig(config, campo) {
+    return config?.values?.[campo.id] ?? campo.value ?? '';
+}
+
+function renderizarCampoConfiguravel(escopo, opcaoId, campo) {
+    const id = `${escopo}_${opcaoId}_${campo.id}`;
+    const attrs = `data-${escopo}-field data-option-id="${escaparHTML(opcaoId)}" data-field-id="${escaparHTML(campo.id)}" data-field-type="${escaparHTML(campo.type)}"`;
+
+    if (campo.type === 'channel') {
+        return `
+            <label class="advanced-field">
+                <span>${escaparHTML(campo.label)}</span>
+                ${ChannelSelect({ id, attrs })}
+            </label>
+        `;
+    }
+
+    if (campo.type === 'role') {
+        return `
+            <label class="advanced-field">
+                <span>${escaparHTML(campo.label)}</span>
+                ${RoleSelect({ id, attrs })}
+            </label>
+        `;
+    }
+
+    if (campo.type === 'channel-multi') {
+        return `
+            <label class="advanced-field advanced-field-wide">
+                <span>${escaparHTML(campo.label)}</span>
+                ${ChannelSelect({ id, attrs, multiple: true })}
+            </label>
+        `;
+    }
+
+    if (campo.type === 'textarea' || campo.type === 'textarea-list') {
+        return `
+            <label class="advanced-field advanced-field-wide">
+                <span>${escaparHTML(campo.label)}</span>
+                <textarea id="${escaparHTML(id)}" rows="4" ${attrs}></textarea>
+            </label>
+        `;
+    }
+
+    if (campo.type === 'select') {
+        return `
+            <label class="advanced-field">
+                <span>${escaparHTML(campo.label)}</span>
+                <select id="${escaparHTML(id)}" ${attrs}>
+                    ${(campo.options || []).map((opcao) => `<option value="${escaparHTML(opcao)}">${escaparHTML(opcao)}</option>`).join('')}
+                </select>
+            </label>
+        `;
+    }
+
+    return `
+        <label class="advanced-field">
+            <span>${escaparHTML(campo.label)}</span>
+            <input id="${escaparHTML(id)}" type="${campo.type === 'number' ? 'number' : 'text'}" ${attrs} ${campo.min !== undefined ? `min="${escaparHTML(campo.min)}"` : ''} ${campo.max !== undefined ? `max="${escaparHTML(campo.max)}"` : ''}>
+        </label>
+    `;
+}
+
+function preencherCampoConfiguravel(elemento, campo, valor, canais = [], cargos = []) {
+    if (!elemento || !campo) return;
+
+    if (campo.type === 'channel') {
+        preencherChannelSelect(elemento, canais, valor);
+        return;
+    }
+
+    if (campo.type === 'channel-multi') {
+        preencherChannelSelect(elemento, canais, Array.isArray(valor) ? valor : textoParaLista(valor), false);
+        return;
+    }
+
+    if (campo.type === 'role') {
+        preencherRoleSelect(elemento, cargos, valor);
+        return;
+    }
+
+    if (campo.type === 'textarea-list') {
+        elemento.value = listaParaTexto(valor);
+        return;
+    }
+
+    elemento.value = valor ?? '';
+}
+
+function coletarValorCampoConfiguravel(elemento) {
+    const tipo = elemento.dataset.fieldType;
+
+    if (tipo === 'channel-multi') {
+        return Array.from(elemento.selectedOptions).map((option) => option.value).filter(Boolean);
+    }
+
+    if (tipo === 'textarea-list') {
+        return textoParaLista(elemento.value);
+    }
+
+    if (tipo === 'number') {
+        return Number.parseInt(elemento.value || '0', 10);
+    }
+
+    return elemento.value;
+}
+
+function AuditSummary() {
+    const auditoria = normalizarAuditoriaLocal(moderacaoAtual.auditoria);
+    const totalAtivos = auditoria.events.filter((evento) => evento.enabled).length;
+    const canais = new Set([
+        auditoria.defaultChannelId,
+        ...auditoria.events.map((evento) => evento.channelId)
+    ].filter(Boolean));
+    const canalPadrao = auditoria.defaultChannelName || (auditoria.defaultChannelId ? `#${auditoria.defaultChannelId}` : 'Nao definido');
+
+    return `
+        <div class="summary-grid">
+            <article><span>Status da auditoria</span><strong>${auditoria.enabled ? 'Ativada' : 'Desativada'}</strong></article>
+            <article><span>Canal padrão</span><strong>${escaparHTML(canalPadrao)}</strong></article>
+            <article><span>Eventos ativos</span><strong>${totalAtivos}</strong></article>
+            <article><span>Último evento enviado</span><strong>${escaparHTML(auditoria.lastEvent || 'Nenhum evento enviado')}</strong></article>
+            <article><span>Canais configurados</span><strong>${canais.size}</strong></article>
+        </div>
+    `;
+}
+
+function AuditEventConfig(evento) {
+    const estado = obterSetting(moderacaoAtual.auditoria?.events, evento.id);
+    const detalhes = evento.logDetails?.length
+        ? `<ul class="audit-detail-list">${evento.logDetails.map((item) => `<li>${escaparHTML(item)}</li>`).join('')}</ul>`
+        : '';
+
+    return `
+        <article class="audit-event-card" data-audit-event-card="${escaparHTML(evento.id)}">
+            <div class="audit-event-main">
+                <div>
+                    <strong>${escaparHTML(evento.title)}</strong>
+                    <p>${escaparHTML(evento.description)}</p>
+                </div>
+                ${ToggleSwitch(`audit_event_enabled_${evento.id}`, estado.enabled ?? evento.enabled, `data-audit-event-enabled data-event-id="${escaparHTML(evento.id)}"`)}
+            </div>
+            ${detalhes}
+            <label class="advanced-field">
+                <span>Canal do evento</span>
+                ${ChannelSelect({ id: `audit_event_channel_${evento.id}`, attrs: `data-audit-event-channel data-event-id="${escaparHTML(evento.id)}"` })}
+            </label>
+        </article>
+    `;
+}
+
+function AuditEventGroup(grupo) {
+    const eventos = auditEvents.filter((evento) => evento.group === grupo.id);
+    const regraVoz = grupo.id === 'voz'
+        ? '<p class="audit-group-note">Todos os logs de voz devem mostrar responsável quando existir, usuário afetado, canal envolvido, data, horário e IDs relevantes.</p>'
+        : '';
+
+    return `
+        <section class="audit-event-group">
+            <div class="advanced-section-heading">
+                <i class="ph ${escaparHTML(grupo.icon)}"></i>
+                <div>
+                    <strong>${escaparHTML(grupo.title)}</strong>
+                    ${regraVoz}
+                </div>
+            </div>
+            <div class="audit-event-grid">
+                ${eventos.map(AuditEventConfig).join('')}
+            </div>
+        </section>
+    `;
+}
+
+function AuditHistory() {
+    const historico = normalizarAuditoriaLocal(moderacaoAtual.auditoria).history;
+
+    if (!historico.length) {
+        return '<div class="advanced-empty">Nenhum log enviado ainda.</div>';
+    }
+
+    return `
+        <div class="audit-history-list">
+            ${historico.map((item) => `
+                <article class="audit-history-item">
+                    <strong>${escaparHTML(item.eventType || item.tipo || 'Evento')}</strong>
+                    <span>${escaparHTML(item.channelName || item.channel || item.canal || 'Canal nao informado')}</span>
+                    <span>${escaparHTML(item.responsibleUser || item.user || item.usuario || 'Responsavel nao informado')}</span>
+                    <span>${escaparHTML(item.dateTime || item.dataHora || item.data || '--')}</span>
+                    <em class="${String(item.status || '').toLowerCase() === 'falhou' ? 'failed' : 'sent'}">${escaparHTML(item.status || 'enviado')}</em>
+                </article>
+            `).join('')}
+        </div>
+    `;
+}
+
+function AuditPage(serverName) {
+    return `
+        <div class="vm-panel-heading">
+            <span>Auditoria</span>
+            <strong>${escaparHTML(serverName)}</strong>
+        </div>
+        <div class="advanced-config-page audit-page">
+            <div id="audit-summary">${AuditSummary()}</div>
+            <div class="advanced-control-grid">
+                <article class="advanced-control-card">
+                    <div>
+                        <strong>Ativar auditoria</strong>
+                        <span>Quando estiver desativada, nenhum log de auditoria sera enviado.</span>
+                    </div>
+                    ${ToggleSwitch('audit_enabled', moderacaoAtual.auditoria?.enabled, 'data-audit-enabled')}
+                </article>
+                <article class="advanced-control-card">
+                    <div>
+                        <strong>Canal padrão</strong>
+                        <span>Usado apenas quando o evento nao tiver canal especifico.</span>
+                    </div>
+                    ${ChannelSelect({ id: 'audit_default_channel', attrs: 'data-audit-default-channel' })}
+                </article>
+            </div>
+            ${auditGroups.map(AuditEventGroup).join('')}
+            <section class="audit-event-group">
+                <div class="advanced-section-heading">
+                    <i class="ph ph-clock-counter-clockwise"></i>
+                    <div>
+                        <strong>Histórico simples</strong>
+                        <p>Últimos logs enviados pelo bot.</p>
+                    </div>
+                </div>
+                <div id="audit-history">${AuditHistory()}</div>
+            </section>
+            <button type="button" onclick="salvarAuditoriaServidor()" class="vm-save-button">
+                <i class="ph ph-clipboard-text" id="mod-save-icon"></i>
+                Salvar Auditoria
+            </button>
+            <div id="mod_status_msg" class="vm-status-message hidden"></div>
+        </div>
+    `;
+}
+
+function SecuritySummary() {
+    const seguranca = normalizarSegurancaLocal(moderacaoAtual.seguranca);
+    const antiRaid = seguranca.antiRaid;
+    const ativar = obterSetting(antiRaid.settings, 'enableAntiRaid');
+    const sensibilidade = obterSetting(antiRaid.settings, 'sensitivity')?.values?.level || 'Média';
+
+    return `
+        <div class="summary-grid">
+            <article><span>Status do Anti Raid</span><strong>${ativar.enabled ? 'Ativado' : 'Desativado'}</strong></article>
+            <article><span>Nível de proteção</span><strong>${escaparHTML(sensibilidade)}</strong></article>
+            <article><span>Última ameaça</span><strong>${escaparHTML(antiRaid.lastThreat || 'Nenhuma ameaça detectada')}</strong></article>
+            <article><span>Ações automáticas</span><strong>${antiRaid.totalAutomaticActions}</strong></article>
+            <article><span>Links bloqueados</span><strong>${antiRaid.suspiciousLinksBlocked}</strong></article>
+            <article><span>Usuários bloqueados</span><strong>${antiRaid.usersBlockedByRaid}</strong></article>
+        </div>
+    `;
+}
+
+function SecurityOptionCard(opcao) {
+    const estado = obterSetting(moderacaoAtual.seguranca?.antiRaid?.settings, opcao.id);
+    const campos = (opcao.fields || []).map((campo) => renderizarCampoConfiguravel('security', opcao.id, campo)).join('');
+
+    return `
+        <article class="security-option-card">
+            <div class="advanced-card-heading">
+                <div>
+                    <strong>${escaparHTML(opcao.title)}</strong>
+                    <p>${escaparHTML(opcao.description)}</p>
+                </div>
+                ${ToggleSwitch(`security_enabled_${opcao.id}`, estado.enabled ?? opcao.enabled, `data-security-enabled data-option-id="${escaparHTML(opcao.id)}"`)}
+            </div>
+            ${campos ? `<div class="advanced-field-grid">${campos}</div>` : ''}
+        </article>
+    `;
+}
+
+function AntiRaidSettings() {
+    return `
+        <section class="advanced-section">
+            <div class="advanced-section-heading">
+                <i class="ph ph-shield-warning"></i>
+                <div>
+                    <strong>Configurações Anti Raid</strong>
+                    <p>Cada função abaixo tem seu próprio controle.</p>
+                </div>
+            </div>
+            <div class="security-option-grid">
+                ${antiRaidSettings.map(SecurityOptionCard).join('')}
+            </div>
+        </section>
+    `;
+}
+
+function SecurityPage(serverName) {
+    return `
+        <div class="vm-panel-heading">
+            <span>Segurança / Anti Raid</span>
+            <strong>${escaparHTML(serverName)}</strong>
+        </div>
+        <div class="advanced-config-page security-page">
+            <div id="security-summary">${SecuritySummary()}</div>
+            ${AntiRaidSettings()}
+            <button type="button" onclick="salvarSegurancaServidor()" class="vm-save-button">
+                <i class="ph ph-shield-warning" id="mod-save-icon"></i>
+                Salvar Segurança
+            </button>
+            <div id="mod_status_msg" class="vm-status-message hidden"></div>
+        </div>
+    `;
+}
+
+function AutomationSummary() {
+    const automacoes = normalizarAutomacoesLocal(moderacaoAtual.automacoes);
+    const ativas = automacoes.options.filter((opcao) => opcao.enabled).length;
+    const regrasAtivas = automacoes.autoResponses.filter((regra) => regra.enabled).length;
+
+    return `
+        <div class="summary-grid">
+            <article><span>Automações ativas</span><strong>${ativas}</strong></article>
+            <article><span>Regras de auto resposta</span><strong>${automacoes.autoResponses.length}</strong></article>
+            <article><span>Auto respostas ativas</span><strong>${regrasAtivas}</strong></article>
+            <article><span>Última execução</span><strong>${escaparHTML(automacoes.lastExecution || 'Nenhuma automação executada')}</strong></article>
+        </div>
+    `;
+}
+
+function AutomationRuleEditor() {
+    return `
+        <div class="automation-rule-editor">
+            <div class="advanced-section-heading">
+                <i class="ph ph-chat-circle-dots"></i>
+                <div>
+                    <strong>Auto resposta por palavra-chave</strong>
+                    <p>Crie multiplas regras com canal, detecção e cooldown proprios.</p>
+                </div>
+            </div>
+            <div class="automation-rule-form">
+                <label class="advanced-toggle-inline">
+                    <span>Regra ativa</span>
+                    ${ToggleSwitch('auto_response_rule_enabled', true)}
+                </label>
+                <label class="advanced-field">
+                    <span>Palavra-chave</span>
+                    <input id="auto_response_keyword" type="text" placeholder="arena">
+                </label>
+                <label class="advanced-field advanced-field-wide">
+                    <span>Resposta automática</span>
+                    <textarea id="auto_response_response" rows="4" placeholder="A arena abre todos os dias às 20h! Use /arena para participar."></textarea>
+                </label>
+                <label class="advanced-field">
+                    <span>Canal onde funciona</span>
+                    ${ChannelSelect({ id: 'auto_response_channel' })}
+                </label>
+                <label class="advanced-field">
+                    <span>Tipo de detecção</span>
+                    <select id="auto_response_detection_type">
+                        ${autoResponseDetectionTypes.map((tipo) => `<option value="${escaparHTML(tipo.value)}">${escaparHTML(tipo.label)}</option>`).join('')}
+                    </select>
+                </label>
+                <label class="advanced-field">
+                    <span>Cooldown em segundos</span>
+                    <input id="auto_response_cooldown" type="number" min="0" max="86400" value="30">
+                </label>
+                <label class="advanced-field">
+                    <span>Apagar resposta depois de</span>
+                    <input id="auto_response_delete_after" type="number" min="0" max="86400" value="0">
+                </label>
+                <label class="advanced-toggle-inline">
+                    <span>Ignorar administradores/moderadores</span>
+                    ${ToggleSwitch('auto_response_ignore_staff', false)}
+                </label>
+                <div class="automation-rule-actions">
+                    <button type="button" onclick="adicionarOuAtualizarRegraAutoResposta()" id="auto_response_save_rule">
+                        <i class="ph ph-plus-circle"></i>
+                        Adicionar nova regra
+                    </button>
+                    <button type="button" onclick="limparEditorAutoResposta()">
+                        <i class="ph ph-eraser"></i>
+                        Limpar
+                    </button>
+                </div>
+            </div>
+            <div class="automation-rule-list" id="auto-response-rules"></div>
+        </div>
+    `;
+}
+
+function AutomationOptionCard(opcao) {
+    const estado = obterSetting(moderacaoAtual.automacoes?.options, opcao.id);
+    const campos = (opcao.fields || []).map((campo) => renderizarCampoConfiguravel('automation', opcao.id, campo)).join('');
+
+    return `
+        <article class="automation-option-card ${opcao.type === 'auto-response' ? 'automation-option-card-wide' : ''}">
+            <div class="advanced-card-heading">
+                <div>
+                    <strong>${escaparHTML(opcao.title)}</strong>
+                    <p>${escaparHTML(opcao.description)}</p>
+                </div>
+                ${ToggleSwitch(`automation_enabled_${opcao.id}`, estado.enabled ?? opcao.enabled, `data-automation-enabled data-option-id="${escaparHTML(opcao.id)}"`)}
+            </div>
+            ${opcao.type === 'auto-response' ? AutomationRuleEditor() : ''}
+            ${campos ? `<div class="advanced-field-grid">${campos}</div>` : ''}
+        </article>
+    `;
+}
+
+function AutomationsPage(serverName) {
+    return `
+        <div class="vm-panel-heading">
+            <span>Automações</span>
+            <strong>${escaparHTML(serverName)}</strong>
+        </div>
+        <div class="advanced-config-page automations-page">
+            <div id="automation-summary">${AutomationSummary()}</div>
+            <section class="advanced-section">
+                <div class="advanced-section-heading">
+                    <i class="ph ph-lightning"></i>
+                    <div>
+                        <strong>Ações automáticas do servidor</strong>
+                        <p>Configure cada automação individualmente.</p>
+                    </div>
+                </div>
+                <div class="automation-option-grid">
+                    ${automationSettings.map(AutomationOptionCard).join('')}
+                </div>
+            </section>
+            <button type="button" onclick="salvarAutomacoesServidor()" class="vm-save-button">
+                <i class="ph ph-lightning" id="mod-save-icon"></i>
+                Salvar Automações
+            </button>
+            <div id="mod_status_msg" class="vm-status-message hidden"></div>
+        </div>
+    `;
+}
+
+function preencherCamposAuditoria(canais = []) {
+    moderacaoAtual.auditoria = normalizarAuditoriaLocal(moderacaoAtual.auditoria);
+    const auditoria = moderacaoAtual.auditoria;
+
+    const resumo = document.getElementById('audit-summary');
+    if (resumo) resumo.innerHTML = AuditSummary();
+
+    const toggle = document.getElementById('audit_enabled');
+    if (toggle) toggle.checked = auditoria.enabled;
+
+    preencherChannelSelect(document.getElementById('audit_default_channel'), canais, auditoria.defaultChannelId);
+
+    auditoria.events.forEach((evento) => {
+        const eventoToggle = document.getElementById(`audit_event_enabled_${evento.id}`);
+        if (eventoToggle) eventoToggle.checked = evento.enabled;
+        preencherChannelSelect(document.getElementById(`audit_event_channel_${evento.id}`), canais, evento.channelId);
+    });
+
+    const historico = document.getElementById('audit-history');
+    if (historico) historico.innerHTML = AuditHistory();
+}
+
+function coletarCamposAuditoria() {
+    moderacaoAtual.auditoria = normalizarAuditoriaLocal(moderacaoAtual.auditoria);
+    const auditoria = moderacaoAtual.auditoria;
+    const canalPadrao = document.getElementById('audit_default_channel');
+
+    auditoria.enabled = Boolean(document.getElementById('audit_enabled')?.checked);
+    auditoria.defaultChannelId = canalPadrao?.value || '';
+    auditoria.defaultChannelName = obterNomeSelecionado(canalPadrao, 'channelName');
+
+    auditoria.events = auditoria.events.map((evento) => {
+        const select = document.getElementById(`audit_event_channel_${evento.id}`);
+        return {
+            ...evento,
+            enabled: Boolean(document.getElementById(`audit_event_enabled_${evento.id}`)?.checked),
+            channelId: select?.value || '',
+            channelName: obterNomeSelecionado(select, 'channelName')
+        };
+    });
+}
+
+function preencherCamposSeguranca(canais = []) {
+    moderacaoAtual.seguranca = normalizarSegurancaLocal(moderacaoAtual.seguranca);
+    const resumo = document.getElementById('security-summary');
+    if (resumo) resumo.innerHTML = SecuritySummary();
+
+    antiRaidSettings.forEach((opcao) => {
+        const estado = obterSetting(moderacaoAtual.seguranca.antiRaid.settings, opcao.id);
+        const toggle = document.getElementById(`security_enabled_${opcao.id}`);
+        if (toggle) toggle.checked = estado.enabled;
+
+        (opcao.fields || []).forEach((campo) => {
+            const elemento = document.getElementById(`security_${opcao.id}_${campo.id}`);
+            preencherCampoConfiguravel(elemento, campo, valorCampoConfig(estado, campo), canais);
+        });
+    });
+}
+
+function coletarCamposSeguranca() {
+    moderacaoAtual.seguranca = normalizarSegurancaLocal(moderacaoAtual.seguranca);
+    moderacaoAtual.seguranca.antiRaid.settings = moderacaoAtual.seguranca.antiRaid.settings.map((estado) => {
+        const base = antiRaidSettings.find((opcao) => opcao.id === estado.id) || {};
+        const novo = {
+            ...estado,
+            enabled: Boolean(document.getElementById(`security_enabled_${estado.id}`)?.checked),
+            values: { ...(estado.values || {}) }
+        };
+
+        (base.fields || []).forEach((campo) => {
+            const elemento = document.getElementById(`security_${estado.id}_${campo.id}`);
+            if (!elemento) return;
+            novo.values[campo.id] = coletarValorCampoConfiguravel(elemento);
+            if (campo.type === 'channel') novo.values[`${campo.id}Name`] = obterNomeSelecionado(elemento, 'channelName');
+        });
+
+        return novo;
+    });
+}
+
+function preencherCamposAutomacoes(canais = [], cargos = []) {
+    moderacaoAtual.automacoes = normalizarAutomacoesLocal(moderacaoAtual.automacoes);
+    const resumo = document.getElementById('automation-summary');
+    if (resumo) resumo.innerHTML = AutomationSummary();
+
+    automationSettings.forEach((opcao) => {
+        const estado = obterSetting(moderacaoAtual.automacoes.options, opcao.id);
+        const toggle = document.getElementById(`automation_enabled_${opcao.id}`);
+        if (toggle) toggle.checked = estado.enabled;
+
+        (opcao.fields || []).forEach((campo) => {
+            const elemento = document.getElementById(`automation_${opcao.id}_${campo.id}`);
+            preencherCampoConfiguravel(elemento, campo, valorCampoConfig(estado, campo), canais, cargos);
+        });
+    });
+
+    preencherChannelSelect(document.getElementById('auto_response_channel'), canais, '');
+    renderizarListaAutoRespostas();
+}
+
+function preencherPainelConfiguracaoAtual(secao, canais = [], cargos = []) {
+    if (secao === 'audit') {
+        preencherCamposAuditoria(canais);
+        return;
+    }
+
+    if (secao === 'security') {
+        preencherCamposSeguranca(canais);
+        return;
+    }
+
+    if (secao === 'automations') {
+        preencherCamposAutomacoes(canais, cargos);
+        return;
+    }
+
+    preencherCamposModeracao(canais);
+}
+
+function coletarCamposAutomacoes() {
+    moderacaoAtual.automacoes = normalizarAutomacoesLocal(moderacaoAtual.automacoes);
+    moderacaoAtual.automacoes.options = moderacaoAtual.automacoes.options.map((estado) => {
+        const base = automationSettings.find((opcao) => opcao.id === estado.id) || {};
+        const novo = {
+            ...estado,
+            enabled: Boolean(document.getElementById(`automation_enabled_${estado.id}`)?.checked),
+            values: { ...(estado.values || {}) }
+        };
+
+        (base.fields || []).forEach((campo) => {
+            const elemento = document.getElementById(`automation_${estado.id}_${campo.id}`);
+            if (!elemento) return;
+            novo.values[campo.id] = coletarValorCampoConfiguravel(elemento);
+            if (campo.type === 'channel') novo.values[`${campo.id}Name`] = obterNomeSelecionado(elemento, 'channelName');
+            if (campo.type === 'role') novo.values[`${campo.id}Name`] = obterNomeSelecionado(elemento, 'roleName');
+        });
+
+        return novo;
+    });
+}
+
+function renderizarListaAutoRespostas() {
+    const lista = document.getElementById('auto-response-rules');
+    if (!lista) return;
+
+    const regras = normalizarAutomacoesLocal(moderacaoAtual.automacoes).autoResponses;
+    moderacaoAtual.automacoes.autoResponses = regras;
+
+    if (!regras.length) {
+        lista.innerHTML = '<div class="advanced-empty">Nenhuma regra de auto resposta cadastrada.</div>';
+        return;
+    }
+
+    lista.innerHTML = regras.map((regra) => {
+        const tipo = autoResponseDetectionTypes.find((item) => item.value === regra.detectionType)?.label || 'Contém a palavra';
+        return `
+            <article class="automation-rule-item">
+                <div>
+                    <strong>${escaparHTML(regra.keyword || 'Sem palavra-chave')}</strong>
+                    <span>${escaparHTML(tipo)} · ${escaparHTML(regra.channelName || regra.channelId || 'Todos os canais')}</span>
+                    <p>${escaparHTML(regra.response || 'Sem resposta configurada')}</p>
+                </div>
+                <em class="${regra.enabled ? 'sent' : 'failed'}">${regra.enabled ? 'ON' : 'OFF'}</em>
+                <button type="button" onclick="editarRegraAutoResposta('${escaparHTML(regra.id)}')">
+                    <i class="ph ph-pencil-simple"></i>
+                    Editar
+                </button>
+                <button type="button" onclick="excluirRegraAutoResposta('${escaparHTML(regra.id)}')">
+                    <i class="ph ph-trash"></i>
+                    Excluir
+                </button>
+            </article>
+        `;
+    }).join('');
+}
+
+function obterDadosEditorAutoResposta() {
+    const canal = document.getElementById('auto_response_channel');
+    return {
+        id: automacaoRegraEditandoId || `auto-response-${Date.now()}`,
+        enabled: Boolean(document.getElementById('auto_response_rule_enabled')?.checked),
+        keyword: document.getElementById('auto_response_keyword')?.value.trim() || '',
+        response: document.getElementById('auto_response_response')?.value.trim() || '',
+        channelId: canal?.value || '',
+        channelName: obterNomeSelecionado(canal, 'channelName'),
+        detectionType: document.getElementById('auto_response_detection_type')?.value || 'contains',
+        cooldownSeconds: Number.parseInt(document.getElementById('auto_response_cooldown')?.value || '0', 10) || 0,
+        ignoreStaff: Boolean(document.getElementById('auto_response_ignore_staff')?.checked),
+        deleteAfterSeconds: Number.parseInt(document.getElementById('auto_response_delete_after')?.value || '0', 10) || 0
+    };
+}
+
+function adicionarOuAtualizarRegraAutoResposta() {
+    moderacaoAtual.automacoes = normalizarAutomacoesLocal(moderacaoAtual.automacoes);
+    const regra = obterDadosEditorAutoResposta();
+
+    if (!regra.keyword || !regra.response) {
+        mostrarStatusModeracao('Informe palavra-chave e resposta para criar a regra.');
+        return;
+    }
+
+    const indice = moderacaoAtual.automacoes.autoResponses.findIndex((item) => item.id === regra.id);
+    if (indice >= 0) {
+        moderacaoAtual.automacoes.autoResponses[indice] = regra;
+    } else {
+        moderacaoAtual.automacoes.autoResponses.push(regra);
+    }
+
+    automacaoRegraEditandoId = '';
+    limparEditorAutoResposta(false);
+    renderizarListaAutoRespostas();
+    const resumo = document.getElementById('automation-summary');
+    if (resumo) resumo.innerHTML = AutomationSummary();
+    mostrarStatusModeracao('Regra pronta. Salve as automações para sincronizar.', 'success');
+}
+
+function editarRegraAutoResposta(id) {
+    const regra = normalizarAutomacoesLocal(moderacaoAtual.automacoes).autoResponses.find((item) => item.id === id);
+    if (!regra) return;
+
+    automacaoRegraEditandoId = regra.id;
+    const canal = document.getElementById('auto_response_channel');
+    document.getElementById('auto_response_rule_enabled').checked = regra.enabled;
+    document.getElementById('auto_response_keyword').value = regra.keyword;
+    document.getElementById('auto_response_response').value = regra.response;
+    if (canal) canal.value = regra.channelId || '';
+    document.getElementById('auto_response_detection_type').value = regra.detectionType || 'contains';
+    document.getElementById('auto_response_cooldown').value = regra.cooldownSeconds ?? 0;
+    document.getElementById('auto_response_ignore_staff').checked = regra.ignoreStaff;
+    document.getElementById('auto_response_delete_after').value = regra.deleteAfterSeconds ?? 0;
+    const botao = document.getElementById('auto_response_save_rule');
+    if (botao) botao.innerHTML = '<i class="ph ph-check-circle"></i> Salvar edição';
+}
+
+function excluirRegraAutoResposta(id) {
+    if (!window.confirm('Excluir esta regra de auto resposta?')) return;
+    moderacaoAtual.automacoes = normalizarAutomacoesLocal(moderacaoAtual.automacoes);
+    moderacaoAtual.automacoes.autoResponses = moderacaoAtual.automacoes.autoResponses.filter((regra) => regra.id !== id);
+    if (automacaoRegraEditandoId === id) automacaoRegraEditandoId = '';
+    limparEditorAutoResposta(false);
+    renderizarListaAutoRespostas();
+    const resumo = document.getElementById('automation-summary');
+    if (resumo) resumo.innerHTML = AutomationSummary();
+}
+
+function limparEditorAutoResposta(limparStatus = true) {
+    automacaoRegraEditandoId = '';
+    const campos = {
+        auto_response_rule_enabled: true,
+        auto_response_keyword: '',
+        auto_response_response: '',
+        auto_response_detection_type: 'contains',
+        auto_response_cooldown: 30,
+        auto_response_ignore_staff: false,
+        auto_response_delete_after: 0
+    };
+
+    Object.entries(campos).forEach(([id, valor]) => {
+        const elemento = document.getElementById(id);
+        if (!elemento) return;
+        if (elemento.type === 'checkbox') elemento.checked = Boolean(valor);
+        else elemento.value = valor;
+    });
+
+    const canal = document.getElementById('auto_response_channel');
+    if (canal) canal.value = '';
+
+    const botao = document.getElementById('auto_response_save_rule');
+    if (botao) botao.innerHTML = '<i class="ph ph-plus-circle"></i> Adicionar nova regra';
+    if (limparStatus) mostrarStatusModeracao('Editor limpo.', 'success');
+}
+
+async function salvarAuditoriaServidor() {
+    coletarCamposAuditoria();
+    await salvarModeracaoServidor();
+}
+
+async function salvarSegurancaServidor() {
+    coletarCamposSeguranca();
+    await salvarModeracaoServidor();
+}
+
+async function salvarAutomacoesServidor() {
+    coletarCamposAutomacoes();
+    await salvarModeracaoServidor();
+}
+
+function renderizarCampoModeracao(campo) {
+    const id = idCampoModeracao(campo.path);
+    const attrs = `id="${id}" data-mod-field data-path="${escaparHTML(campo.path)}" data-type="${escaparHTML(campo.type)}"${campo.namePath ? ` data-name-path="${escaparHTML(campo.namePath)}"` : ''}`;
+    const hint = campo.hint ? `<small>${escaparHTML(campo.hint)}</small>` : '';
+
+    if (campo.type === 'toggle') {
+        return `
+            <label class="mod-toggle-row">
+                <span>
+                    <strong>${escaparHTML(campo.label)}</strong>
+                    ${hint}
+                </span>
+                <input type="checkbox" ${attrs}>
+            </label>
+        `;
+    }
+
+    if (campo.type === 'textarea-list') {
+        return `
+            <label class="mod-field mod-field-wide">
+                <span>${escaparHTML(campo.label)}</span>
+                <textarea rows="6" ${attrs} placeholder="Um item por linha"></textarea>
+                ${hint}
+            </label>
+        `;
+    }
+
+    if (campo.type === 'channel') {
+        return `
+            <label class="mod-field">
+                <span>${escaparHTML(campo.label)}</span>
+                <select ${attrs}>
+                    <option value="">Carregando canais...</option>
+                </select>
+                ${hint}
+            </label>
+        `;
+    }
+
+    const inputType = campo.type === 'color' ? 'color' : campo.type === 'number' ? 'number' : 'text';
+    const limites = campo.type === 'number' ? ` min="${campo.min || 0}" max="${campo.max || 999999}"` : '';
+
+    return `
+        <label class="mod-field">
+            <span>${escaparHTML(campo.label)}</span>
+            <input type="${inputType}" ${attrs}${limites} ${campo.disabled ? 'disabled' : ''}>
+            ${hint}
+        </label>
+    `;
+}
+
+function renderizarPainelModeracao(secao, serverName) {
+    const modulo = MODERACAO_SECTIONS[secao] || MODERACAO_SECTIONS.role;
+
+    if (secao === 'upgrade') {
+        return `
+            <div class="vm-panel-heading">
+                <span>${escaparHTML(modulo.label)}</span>
+                <strong>${escaparHTML(serverName)}</strong>
+            </div>
+            <div class="mod-config-panel">
+                <div class="mod-intro">
+                    <strong>AMZ Bot completo</strong>
+                    <span>Limpeza, entrada/saida, logs, AutoMod, blacklist, permissoes, painel ADM, midia e comandos slash.</span>
+                </div>
+                <div class="mod-feature-grid">
+                    ${['Logs de mensagens', 'Ban/kick/castigo', 'AutoMod', 'Blacklist', 'Resposta por mencao', 'Painel ADM', 'Conversao de midia', 'Backups'].map((item) => `<span>${escaparHTML(item)}</span>`).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="vm-panel-heading">
+            <span>${escaparHTML(modulo.label)}</span>
+            <strong>${escaparHTML(serverName)}</strong>
+        </div>
+        <div class="mod-config-panel" data-mod-section="${escaparHTML(secao)}">
+            <div class="mod-intro">
+                <strong>${escaparHTML(modulo.label)}</strong>
+                <span>${escaparHTML(modulo.description)}</span>
+            </div>
+            <div class="mod-field-grid">
+                ${modulo.fields.map(renderizarCampoModeracao).join('')}
+            </div>
+            <button type="button" onclick="salvarModeracaoServidor()" class="vm-save-button">
+                <i class="ph ph-shield-check" id="mod-save-icon"></i>
+                Salvar Configuracao
+            </button>
+            <div id="mod_status_msg" class="vm-status-message hidden"></div>
+        </div>
+    `;
+}
+
+function mostrarStatusModeracao(mensagem, tipo = 'error') {
+    const statusMsg = document.getElementById('mod_status_msg');
+    if (!statusMsg) return;
+    statusMsg.innerText = mensagem;
+    statusMsg.className = `vm-status-message ${tipo}`;
+}
+
+function preencherCamposModeracao(canais = []) {
+    document.querySelectorAll('[data-mod-field]').forEach((campo) => {
+        const path = campo.dataset.path;
+        const tipo = campo.dataset.type;
+        const valor = obterValorPath(moderacaoAtual, path);
+
+        if (tipo === 'toggle') {
+            campo.checked = Boolean(valor);
+            return;
+        }
+
+        if (tipo === 'textarea-list') {
+            campo.value = listaParaTexto(valor);
+            return;
+        }
+
+        if (tipo === 'channel') {
+            campo.innerHTML = [
+                '<option value="">Nao definido</option>',
+                ...canais.map((canal) => `<option value="${escaparHTML(canal.id)}" data-channel-name="${escaparHTML(canal.nome)}">#${escaparHTML(canal.nome)}${canal.categoria ? ` - ${escaparHTML(canal.categoria)}` : ''}</option>`)
+            ].join('');
+            campo.value = valor || '';
+            return;
+        }
+
+        campo.value = valor ?? '';
+    });
+}
+
+function coletarCamposModeracao() {
+    document.querySelectorAll('[data-mod-field]').forEach((campo) => {
+        const path = campo.dataset.path;
+        const tipo = campo.dataset.type;
+        let valor = campo.value;
+
+        if (tipo === 'toggle') valor = campo.checked;
+        if (tipo === 'number') valor = Number.parseInt(campo.value || '0', 10);
+        if (tipo === 'textarea-list') valor = textoParaLista(campo.value);
+
+        definirValorPath(moderacaoAtual, path, valor);
+
+        if (tipo === 'channel' && campo.dataset.namePath) {
+            const option = campo.options[campo.selectedIndex];
+            definirValorPath(moderacaoAtual, campo.dataset.namePath, option?.dataset.channelName || '');
+        }
+    });
+}
+
+function chaveModeracaoDemo(serverId) {
+    return `moderacao_demo_${serverId}`;
+}
+
+async function carregarModeracaoServidor(secao) {
+    const painelSecao = document.getElementById('dashboard-section-panel');
+    const serverId = painelSecao?.dataset.serverId || '';
+    const token = localStorage.getItem('discord_token');
+    let canais = [];
+    let cargos = [];
+
+    if (!serverId) {
+        mostrarStatusModeracao('Servidor nao identificado.');
+        return;
+    }
+
+    if (token === 'demo-token') {
+        try {
+            moderacaoAtual = normalizarModeracaoLocal(JSON.parse(localStorage.getItem(chaveModeracaoDemo(serverId)) || '{}'));
+        } catch {
+            moderacaoAtual = normalizarModeracaoLocal(clonarConfig(MODERACAO_PADRAO));
+        }
+        canais = obterCanaisDemo();
+        cargos = obterCargosDemo();
+        preencherPainelConfiguracaoAtual(secao, canais, cargos);
+        mostrarStatusModeracao('Modo teste local. Configuracao salva no navegador.', 'success');
+        return;
+    }
+
+    if (!token) {
+        mostrarStatusModeracao('Sessao expirada. Entre novamente com o Discord.');
+        return;
+    }
+
+    try {
+        const [responseConfig, responseCanais, responseCargos] = await Promise.all([
+            fetch(`${API_URL}/api/config/${encodeURIComponent(serverId)}/moderacao`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }),
+            fetch(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/canais`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }),
+            fetch(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/cargos`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+        ]);
+        const resultadoConfig = await lerJsonResposta(responseConfig);
+        const resultadoCanais = await lerJsonResposta(responseCanais);
+        const resultadoCargos = await lerJsonResposta(responseCargos);
+
+        if (responseConfig.ok && resultadoConfig.status === 'sucesso') {
+            moderacaoAtual = normalizarModeracaoLocal(resultadoConfig.moderacao || {});
+        } else {
+            moderacaoAtual = normalizarModeracaoLocal(clonarConfig(MODERACAO_PADRAO));
+        }
+
+        if (responseCanais.ok && resultadoCanais.status === 'sucesso') {
+            canais = resultadoCanais.canais || [];
+        }
+
+        if (responseCargos.ok && resultadoCargos.status === 'sucesso') {
+            cargos = resultadoCargos.cargos || [];
+        }
+
+        preencherPainelConfiguracaoAtual(secao, canais, cargos);
+        mostrarStatusModeracao('Configuracao carregada.', 'success');
+    } catch (erro) {
+        console.error('Erro ao carregar moderacao:', erro);
+        moderacaoAtual = normalizarModeracaoLocal(clonarConfig(MODERACAO_PADRAO));
+        preencherPainelConfiguracaoAtual(secao, [], []);
+        mostrarStatusModeracao('Erro ao conectar na API.');
+    }
+}
+
+async function salvarModeracaoServidor() {
+    const painelSecao = document.getElementById('dashboard-section-panel');
+    const serverId = painelSecao?.dataset.serverId || '';
+    const serverName = painelSecao?.dataset.serverName || document.getElementById('nome-servidor-atual')?.innerText || '';
+    const token = localStorage.getItem('discord_token');
+    const icon = document.getElementById('mod-save-icon');
+    const iconOriginalClass = icon?.className || '';
+
+    coletarCamposModeracao();
+    moderacaoAtual = normalizarModeracaoLocal(moderacaoAtual);
+
+    if (token === 'demo-token') {
+        localStorage.setItem(chaveModeracaoDemo(serverId), JSON.stringify(moderacaoAtual));
+        mostrarStatusModeracao('Configuracao salva no modo teste local.', 'success');
+        return;
+    }
+
+    if (!token) {
+        mostrarStatusModeracao('Sessao expirada. Entre novamente com o Discord.');
+        return;
+    }
+
+    try {
+        if (icon) icon.className = 'ph ph-spinner-gap animate-spin';
+        const response = await fetch(`${API_URL}/api/config/moderacao`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ id: serverId, nome: serverName, ...moderacaoAtual })
+        });
+        const resultado = await lerJsonResposta(response);
+
+        if (response.ok && resultado.status === 'sucesso') {
+            moderacaoAtual = normalizarModeracaoLocal(resultado.moderacao || moderacaoAtual);
+            mostrarStatusModeracao('Moderacao salva e sincronizada com o bot.', 'success');
+            return;
+        }
+
+        mostrarStatusModeracao(resultado.mensagem || resultado.erro || 'Nao foi possivel salvar a moderacao.');
+    } catch (erro) {
+        console.error('Erro ao salvar moderacao:', erro);
+        mostrarStatusModeracao('Erro ao conectar na API para salvar moderacao.');
+    } finally {
+        if (icon && iconOriginalClass) icon.className = iconOriginalClass;
+    }
 }
 
 function renderizarTemplateBoasVindas(tipo, titulo, descricao) {
@@ -1181,6 +2695,15 @@ function obterCanaisDemo() {
         { id: '222222222222222222', nome: 'anuncios', categoria: 'Informacoes' },
         { id: '333333333333333333', nome: 'regras', categoria: 'Informacoes' },
         { id: '444444444444444444', nome: 'chat-denuncia', categoria: 'Suporte' }
+    ];
+}
+
+function obterCargosDemo() {
+    return [
+        { id: '555555555555555555', nome: 'Membro' },
+        { id: '666666666666666666', nome: 'Verificado' },
+        { id: '777777777777777777', nome: 'Moderador' },
+        { id: '888888888888888888', nome: 'Admin' }
     ];
 }
 
