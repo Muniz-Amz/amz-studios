@@ -8,6 +8,19 @@ from services.cleanup_service import INTERVALO_LIMPEZA_MINUTOS, executar_limpeza
 MAX_LIMPAR_MENSAGENS = 1000
 
 
+def usuario_e_admin_ou_dono(interaction):
+    guild = interaction.guild
+    usuario = interaction.user
+
+    if not guild or not usuario:
+        return False
+
+    if usuario.id == guild.owner_id:
+        return True
+
+    return getattr(usuario.guild_permissions, "administrator", False)
+
+
 class CleanupCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -39,11 +52,10 @@ class CleanupCog(commands.Cog):
         if not guild.me:
             return None, "Nao consegui identificar o cargo do bot neste servidor."
 
-        user_permissions = channel.permissions_for(interaction.user)
         bot_permissions = channel.permissions_for(guild.me)
 
-        if not user_permissions.manage_messages:
-            return None, "Voce precisa da permissao `Gerenciar mensagens` para usar `/limpar`."
+        if not usuario_e_admin_ou_dono(interaction):
+            return None, "Apenas o dono do servidor ou usuarios com `Administrador` podem usar `/limpar`."
 
         if not bot_permissions.manage_messages or not bot_permissions.read_message_history:
             return None, "O bot precisa de `Gerenciar mensagens` e `Ler historico de mensagens` neste canal."
@@ -66,7 +78,7 @@ class CleanupCog(commands.Cog):
 
     @app_commands.command(name="limpar", description="Apaga mensagens recentes do canal atual.")
     @app_commands.describe(quantidade="Quantidade de mensagens para apagar. Maximo: 1000.")
-    @app_commands.default_permissions(manage_messages=True)
+    @app_commands.default_permissions(administrator=True)
     @app_commands.guild_only()
     async def slash_limpar(self, interaction: discord.Interaction, quantidade: app_commands.Range[int, 1, 1000]):
         await interaction.response.defer(ephemeral=True, thinking=True)
