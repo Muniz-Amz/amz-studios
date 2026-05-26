@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 from database import buscar_limpezas
-from services.cleanup_service import INTERVALO_LIMPEZA_MINUTOS, executar_limpezas, normalizar_dias
+from services.cleanup_service import INTERVALO_LIMPEZA_MINUTOS, executar_limpezas, rotulo_tempo_limpeza
 
 
 class CleanupCog(commands.Cog):
@@ -36,7 +36,7 @@ class CleanupCog(commands.Cog):
             return
 
         linhas = [
-            f"#{limpeza.get('canal_nome', limpeza.get('canal_id'))}: {normalizar_dias(limpeza.get('dias'))} dias"
+            f"#{limpeza.get('canal_nome', limpeza.get('canal_id'))}: {rotulo_tempo_limpeza(limpeza)}"
             for limpeza in limpezas
         ]
         await ctx.send("Limpezas configuradas:\n" + "\n".join(linhas))
@@ -53,7 +53,7 @@ class CleanupCog(commands.Cog):
             return
 
         linhas = [
-            f"#{limpeza.get('canal_nome', limpeza.get('canal_id'))}: {normalizar_dias(limpeza.get('dias'))} dias"
+            f"#{limpeza.get('canal_nome', limpeza.get('canal_id'))}: {rotulo_tempo_limpeza(limpeza)}"
             for limpeza in limpezas
         ]
         await interaction.response.send_message("Limpezas configuradas:\n" + "\n".join(linhas), ephemeral=True)

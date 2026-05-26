@@ -6,7 +6,7 @@ import discord
 
 from database import buscar_todas_limpezas
 
-INTERVALO_LIMPEZA_MINUTOS = int(os.getenv("AMZ_CLEANUP_INTERVAL_MINUTES", "30"))
+INTERVALO_LIMPEZA_MINUTOS = int(os.getenv("AMZ_CLEANUP_INTERVAL_MINUTES", "1"))
 MAX_MENSAGENS_POR_CANAL = int(os.getenv("AMZ_CLEANUP_MAX_MESSAGES_PER_CHANNEL", "200"))
 PAUSA_ENTRE_DELECOES = float(os.getenv("AMZ_CLEANUP_DELETE_DELAY_SECONDS", "0.35"))
 
@@ -18,6 +18,29 @@ def normalizar_dias(dias):
         valor = 1
 
     return min(max(valor, 1), 14)
+
+
+def normalizar_minutos(minutos):
+    try:
+        valor = int(minutos)
+    except (TypeError, ValueError):
+        valor = 1
+
+    return min(max(valor, 1), 60)
+
+
+def obter_tempo_limpeza(limpeza):
+    if limpeza.get("unidade") == "minutos" or limpeza.get("minutos") is not None:
+        minutos = normalizar_minutos(limpeza.get("minutos", 1))
+        return timedelta(minutes=minutos), f"{minutos} minuto{'s' if minutos != 1 else ''}"
+
+    dias = normalizar_dias(limpeza.get("dias", 1))
+    return timedelta(days=dias), f"{dias} dia{'s' if dias != 1 else ''}"
+
+
+def rotulo_tempo_limpeza(limpeza):
+    _, rotulo = obter_tempo_limpeza(limpeza)
+    return rotulo
 
 
 def bot_tem_permissoes_limpeza(channel):
@@ -47,8 +70,8 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza):
         print(f"[LIMPEZA] Sem permissao para limpar #{channel.name} em {guild.name}.")
         return 0
 
-    dias = normalizar_dias(limpeza.get("dias", 1))
-    limite = datetime.now(timezone.utc) - timedelta(days=dias)
+    tempo_limpeza, rotulo = obter_tempo_limpeza(limpeza)
+    limite = datetime.now(timezone.utc) - tempo_limpeza
     removidas = 0
 
     try:
@@ -72,6 +95,9 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza):
         print(f"[LIMPEZA] Sem acesso ao historico de #{channel.name} em {guild.name}.")
     except discord.HTTPException as erro:
         print(f"[LIMPEZA] Erro ao ler historico de #{channel.name}: {erro}")
+
+    if removidas:
+        print(f"[LIMPEZA] #{channel.name} em {guild.name}: {removidas} mensagens com mais de {rotulo}.")
 
     return removidas
 

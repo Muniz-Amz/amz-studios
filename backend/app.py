@@ -681,6 +681,9 @@ def montar_status_configuracoes():
         "AMZ_ADMIN_SESSION_SECRET",
         "AMZ_ADMIN_MEMBERS_LIMIT",
         "AMZ_SLASH_GUILD_IDS",
+        "AMZ_CLEANUP_INTERVAL_MINUTES",
+        "AMZ_CLEANUP_MAX_MESSAGES_PER_CHANNEL",
+        "AMZ_CLEANUP_DELETE_DELAY_SECONDS",
     )
 
     return {nome: variavel_configurada(nome) for nome in variaveis}

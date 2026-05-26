@@ -12,6 +12,7 @@ client = AsyncIOMotorClient(MONGO_URI)
 db = client["AMZCore"]
 collection = db["servidores"]
 MAX_DIAS_LIMPEZA_DISCORD = 14
+MAX_MINUTOS_LIMPEZA = 60
 
 
 def _agora_iso():
@@ -27,14 +28,37 @@ def _normalizar_dias(dias):
     return str(min(max(valor, 1), MAX_DIAS_LIMPEZA_DISCORD))
 
 
+def _normalizar_minutos(minutos):
+    try:
+        valor = int(minutos)
+    except (TypeError, ValueError):
+        valor = 1
+
+    return str(min(max(valor, 1), MAX_MINUTOS_LIMPEZA))
+
+
 def _normalizar_limpeza(dados):
     canal_id = str(dados.get("canal_id", "")).strip()
     canal_nome = str(dados.get("canal_nome") or dados.get("canal") or canal_id).strip()
+    usa_minutos = dados.get("minutos") is not None or dados.get("unidade") == "minutos"
+
+    if usa_minutos:
+        tempo = _normalizar_minutos(dados.get("minutos", "1"))
+        campo_tempo = {
+            "minutos": tempo,
+            "unidade": "minutos",
+        }
+    else:
+        tempo = _normalizar_dias(dados.get("dias", "1"))
+        campo_tempo = {
+            "dias": tempo,
+            "unidade": "dias",
+        }
 
     return {
         "canal_id": canal_id,
         "canal_nome": canal_nome,
-        "dias": _normalizar_dias(dados.get("dias", "1")),
+        **campo_tempo,
         "acao": "excluir_mensagens",
         "atualizado_em": _agora_iso(),
     }
@@ -141,7 +165,17 @@ async def buscar_todas_limpezas():
                 {"canal_id": {"$exists": True, "$ne": ""}},
             ]
         },
-        {"_id": 0, "id": 1, "nome": 1, "limpezas": 1, "canal_id": 1, "canal_nome": 1, "dias": 1},
+        {
+            "_id": 0,
+            "id": 1,
+            "nome": 1,
+            "limpezas": 1,
+            "canal_id": 1,
+            "canal_nome": 1,
+            "dias": 1,
+            "minutos": 1,
+            "unidade": 1,
+        },
     )
 
     servidores = []
@@ -174,6 +208,8 @@ async def remover_limpeza(server_id, canal_id):
                 "canal_id": "",
                 "canal_nome": "",
                 "dias": "",
+                "minutos": "",
+                "unidade": "",
             },
             "$set": {"atualizado_em": _agora_iso()},
         },

@@ -4,24 +4,31 @@
 const API_URL = 'https://amz-studios-api.onrender.com';
 const DISCORD_CLIENT_ID = '1479103284064026787';
 const DISCORD_REDIRECT_PADRAO = 'https://muniz-amz.github.io/amz-studios/';
-const MAX_DIAS_LIMPEZA_DISCORD = 14;
+const MAX_MINUTOS_LIMPEZA = 60;
 const ADMIN_TOKEN_KEY = 'amz_admin_token';
+
+function normalizarMinutosLimpeza(minutos) {
+    const valor = Number.parseInt(minutos, 10);
+
+    if (!Number.isFinite(valor)) return 1;
+
+    return Math.min(Math.max(valor, 1), MAX_MINUTOS_LIMPEZA);
+}
 
 function normalizarDiasLimpeza(dias) {
     const valor = Number.parseInt(dias, 10);
 
     if (!Number.isFinite(valor)) return 1;
 
-    return Math.min(Math.max(valor, 1), MAX_DIAS_LIMPEZA_DISCORD);
+    return Math.min(Math.max(valor, 1), 14);
 }
 
-function gerarOpcoesDiasLimpeza() {
-    return Array.from({ length: MAX_DIAS_LIMPEZA_DISCORD }, (_, indice) => {
-        const dias = indice + 1;
-        const horas = dias * 24;
-        const rotuloDias = dias === 1 ? 'dia' : 'dias';
+function gerarOpcoesMinutosLimpeza() {
+    return Array.from({ length: MAX_MINUTOS_LIMPEZA }, (_, indice) => {
+        const minutos = indice + 1;
+        const rotulo = minutos === 1 ? 'minuto' : 'minutos';
 
-        return `<option value="${dias}">${horas} Horas (${dias} ${rotuloDias})</option>`;
+        return `<option value="${minutos}">${minutos} ${rotulo}</option>`;
     }).join('');
 }
 
@@ -497,8 +504,8 @@ function selecionarSecaoDashboard(secao = 'setup') {
 
                 <label>
                     <span>Excluir mensagens apos</span>
-                    <select id="dias">
-                        ${gerarOpcoesDiasLimpeza()}
+                    <select id="minutos">
+                        ${gerarOpcoesMinutosLimpeza()}
                     </select>
                 </label>
             </div>
@@ -746,6 +753,19 @@ function obterRotuloDias(dias) {
     return `${valor} ${valor === 1 ? 'dia' : 'dias'}`;
 }
 
+function obterRotuloMinutos(minutos) {
+    const valor = normalizarMinutosLimpeza(minutos);
+    return `${valor} ${valor === 1 ? 'minuto' : 'minutos'}`;
+}
+
+function obterRotuloTempoLimpeza(limpeza = {}) {
+    if (limpeza.unidade === 'minutos' || limpeza.minutos !== undefined) {
+        return obterRotuloMinutos(limpeza.minutos || 1);
+    }
+
+    return obterRotuloDias(limpeza.dias || 1);
+}
+
 function renderizarLimpezasConfiguradas(limpezas = []) {
     const container = document.getElementById('limpezas-configuradas');
     if (!container) return;
@@ -760,7 +780,7 @@ function renderizarLimpezasConfiguradas(limpezas = []) {
     container.innerHTML = limpezas.map((limpeza) => {
         const canalId = String(limpeza.canal_id || '');
         const canalNome = String(limpeza.canal_nome || canalId || 'canal');
-        const dias = obterRotuloDias(limpeza.dias || '1');
+        const tempo = obterRotuloTempoLimpeza(limpeza);
 
         return `
             <div class="cleanup-item">
@@ -769,7 +789,7 @@ function renderizarLimpezasConfiguradas(limpezas = []) {
                 </div>
                 <div class="cleanup-item-body">
                     <strong>#${escaparHTML(canalNome.replace(/^#/, ''))}</strong>
-                    <span>Excluir mensagens de ${escaparHTML(dias)} no canal configurado.</span>
+                    <span>Excluir mensagens com mais de ${escaparHTML(tempo)} no canal configurado.</span>
                     <small>ID: ${escaparHTML(canalId)}</small>
                 </div>
                 <button type="button" data-remover-limpeza="${escaparHTML(canalId)}">
@@ -913,7 +933,7 @@ async function enviarConfiguracao() {
     const serverId = document.getElementById('canal_id').dataset.id;
     const canalInput = document.getElementById('canal_id').value;
     const canalNomeInput = document.getElementById('canal_nome')?.value || canalInput;
-    const diasSelect = document.getElementById('dias').value;
+    const minutosSelect = document.getElementById('minutos').value;
     const statusMsg = document.getElementById('status_msg');
     const iconSync = document.getElementById('icon-sync');
     
@@ -934,7 +954,8 @@ async function enviarConfiguracao() {
         const limpezas = salvarLimpezaDemo(serverId, {
             canal_id: canalInput,
             canal_nome: canalNomeInput,
-            dias: diasSelect,
+            minutos: minutosSelect,
+            unidade: 'minutos',
             acao: 'excluir_mensagens',
             atualizado_em: new Date().toISOString()
         });
@@ -951,7 +972,8 @@ async function enviarConfiguracao() {
         nome: document.getElementById('nome-servidor-atual').innerText,
         canal_id: canalInput,
         canal_nome: canalNomeInput,
-        dias: diasSelect 
+        minutos: minutosSelect,
+        unidade: 'minutos'
     };
 
     try {
@@ -1622,7 +1644,7 @@ function renderizarLimpezaAdmin(limpeza) {
     return `
         <div class="admin-detail-row">
             <strong>#${escaparHTML(limpeza.canal_nome || limpeza.canal_id || 'canal')}</strong>
-            <span>${escaparHTML(obterRotuloDias(limpeza.dias || 1))}</span>
+            <span>${escaparHTML(obterRotuloTempoLimpeza(limpeza))}</span>
             <small>ID ${escaparHTML(limpeza.canal_id || '--')}</small>
         </div>
     `;
