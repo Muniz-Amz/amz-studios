@@ -6,6 +6,14 @@ const DISCORD_CLIENT_ID = '1479103284064026787';
 const DISCORD_REDIRECT_PADRAO = 'https://muniz-amz.github.io/amz-studios/';
 const MAX_MINUTOS_LIMPEZA = 1440;
 const ADMIN_TOKEN_KEY = 'amz_admin_token';
+const MODELO_AVISOS_AMZ = {
+    entrada_conteudo: '**Bem-vindo** {mention} **{server_upper}** ! Agora temos **{member_count} Membros.**',
+    entrada_titulo: '',
+    entrada_mensagem: '**Voce e o {member_count} a entrar no servidor!**',
+    saida_conteudo: '**Saiu** **{user}** de **{server_upper}**. Agora temos **{member_count} Membros.**',
+    saida_titulo: '',
+    saida_mensagem: '**{user_tag} saiu do servidor.**'
+};
 const BOAS_VINDAS_PADRAO = {
     entrada_ativa: false,
     saida_ativa: false,
@@ -13,20 +21,20 @@ const BOAS_VINDAS_PADRAO = {
     canal_entrada_nome: '',
     canal_saida_id: '',
     canal_saida_nome: '',
-    entrada_conteudo: '{mention}',
-    entrada_titulo: 'Bem-vindo(a), {user}!',
-    entrada_mensagem: '{mention} entrou em {server}. Agora somos {member_count} membros.',
+    entrada_conteudo: MODELO_AVISOS_AMZ.entrada_conteudo,
+    entrada_titulo: MODELO_AVISOS_AMZ.entrada_titulo,
+    entrada_mensagem: MODELO_AVISOS_AMZ.entrada_mensagem,
     entrada_imagem_url: '',
     entrada_cor: '#55ff88',
     entrada_mostrar_avatar: true,
-    saida_conteudo: '',
-    saida_titulo: '{user} saiu do servidor',
-    saida_mensagem: '{user_tag} saiu de {server}. Agora somos {member_count} membros.',
+    saida_conteudo: MODELO_AVISOS_AMZ.saida_conteudo,
+    saida_titulo: MODELO_AVISOS_AMZ.saida_titulo,
+    saida_mensagem: MODELO_AVISOS_AMZ.saida_mensagem,
     saida_imagem_url: '',
     saida_cor: '#ff6767',
     saida_mostrar_avatar: true
 };
-const VARIAVEIS_BOAS_VINDAS = ['{mention}', '{user}', '{username}', '{user_tag}', '{id}', '{server}', '{member_count}'];
+const VARIAVEIS_BOAS_VINDAS = ['{mention}', '{user}', '{username}', '{user_tag}', '{id}', '{server}', '{server_upper}', '{member_count}', '{member_number}'];
 
 function normalizarMinutosLimpeza(minutos) {
     const valor = Number.parseInt(minutos, 10);
@@ -691,6 +699,10 @@ function renderizarPainelBoasVindas(serverName) {
                 <div class="welcome-vars">
                     ${renderizarVariaveisBoasVindas()}
                 </div>
+                <button type="button" class="welcome-model-button" onclick="aplicarModeloBoasVindas()">
+                    <i class="ph ph-sparkle"></i>
+                    Aplicar modelo do print
+                </button>
             </div>
 
             <div class="welcome-toggle-grid">
@@ -863,6 +875,22 @@ function preencherFormularioBoasVindas(config = {}) {
     atualizarPreviewBoasVindas();
 }
 
+function aplicarModeloBoasVindas() {
+    const atual = obterDadosFormularioBoasVindas();
+
+    preencherFormularioBoasVindas({
+        ...atual,
+        ...MODELO_AVISOS_AMZ,
+        entrada_ativa: atual.entrada_ativa,
+        saida_ativa: atual.saida_ativa,
+        canal_entrada_id: atual.canal_entrada_id,
+        canal_entrada_nome: atual.canal_entrada_nome,
+        canal_saida_id: atual.canal_saida_id,
+        canal_saida_nome: atual.canal_saida_nome
+    });
+    mostrarStatusBoasVindas('Modelo do print aplicado. Salve para enviar assim no Discord.', 'success');
+}
+
 function formatarPreviewBoasVindas(texto) {
     const painelSecao = document.getElementById('dashboard-section-panel');
     const serverName = painelSecao?.dataset.serverName || document.getElementById('nome-servidor-atual')?.innerText || 'Seu servidor';
@@ -873,7 +901,9 @@ function formatarPreviewBoasVindas(texto) {
         '{user_tag}': 'usuario#0000',
         '{id}': '1234567890',
         '{server}': serverName,
-        '{member_count}': '100'
+        '{server_upper}': serverName.toUpperCase(),
+        '{member_count}': '100',
+        '{member_number}': '100'
     };
 
     return Object.entries(valores).reduce((resultado, [chave, valor]) => {

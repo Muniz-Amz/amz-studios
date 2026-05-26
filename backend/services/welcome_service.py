@@ -44,6 +44,7 @@ def cor_embed(cor, padrao):
 
 def formatar_variaveis(template, member):
     guild = member.guild
+    member_count = str(guild.member_count or len(guild.members))
     valores = {
         "{user}": member.display_name,
         "{username}": member.name,
@@ -51,7 +52,9 @@ def formatar_variaveis(template, member):
         "{mention}": member.mention,
         "{id}": str(member.id),
         "{server}": guild.name,
-        "{member_count}": str(guild.member_count or len(guild.members)),
+        "{server_upper}": guild.name.upper(),
+        "{member_count}": member_count,
+        "{member_number}": member_count,
     }
 
     texto = str(template or "")

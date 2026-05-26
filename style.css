@@ -1137,6 +1137,30 @@ section {
     font-weight: 900;
 }
 
+.welcome-model-button {
+    grid-column: 2;
+    justify-self: end;
+    min-height: 34px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: #ffffff;
+    color: #050505;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 10px;
+    font-weight: 950;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+}
+
+.welcome-model-button:hover {
+    background: #050505;
+    color: #ffffff;
+}
+
 .welcome-toggle-grid,
 .welcome-channel-grid,
 .welcome-form-grid,
@@ -1302,6 +1326,12 @@ section {
 
     .welcome-vars {
         justify-content: flex-start;
+    }
+
+    .welcome-model-button {
+        grid-column: auto;
+        justify-self: stretch;
+        width: 100%;
     }
 }
 
