@@ -16,8 +16,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    <link rel="stylesheet" href="style.css?v=11">
-    <link rel="stylesheet" href="/amz-studios/style.css?v=11">
+    <link rel="stylesheet" href="style.css?v=12">
+    <link rel="stylesheet" href="/amz-studios/style.css?v=12">
 </head>
 <body class="flex flex-col min-h-screen overflow-x-hidden bg-black">
 
@@ -159,7 +159,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
 
                         <nav class="vm-sidebar-nav" aria-label="Configuracoes do servidor">
                             <button type="button" class="vm-sidebar-link active" data-dashboard-section="setup" onclick="selecionarSecaoDashboard('setup')">Limpeza</button>
-                            <button type="button" class="vm-sidebar-link" data-dashboard-section="server" onclick="selecionarSecaoDashboard('server')">Server Toggles</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="server" onclick="selecionarSecaoDashboard('server')">Avisos</button>
                             <button type="button" class="vm-sidebar-link" data-dashboard-section="role" onclick="selecionarSecaoDashboard('role')">Role Toggles</button>
                             <button type="button" class="vm-sidebar-link" data-dashboard-section="misc" onclick="selecionarSecaoDashboard('misc')">Misc</button>
                             <button type="button" class="vm-sidebar-link" data-dashboard-section="bot" onclick="selecionarSecaoDashboard('bot')">Bot Profile</button>
@@ -223,8 +223,8 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                             <button type="button" class="vm-dashboard-card" data-dashboard-section="server" onclick="selecionarSecaoDashboard('server')">
                                 <i class="ph ph-toggle-left"></i>
                                 <span>
-                                    <strong>Server Toggles</strong>
-                                    <small>Recursos do servidor</small>
+                                    <strong>Avisos</strong>
+                                    <small>Entrada e saida</small>
                                 </span>
                             </button>
                             <button type="button" class="vm-dashboard-card" data-dashboard-section="role" onclick="selecionarSecaoDashboard('role')">
@@ -434,7 +434,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
 
     <script>
         const amzScript = document.createElement('script');
-        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=13' : 'script.js?v=13';
+        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=14' : 'script.js?v=14';
         document.body.appendChild(amzScript);
     </script>
 </body>

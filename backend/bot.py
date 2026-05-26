@@ -11,6 +11,7 @@ EXTENSIONS = (
     "cogs.cleanup",
     "cogs.admin",
     "cogs.media",
+    "cogs.welcome",
 )
 SLASH_GUILD_IDS = [
     int(guild_id.strip())

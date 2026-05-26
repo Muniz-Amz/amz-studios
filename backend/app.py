@@ -17,7 +17,15 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 from bot import bot
-from database import buscar_limpezas, remover_limpeza, salvar_config, salvar_limpeza, status_banco_dados
+from database import (
+    buscar_boas_vindas,
+    buscar_limpezas,
+    remover_limpeza,
+    salvar_boas_vindas,
+    salvar_config,
+    salvar_limpeza,
+    status_banco_dados,
+)
 
 load_dotenv()
 
@@ -407,6 +415,7 @@ def canais_texto_do_servidor(server_id):
             "categoria": canal.category.name if canal.category else None,
             "tipo": str(canal.type),
             "posicao": canal.position,
+            "permissoes_bot": permissoes_bot_canal(canal),
         })
 
     return canais
@@ -443,6 +452,7 @@ def permissoes_bot_canal(canal):
     return {
         "ver": permissoes.view_channel,
         "enviar": permissoes.send_messages,
+        "enviar_embeds": permissoes.embed_links,
         "gerenciar_mensagens": permissoes.manage_messages,
         "ler_historico": permissoes.read_message_history,
     }
@@ -632,6 +642,61 @@ def buscar_limpezas_sync(server_id):
         return []
 
 
+def buscar_boas_vindas_sync(server_id):
+    try:
+        futuro = asyncio.run_coroutine_threadsafe(buscar_boas_vindas(str(server_id)), bot.loop)
+        return futuro.result(timeout=10)
+    except Exception:
+        return {}
+
+
+def valor_booleano(valor):
+    if isinstance(valor, bool):
+        return valor
+
+    if isinstance(valor, str):
+        return valor.strip().lower() in ("1", "true", "sim", "yes", "on")
+
+    return bool(valor)
+
+
+def validar_canais_boas_vindas(server_id, dados):
+    canais = canais_texto_do_servidor(server_id)
+
+    if canais is None:
+        return None, "Servidor nao encontrado pelo bot."
+
+    canais_por_id = {str(canal["id"]): canal for canal in canais}
+    dados = dict(dados or {})
+
+    for tipo in ("entrada", "saida"):
+        ativo = valor_booleano(dados.get(f"{tipo}_ativa"))
+        canal_id = str(dados.get(f"canal_{tipo}_id") or "").strip()
+
+        if not ativo and not canal_id:
+            continue
+
+        if not ativo and canal_id not in canais_por_id:
+            dados[f"canal_{tipo}_id"] = ""
+            dados[f"canal_{tipo}_nome"] = ""
+            continue
+
+        canal = canais_por_id.get(canal_id)
+
+        if not canal:
+            return None, f"Selecione um canal valido para o aviso de {tipo}."
+
+        permissoes = canal.get("permissoes_bot", {})
+
+        if ativo and (not permissoes.get("ver") or not permissoes.get("enviar")):
+            return None, f"O bot nao consegue enviar mensagens no canal de {tipo}."
+
+        dados[f"canal_{tipo}_id"] = canal_id
+        dados[f"canal_{tipo}_nome"] = canal.get("nome", "")
+
+    return dados, None
+
+
 def status_banco_sync():
     try:
         futuro = asyncio.run_coroutine_threadsafe(status_banco_dados(), bot.loop)
@@ -742,6 +807,7 @@ def montar_info_servidor_admin(guild):
     )
     cargos = sorted(guild.roles, key=lambda cargo: cargo.position, reverse=True)
     limpezas = buscar_limpezas_sync(guild.id)
+    boas_vindas = buscar_boas_vindas_sync(guild.id)
 
     return {
         "id": str(guild.id),
@@ -756,6 +822,7 @@ def montar_info_servidor_admin(guild):
         "boosts": guild.premium_subscription_count,
         "features": sorted(guild.features),
         "limpezas_configuradas": limpezas,
+        "boas_vindas_config": boas_vindas,
         "contagens": {
             "canais": len(guild.channels),
             "texto": len(guild.text_channels),
@@ -986,6 +1053,35 @@ def salvar_limpeza_canal():
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
 
 
+@app.route("/api/config/boas-vindas", methods=["POST"])
+def salvar_config_boas_vindas():
+    dados = request.json or {}
+    server_id = dados.get("id")
+
+    if not server_id:
+        return jsonify({"status": "erro", "mensagem": "ID do servidor invalido."}), 400
+
+    erro = validar_admin_requisicao(server_id)
+    if erro:
+        return erro
+
+    dados_validados, erro_canal = validar_canais_boas_vindas(server_id, dados)
+
+    if erro_canal:
+        return jsonify({"status": "erro", "mensagem": erro_canal}), 400
+
+    try:
+        futuro = asyncio.run_coroutine_threadsafe(salvar_boas_vindas(server_id, dados_validados), bot.loop)
+        config = futuro.result(timeout=15)
+        return jsonify({
+            "status": "sucesso",
+            "mensagem": "Avisos de entrada e saida salvos!",
+            "boas_vindas": config,
+        }), 200
+    except Exception as e:
+        return jsonify({"status": "erro", "mensagem": str(e)}), 500
+
+
 @app.route("/api/servidores/<server_id>/canais", methods=["GET"])
 def listar_canais_servidor(server_id):
     if not server_id:
@@ -1002,6 +1098,23 @@ def listar_canais_servidor(server_id):
             return jsonify({"status": "erro", "mensagem": "Servidor nao encontrado pelo bot."}), 404
 
         return jsonify({"status": "sucesso", "canais": canais}), 200
+    except Exception as e:
+        return jsonify({"status": "erro", "mensagem": str(e)}), 500
+
+
+@app.route("/api/config/<server_id>/boas-vindas", methods=["GET"])
+def listar_config_boas_vindas(server_id):
+    if not server_id:
+        return jsonify({"status": "erro", "mensagem": "ID do servidor invalido."}), 400
+
+    erro = validar_admin_requisicao(server_id)
+    if erro:
+        return erro
+
+    try:
+        futuro = asyncio.run_coroutine_threadsafe(buscar_boas_vindas(server_id), bot.loop)
+        config = futuro.result(timeout=15)
+        return jsonify({"status": "sucesso", "boas_vindas": config}), 200
     except Exception as e:
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
 

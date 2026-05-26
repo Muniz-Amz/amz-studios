@@ -13,6 +13,30 @@ db = client["AMZCore"]
 collection = db["servidores"]
 MAX_DIAS_LIMPEZA_DISCORD = 14
 MAX_MINUTOS_LIMPEZA = 60
+MAX_TITULO_AVISO = 240
+MAX_CONTEUDO_AVISO = 1900
+MAX_MENSAGEM_AVISO = 3800
+MAX_URL_AVISO = 500
+PADRAO_BOAS_VINDAS = {
+    "entrada_ativa": False,
+    "saida_ativa": False,
+    "canal_entrada_id": "",
+    "canal_entrada_nome": "",
+    "canal_saida_id": "",
+    "canal_saida_nome": "",
+    "entrada_conteudo": "{mention}",
+    "entrada_titulo": "Bem-vindo(a), {user}!",
+    "entrada_mensagem": "{mention} entrou em {server}. Agora somos {member_count} membros.",
+    "entrada_imagem_url": "",
+    "entrada_cor": "#55ff88",
+    "entrada_mostrar_avatar": True,
+    "saida_conteudo": "",
+    "saida_titulo": "{user} saiu do servidor",
+    "saida_mensagem": "{user_tag} saiu de {server}. Agora somos {member_count} membros.",
+    "saida_imagem_url": "",
+    "saida_cor": "#ff6767",
+    "saida_mostrar_avatar": True,
+}
 
 
 def _agora_iso():
@@ -61,6 +85,75 @@ def _normalizar_limpeza(dados):
         **campo_tempo,
         "acao": "excluir_mensagens",
         "atualizado_em": _agora_iso(),
+    }
+
+
+def _normalizar_bool(valor):
+    if isinstance(valor, bool):
+        return valor
+
+    if isinstance(valor, str):
+        return valor.strip().lower() in ("1", "true", "sim", "yes", "on")
+
+    return bool(valor)
+
+
+def _limitar_texto(valor, limite, padrao=""):
+    texto = str(valor if valor is not None else padrao).strip()
+    return texto[:limite]
+
+
+def _normalizar_cor(cor, padrao):
+    texto = str(cor or padrao).strip()
+
+    if not texto.startswith("#"):
+        texto = f"#{texto}"
+
+    texto = texto[:7]
+    hexadecimais = "0123456789abcdefABCDEF"
+
+    if len(texto) != 7 or any(char not in hexadecimais for char in texto[1:]):
+        return padrao
+
+    return texto.lower()
+
+
+def _normalizar_url(valor):
+    url = _limitar_texto(valor, MAX_URL_AVISO)
+
+    if not url:
+        return ""
+
+    if url.startswith("http://") or url.startswith("https://"):
+        return url
+
+    return ""
+
+
+def _normalizar_boas_vindas(dados):
+    dados = dados or {}
+    base = {**PADRAO_BOAS_VINDAS, **dados}
+
+    return {
+        "entrada_ativa": _normalizar_bool(base.get("entrada_ativa")),
+        "saida_ativa": _normalizar_bool(base.get("saida_ativa")),
+        "canal_entrada_id": _limitar_texto(base.get("canal_entrada_id"), 32),
+        "canal_entrada_nome": _limitar_texto(base.get("canal_entrada_nome"), 120),
+        "canal_saida_id": _limitar_texto(base.get("canal_saida_id"), 32),
+        "canal_saida_nome": _limitar_texto(base.get("canal_saida_nome"), 120),
+        "entrada_conteudo": _limitar_texto(base.get("entrada_conteudo"), MAX_CONTEUDO_AVISO),
+        "entrada_titulo": _limitar_texto(base.get("entrada_titulo"), MAX_TITULO_AVISO, PADRAO_BOAS_VINDAS["entrada_titulo"]),
+        "entrada_mensagem": _limitar_texto(base.get("entrada_mensagem"), MAX_MENSAGEM_AVISO, PADRAO_BOAS_VINDAS["entrada_mensagem"]),
+        "entrada_imagem_url": _normalizar_url(base.get("entrada_imagem_url")),
+        "entrada_cor": _normalizar_cor(base.get("entrada_cor"), PADRAO_BOAS_VINDAS["entrada_cor"]),
+        "entrada_mostrar_avatar": _normalizar_bool(base.get("entrada_mostrar_avatar")),
+        "saida_conteudo": _limitar_texto(base.get("saida_conteudo"), MAX_CONTEUDO_AVISO),
+        "saida_titulo": _limitar_texto(base.get("saida_titulo"), MAX_TITULO_AVISO, PADRAO_BOAS_VINDAS["saida_titulo"]),
+        "saida_mensagem": _limitar_texto(base.get("saida_mensagem"), MAX_MENSAGEM_AVISO, PADRAO_BOAS_VINDAS["saida_mensagem"]),
+        "saida_imagem_url": _normalizar_url(base.get("saida_imagem_url")),
+        "saida_cor": _normalizar_cor(base.get("saida_cor"), PADRAO_BOAS_VINDAS["saida_cor"]),
+        "saida_mostrar_avatar": _normalizar_bool(base.get("saida_mostrar_avatar")),
+        "atualizado_em": base.get("atualizado_em") or _agora_iso(),
     }
 
 
@@ -152,6 +245,41 @@ async def buscar_limpezas(server_id):
     """
     documento = await collection.find_one({"id": str(server_id)}, {"_id": 0})
     return _limpezas_do_documento(documento)
+
+
+async def salvar_boas_vindas(server_id, dados):
+    """
+    Salva os avisos de entrada e saida do servidor.
+    """
+    server_id = str(server_id)
+    configuracao = _normalizar_boas_vindas(dados)
+    agora = _agora_iso()
+    configuracao["atualizado_em"] = agora
+
+    documento = await collection.find_one_and_update(
+        {"id": server_id},
+        {
+            "$set": {
+                "id": server_id,
+                "nome": dados.get("nome", ""),
+                "boas_vindas": configuracao,
+                "atualizado_em": agora,
+            }
+        },
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
+        projection={"_id": 0, "boas_vindas": 1},
+    )
+
+    return _normalizar_boas_vindas((documento or {}).get("boas_vindas"))
+
+
+async def buscar_boas_vindas(server_id):
+    """
+    Retorna a configuracao de avisos de entrada e saida de um servidor.
+    """
+    documento = await collection.find_one({"id": str(server_id)}, {"_id": 0, "boas_vindas": 1})
+    return _normalizar_boas_vindas((documento or {}).get("boas_vindas"))
 
 
 async def buscar_todas_limpezas():

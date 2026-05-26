@@ -6,6 +6,27 @@ const DISCORD_CLIENT_ID = '1479103284064026787';
 const DISCORD_REDIRECT_PADRAO = 'https://muniz-amz.github.io/amz-studios/';
 const MAX_MINUTOS_LIMPEZA = 60;
 const ADMIN_TOKEN_KEY = 'amz_admin_token';
+const BOAS_VINDAS_PADRAO = {
+    entrada_ativa: false,
+    saida_ativa: false,
+    canal_entrada_id: '',
+    canal_entrada_nome: '',
+    canal_saida_id: '',
+    canal_saida_nome: '',
+    entrada_conteudo: '{mention}',
+    entrada_titulo: 'Bem-vindo(a), {user}!',
+    entrada_mensagem: '{mention} entrou em {server}. Agora somos {member_count} membros.',
+    entrada_imagem_url: '',
+    entrada_cor: '#55ff88',
+    entrada_mostrar_avatar: true,
+    saida_conteudo: '',
+    saida_titulo: '{user} saiu do servidor',
+    saida_mensagem: '{user_tag} saiu de {server}. Agora somos {member_count} membros.',
+    saida_imagem_url: '',
+    saida_cor: '#ff6767',
+    saida_mostrar_avatar: true
+};
+const VARIAVEIS_BOAS_VINDAS = ['{mention}', '{user}', '{username}', '{user_tag}', '{id}', '{server}', '{member_count}'];
 
 function normalizarMinutosLimpeza(minutos) {
     const valor = Number.parseInt(minutos, 10);
@@ -95,8 +116,8 @@ const DASHBOARD_SECTIONS = {
         description: 'Exclusao automatica de mensagens por canal.'
     },
     server: {
-        title: 'Server Toggles',
-        description: 'Ative ou desative recursos do servidor.'
+        title: 'Avisos',
+        description: 'Configure entrada, saida, canal, mensagem e imagem/GIF.'
     },
     role: {
         title: 'Role Toggles',
@@ -537,6 +558,12 @@ function selecionarSecaoDashboard(secao = 'setup') {
         return;
     }
 
+    if (secao === 'server') {
+        painelSecao.innerHTML = renderizarPainelBoasVindas(serverName);
+        carregarBoasVindasServidor();
+        return;
+    }
+
     painelSecao.innerHTML = `
         <div class="vm-panel-heading">
             <span>${escaparHTML(info.title)}</span>
@@ -562,6 +589,480 @@ function selecionarSecaoDashboard(secao = 'setup') {
             </div>
         </div>
     `;
+}
+
+function renderizarVariaveisBoasVindas() {
+    return VARIAVEIS_BOAS_VINDAS.map((variavel) => `<code>${escaparHTML(variavel)}</code>`).join('');
+}
+
+function renderizarTemplateBoasVindas(tipo, titulo, descricao) {
+    return `
+        <section class="welcome-template-section">
+            <div class="welcome-section-heading">
+                <div>
+                    <strong>${escaparHTML(titulo)}</strong>
+                    <span>${escaparHTML(descricao)}</span>
+                </div>
+                <label class="welcome-avatar-toggle">
+                    <input type="checkbox" id="welcome_${tipo}_mostrar_avatar" data-welcome-input>
+                    <span>Avatar no embed</span>
+                </label>
+            </div>
+
+            <div class="welcome-form-grid">
+                <label>
+                    <span>Texto antes do embed</span>
+                    <input id="welcome_${tipo}_conteudo" data-welcome-input placeholder="{mention}">
+                </label>
+                <label>
+                    <span>Cor do embed</span>
+                    <input type="color" id="welcome_${tipo}_cor" data-welcome-input>
+                </label>
+                <label>
+                    <span>Titulo</span>
+                    <input id="welcome_${tipo}_titulo" data-welcome-input placeholder="Titulo do aviso">
+                </label>
+                <label>
+                    <span>Imagem/GIF de fundo</span>
+                    <input id="welcome_${tipo}_imagem_url" data-welcome-input placeholder="https://...">
+                </label>
+            </div>
+
+            <label class="welcome-full-field">
+                <span>Mensagem</span>
+                <textarea id="welcome_${tipo}_mensagem" data-welcome-input rows="4" placeholder="Escreva a mensagem do aviso"></textarea>
+            </label>
+        </section>
+    `;
+}
+
+function renderizarPainelBoasVindas(serverName) {
+    return `
+        <div class="vm-panel-heading">
+            <span>Avisos do servidor</span>
+            <strong>${escaparHTML(serverName)}</strong>
+        </div>
+
+        <div class="welcome-config-panel">
+            <div class="welcome-intro">
+                <div>
+                    <strong>Entrada e saida</strong>
+                    <span>Escolha canais, textos, cores e imagens/GIFs para avisar sua comunidade.</span>
+                </div>
+                <div class="welcome-vars">
+                    ${renderizarVariaveisBoasVindas()}
+                </div>
+            </div>
+
+            <div class="welcome-toggle-grid">
+                <label class="welcome-toggle-row">
+                    <span>
+                        <strong>Aviso de entrada</strong>
+                        <small>Envia quando alguem entra no servidor.</small>
+                    </span>
+                    <input type="checkbox" id="welcome_entrada_ativa" data-welcome-input>
+                </label>
+                <label class="welcome-toggle-row">
+                    <span>
+                        <strong>Aviso de saida</strong>
+                        <small>Envia quando alguem sai do servidor.</small>
+                    </span>
+                    <input type="checkbox" id="welcome_saida_ativa" data-welcome-input>
+                </label>
+            </div>
+
+            <div class="welcome-channel-grid">
+                <label>
+                    <span>Canal de entrada</span>
+                    <select id="welcome_canal_entrada"></select>
+                </label>
+                <label>
+                    <span>Canal de saida</span>
+                    <select id="welcome_canal_saida"></select>
+                </label>
+            </div>
+
+            ${renderizarTemplateBoasVindas('entrada', 'Mensagem de entrada', 'Use para receber novos membros com nome, mencao e imagem.')}
+            ${renderizarTemplateBoasVindas('saida', 'Mensagem de saida', 'Use para avisar a equipe ou o chat quando alguem sair.')}
+
+            <div class="welcome-preview-grid">
+                <article class="welcome-preview" id="welcome_preview_entrada">
+                    <span>Preview entrada</span>
+                    <strong id="welcome_preview_entrada_titulo"></strong>
+                    <p id="welcome_preview_entrada_mensagem"></p>
+                    <small id="welcome_preview_entrada_conteudo"></small>
+                </article>
+                <article class="welcome-preview" id="welcome_preview_saida">
+                    <span>Preview saida</span>
+                    <strong id="welcome_preview_saida_titulo"></strong>
+                    <p id="welcome_preview_saida_mensagem"></p>
+                    <small id="welcome_preview_saida_conteudo"></small>
+                </article>
+            </div>
+
+            <button type="button" onclick="salvarBoasVindas()" class="vm-save-button">
+                <i class="ph ph-floppy-disk" id="welcome-save-icon"></i>
+                Salvar avisos
+            </button>
+
+            <div id="welcome_status_msg" class="vm-status-message hidden"></div>
+        </div>
+    `;
+}
+
+function normalizarCorHex(cor, padrao) {
+    const texto = String(cor || padrao || '#ffffff').trim();
+    const valor = texto.startsWith('#') ? texto : `#${texto}`;
+
+    return /^#[0-9a-fA-F]{6}$/.test(valor) ? valor.toLowerCase() : padrao;
+}
+
+function normalizarConfigBoasVindas(config = {}) {
+    return {
+        ...BOAS_VINDAS_PADRAO,
+        ...config,
+        entrada_cor: normalizarCorHex(config.entrada_cor, BOAS_VINDAS_PADRAO.entrada_cor),
+        saida_cor: normalizarCorHex(config.saida_cor, BOAS_VINDAS_PADRAO.saida_cor)
+    };
+}
+
+function obterChaveBoasVindasDemo(serverId) {
+    return `boas_vindas_demo_${serverId}`;
+}
+
+function obterBoasVindasDemo(serverId) {
+    try {
+        return normalizarConfigBoasVindas(JSON.parse(localStorage.getItem(obterChaveBoasVindasDemo(serverId)) || '{}'));
+    } catch (erro) {
+        console.warn('Cache de boas-vindas invalido:', erro);
+        return normalizarConfigBoasVindas();
+    }
+}
+
+function salvarBoasVindasDemo(serverId, config) {
+    const normalizada = normalizarConfigBoasVindas(config);
+    localStorage.setItem(obterChaveBoasVindasDemo(serverId), JSON.stringify(normalizada));
+    return normalizada;
+}
+
+function mostrarStatusBoasVindas(mensagem, tipo = 'error') {
+    const statusMsg = document.getElementById('welcome_status_msg');
+    if (!statusMsg) return;
+
+    statusMsg.innerText = mensagem;
+    statusMsg.className = `vm-status-message ${tipo}`;
+}
+
+function renderizarSelectBoasVindas(selectId, canais = [], selecionado = '') {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+
+    const selecionadoTexto = String(selecionado || '');
+    select.disabled = !canais.length;
+
+    if (!canais.length) {
+        select.innerHTML = '<option value="">Nenhum canal de texto encontrado</option>';
+        return;
+    }
+
+    const existeSelecionado = canais.some((canal) => String(canal.id) === selecionadoTexto);
+    const opcaoSalva = selecionadoTexto && !existeSelecionado
+        ? `<option value="${escaparHTML(selecionadoTexto)}">Canal salvo nao encontrado</option>`
+        : '';
+
+    select.innerHTML = [
+        '<option value="">Selecione um canal</option>',
+        opcaoSalva,
+        ...canais.map((canal) => `
+            <option value="${escaparHTML(canal.id)}" data-channel-name="${escaparHTML(canal.nome)}">
+                #${escaparHTML(canal.nome)}${canal.categoria ? ` - ${escaparHTML(canal.categoria)}` : ''}
+            </option>
+        `)
+    ].join('');
+
+    select.value = selecionadoTexto;
+}
+
+function preencherFormularioBoasVindas(config = {}) {
+    const dados = normalizarConfigBoasVindas(config);
+    const camposTexto = [
+        'entrada_conteudo',
+        'entrada_titulo',
+        'entrada_mensagem',
+        'entrada_imagem_url',
+        'entrada_cor',
+        'saida_conteudo',
+        'saida_titulo',
+        'saida_mensagem',
+        'saida_imagem_url',
+        'saida_cor'
+    ];
+
+    document.getElementById('welcome_entrada_ativa').checked = Boolean(dados.entrada_ativa);
+    document.getElementById('welcome_saida_ativa').checked = Boolean(dados.saida_ativa);
+    document.getElementById('welcome_entrada_mostrar_avatar').checked = Boolean(dados.entrada_mostrar_avatar);
+    document.getElementById('welcome_saida_mostrar_avatar').checked = Boolean(dados.saida_mostrar_avatar);
+
+    camposTexto.forEach((campo) => {
+        const elemento = document.getElementById(`welcome_${campo}`);
+        if (elemento) elemento.value = dados[campo] ?? '';
+    });
+
+    const canalEntrada = document.getElementById('welcome_canal_entrada');
+    const canalSaida = document.getElementById('welcome_canal_saida');
+    if (canalEntrada) canalEntrada.value = dados.canal_entrada_id || '';
+    if (canalSaida) canalSaida.value = dados.canal_saida_id || '';
+
+    atualizarPreviewBoasVindas();
+}
+
+function formatarPreviewBoasVindas(texto) {
+    const painelSecao = document.getElementById('dashboard-section-panel');
+    const serverName = painelSecao?.dataset.serverName || document.getElementById('nome-servidor-atual')?.innerText || 'Seu servidor';
+    const valores = {
+        '{mention}': '@Usuario',
+        '{user}': 'Usuario',
+        '{username}': 'usuario',
+        '{user_tag}': 'usuario#0000',
+        '{id}': '1234567890',
+        '{server}': serverName,
+        '{member_count}': '100'
+    };
+
+    return Object.entries(valores).reduce((resultado, [chave, valor]) => {
+        return resultado.replaceAll(chave, valor);
+    }, String(texto || ''));
+}
+
+function atualizarPreviewBoasVindas() {
+    ['entrada', 'saida'].forEach((tipo) => {
+        const preview = document.getElementById(`welcome_preview_${tipo}`);
+        const titulo = document.getElementById(`welcome_preview_${tipo}_titulo`);
+        const mensagem = document.getElementById(`welcome_preview_${tipo}_mensagem`);
+        const conteudo = document.getElementById(`welcome_preview_${tipo}_conteudo`);
+        const cor = document.getElementById(`welcome_${tipo}_cor`)?.value || BOAS_VINDAS_PADRAO[`${tipo}_cor`];
+
+        if (preview) preview.style.borderColor = normalizarCorHex(cor, BOAS_VINDAS_PADRAO[`${tipo}_cor`]);
+        if (titulo) titulo.innerText = formatarPreviewBoasVindas(document.getElementById(`welcome_${tipo}_titulo`)?.value);
+        if (mensagem) mensagem.innerText = formatarPreviewBoasVindas(document.getElementById(`welcome_${tipo}_mensagem`)?.value);
+        if (conteudo) conteudo.innerText = formatarPreviewBoasVindas(document.getElementById(`welcome_${tipo}_conteudo`)?.value);
+    });
+}
+
+function conectarEventosBoasVindas() {
+    document.querySelectorAll('[data-welcome-input]').forEach((elemento) => {
+        elemento.addEventListener('input', atualizarPreviewBoasVindas);
+        elemento.addEventListener('change', atualizarPreviewBoasVindas);
+    });
+}
+
+async function carregarBoasVindasServidor() {
+    const painelSecao = document.getElementById('dashboard-section-panel');
+    const serverId = painelSecao?.dataset.serverId || '';
+    const token = localStorage.getItem('discord_token');
+    let config = normalizarConfigBoasVindas();
+
+    renderizarSelectBoasVindas('welcome_canal_entrada', [], '');
+    renderizarSelectBoasVindas('welcome_canal_saida', [], '');
+    preencherFormularioBoasVindas(config);
+    conectarEventosBoasVindas();
+
+    if (!serverId) {
+        mostrarStatusBoasVindas('Servidor nao identificado.');
+        return;
+    }
+
+    if (token === 'demo-token') {
+        const canais = obterCanaisDemo();
+        config = obterBoasVindasDemo(serverId);
+        renderizarSelectBoasVindas('welcome_canal_entrada', canais, config.canal_entrada_id);
+        renderizarSelectBoasVindas('welcome_canal_saida', canais, config.canal_saida_id);
+        preencherFormularioBoasVindas(config);
+        mostrarStatusBoasVindas('Modo teste local. As mensagens nao sao enviadas no Discord.', 'success');
+        return;
+    }
+
+    if (!token) {
+        mostrarStatusBoasVindas('Sessao expirada. Entre novamente com o Discord.');
+        return;
+    }
+
+    try {
+        const responseConfig = await fetch(`${API_URL}/api/config/${encodeURIComponent(serverId)}/boas-vindas`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const resultadoConfig = await lerJsonResposta(responseConfig);
+
+        if (responseConfig.ok && resultadoConfig.status === 'sucesso') {
+            config = normalizarConfigBoasVindas(resultadoConfig.boas_vindas || {});
+        } else if (responseConfig.status === 401) {
+            limparSessaoDiscord();
+            mostrarStatusBoasVindas(resultadoConfig.mensagem || 'Sessao expirada. Entre novamente com o Discord.');
+            return;
+        } else if (responseConfig.status === 403) {
+            mostrarStatusBoasVindas(resultadoConfig.mensagem || 'Acesso negado para este servidor.');
+            return;
+        } else {
+            mostrarStatusBoasVindas(resultadoConfig.mensagem || resultadoConfig.erro || 'Nao foi possivel carregar os avisos.');
+        }
+
+        const responseCanais = await fetch(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/canais`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const resultadoCanais = await lerJsonResposta(responseCanais);
+
+        if (responseCanais.ok && resultadoCanais.status === 'sucesso') {
+            const canais = resultadoCanais.canais || [];
+            renderizarSelectBoasVindas('welcome_canal_entrada', canais, config.canal_entrada_id);
+            renderizarSelectBoasVindas('welcome_canal_saida', canais, config.canal_saida_id);
+            preencherFormularioBoasVindas(config);
+            mostrarStatusBoasVindas('Avisos carregados.', 'success');
+            return;
+        }
+
+        if (responseCanais.status === 401) {
+            limparSessaoDiscord();
+        }
+
+        preencherFormularioBoasVindas(config);
+        mostrarStatusBoasVindas(resultadoCanais.mensagem || resultadoCanais.erro || 'Nao foi possivel carregar os canais.');
+    } catch (erro) {
+        console.error('Erro ao carregar avisos:', erro);
+        mostrarStatusBoasVindas('Erro ao conectar na API para carregar os avisos.');
+    }
+}
+
+function opcaoSelecionadaBoasVindas(selectId) {
+    const select = document.getElementById(selectId);
+    const option = select?.options[select.selectedIndex];
+
+    return {
+        id: select?.value || '',
+        nome: option?.dataset.channelName || ''
+    };
+}
+
+function obterDadosFormularioBoasVindas() {
+    const entrada = opcaoSelecionadaBoasVindas('welcome_canal_entrada');
+    const saida = opcaoSelecionadaBoasVindas('welcome_canal_saida');
+    const valor = (id) => document.getElementById(id)?.value?.trim() || '';
+    const marcado = (id) => Boolean(document.getElementById(id)?.checked);
+
+    return {
+        id: document.getElementById('dashboard-section-panel')?.dataset.serverId || '',
+        nome: document.getElementById('nome-servidor-atual')?.innerText || '',
+        entrada_ativa: marcado('welcome_entrada_ativa'),
+        saida_ativa: marcado('welcome_saida_ativa'),
+        canal_entrada_id: entrada.id,
+        canal_entrada_nome: entrada.nome,
+        canal_saida_id: saida.id,
+        canal_saida_nome: saida.nome,
+        entrada_conteudo: valor('welcome_entrada_conteudo'),
+        entrada_titulo: valor('welcome_entrada_titulo'),
+        entrada_mensagem: valor('welcome_entrada_mensagem'),
+        entrada_imagem_url: valor('welcome_entrada_imagem_url'),
+        entrada_cor: valor('welcome_entrada_cor') || BOAS_VINDAS_PADRAO.entrada_cor,
+        entrada_mostrar_avatar: marcado('welcome_entrada_mostrar_avatar'),
+        saida_conteudo: valor('welcome_saida_conteudo'),
+        saida_titulo: valor('welcome_saida_titulo'),
+        saida_mensagem: valor('welcome_saida_mensagem'),
+        saida_imagem_url: valor('welcome_saida_imagem_url'),
+        saida_cor: valor('welcome_saida_cor') || BOAS_VINDAS_PADRAO.saida_cor,
+        saida_mostrar_avatar: marcado('welcome_saida_mostrar_avatar')
+    };
+}
+
+function urlBoasVindasValida(url) {
+    if (!url) return true;
+
+    try {
+        const parsed = new URL(url);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+        return false;
+    }
+}
+
+function validarBoasVindas(config) {
+    if (config.entrada_ativa && !config.canal_entrada_id) {
+        return 'Selecione o canal do aviso de entrada.';
+    }
+
+    if (config.saida_ativa && !config.canal_saida_id) {
+        return 'Selecione o canal do aviso de saida.';
+    }
+
+    if (!urlBoasVindasValida(config.entrada_imagem_url)) {
+        return 'A imagem/GIF de entrada precisa ser um link http ou https.';
+    }
+
+    if (!urlBoasVindasValida(config.saida_imagem_url)) {
+        return 'A imagem/GIF de saida precisa ser um link http ou https.';
+    }
+
+    return null;
+}
+
+async function salvarBoasVindas() {
+    const config = obterDadosFormularioBoasVindas();
+    const erroValidacao = validarBoasVindas(config);
+    const token = localStorage.getItem('discord_token');
+    const icon = document.getElementById('welcome-save-icon');
+
+    if (erroValidacao) {
+        mostrarStatusBoasVindas(erroValidacao);
+        alert(erroValidacao);
+        return;
+    }
+
+    if (!token) {
+        mostrarStatusBoasVindas('Sessao expirada. Entre novamente com o Discord.');
+        alert('Sessao expirada. Por favor, logue novamente.');
+        return;
+    }
+
+    if (token === 'demo-token') {
+        const salva = salvarBoasVindasDemo(config.id, config);
+        preencherFormularioBoasVindas(salva);
+        mostrarStatusBoasVindas('Avisos salvos no modo teste local.', 'success');
+        return;
+    }
+
+    try {
+        if (icon) icon.classList.add('animate-spin');
+
+        const response = await fetch(`${API_URL}/api/config/boas-vindas`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(config)
+        });
+        const resultado = await lerJsonResposta(response);
+
+        if (icon) icon.classList.remove('animate-spin');
+
+        if (response.ok && resultado.status === 'sucesso') {
+            preencherFormularioBoasVindas(resultado.boas_vindas || config);
+            mostrarStatusBoasVindas('Avisos salvos e sincronizados com o bot.', 'success');
+            alert('Avisos salvos com sucesso!');
+            return;
+        }
+
+        if (response.status === 401) {
+            limparSessaoDiscord();
+        }
+
+        const mensagem = resultado.mensagem || resultado.erro || 'Nao foi possivel salvar os avisos.';
+        mostrarStatusBoasVindas(mensagem);
+        alert(mensagem);
+    } catch (erro) {
+        console.error('Erro ao salvar avisos:', erro);
+        if (icon) icon.classList.remove('animate-spin');
+        mostrarStatusBoasVindas('Erro ao conectar na API.');
+        alert('Erro ao conectar na API.');
+    }
 }
 
 function obterCanaisDemo() {
@@ -1431,6 +1932,8 @@ function renderizarServidorAdmin(servidor) {
     const canais = Array.isArray(servidor.canais) ? servidor.canais : [];
     const cargos = Array.isArray(servidor.cargos) ? servidor.cargos : [];
     const limpezas = Array.isArray(servidor.limpezas_configuradas) ? servidor.limpezas_configuradas : [];
+    const boasVindas = servidor.boas_vindas_config || {};
+    const avisosAtivos = Number(Boolean(boasVindas.entrada_ativa)) + Number(Boolean(boasVindas.saida_ativa));
     const features = Array.isArray(servidor.features) && servidor.features.length
         ? servidor.features.join(', ')
         : 'Nenhuma feature especial';
@@ -1450,6 +1953,7 @@ function renderizarServidorAdmin(servidor) {
                 <span>Canais <strong>${escaparHTML(servidor.contagens?.canais ?? canais.length)}</strong></span>
                 <span>Cargos <strong>${escaparHTML(servidor.contagens?.cargos ?? cargos.length)}</strong></span>
                 <span>Limpezas <strong>${escaparHTML(limpezas.length)}</strong></span>
+                <span>Avisos <strong>${escaparHTML(avisosAtivos)}</strong></span>
             </div>
 
             <div class="admin-server-meta">
@@ -1498,6 +2002,13 @@ function renderizarServidorAdmin(servidor) {
                     ${limpezas.map(renderizarLimpezaAdmin).join('') || '<span>Nenhuma limpeza configurada.</span>'}
                 </div>
             </details>
+
+            <details class="admin-details">
+                <summary>Avisos de entrada e saida</summary>
+                <div class="admin-detail-list">
+                    ${renderizarBoasVindasAdmin(boasVindas)}
+                </div>
+            </details>
         </article>
     `;
 }
@@ -1509,7 +2020,7 @@ function renderizarCanalAdmin(canal) {
         <div class="admin-detail-row">
             <strong>#${escaparHTML(canal.nome)}</strong>
             <span>${escaparHTML(canal.tipo)}${canal.categoria ? ` / ${escaparHTML(canal.categoria)}` : ''}</span>
-            <small>ID ${escaparHTML(canal.id)} | Ver: ${permissoes.ver ? 'sim' : 'nao'} | Enviar: ${permissoes.enviar ? 'sim' : 'nao'} | Limpar: ${permissoes.gerenciar_mensagens ? 'sim' : 'nao'}</small>
+            <small>ID ${escaparHTML(canal.id)} | Ver: ${permissoes.ver ? 'sim' : 'nao'} | Enviar: ${permissoes.enviar ? 'sim' : 'nao'} | Embeds: ${permissoes.enviar_embeds ? 'sim' : 'nao'} | Limpar: ${permissoes.gerenciar_mensagens ? 'sim' : 'nao'}</small>
         </div>
     `;
 }
@@ -1638,6 +2149,28 @@ async function banirMembroAdmin(serverId, userId) {
         console.error('Erro ao banir membro:', erro);
         alert('Erro ao conectar na API para banir membro.');
     }
+}
+
+function renderizarBoasVindasAdmin(config = {}) {
+    const entrada = config.entrada_ativa
+        ? `Ativo em #${config.canal_entrada_nome || config.canal_entrada_id || 'canal'}`
+        : 'Desativado';
+    const saida = config.saida_ativa
+        ? `Ativo em #${config.canal_saida_nome || config.canal_saida_id || 'canal'}`
+        : 'Desativado';
+
+    return `
+        <div class="admin-detail-row">
+            <strong>Entrada</strong>
+            <span>${escaparHTML(entrada)}</span>
+            <small>Titulo: ${escaparHTML(config.entrada_titulo || '--')}</small>
+        </div>
+        <div class="admin-detail-row">
+            <strong>Saida</strong>
+            <span>${escaparHTML(saida)}</span>
+            <small>Titulo: ${escaparHTML(config.saida_titulo || '--')}</small>
+        </div>
+    `;
 }
 
 function renderizarLimpezaAdmin(limpeza) {
