@@ -9,9 +9,17 @@ load_dotenv()
 
 EXTENSIONS = (
     "cogs.cleanup",
+    "cogs.status",
     "cogs.admin",
     "cogs.media",
     "cogs.welcome",
+)
+SINCRONIZAR_SLASH_GLOBAL = os.getenv("AMZ_SYNC_GLOBAL_SLASH", "true").strip().lower() in (
+    "1",
+    "true",
+    "sim",
+    "yes",
+    "on",
 )
 SLASH_GUILD_IDS = [
     int(guild_id.strip())
@@ -32,6 +40,11 @@ class AMZBot(commands.Bot):
         for extension in EXTENSIONS:
             await self.load_extension(extension)
             print(f"[BOT] Extensao carregada: {extension}")
+
+        if SINCRONIZAR_SLASH_GLOBAL:
+            comandos = await self.tree.sync()
+            self.last_slash_sync_at = datetime.now(timezone.utc)
+            print(f"[BOT] {len(comandos)} slash commands globais sincronizados.")
 
         if SLASH_GUILD_IDS:
             for guild_id in SLASH_GUILD_IDS:

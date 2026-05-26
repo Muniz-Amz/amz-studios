@@ -2,8 +2,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from database import buscar_limpezas
-from services.cleanup_service import INTERVALO_LIMPEZA_MINUTOS, executar_limpezas, rotulo_tempo_limpeza
+from services.cleanup_service import INTERVALO_LIMPEZA_MINUTOS, executar_limpezas
+
+
+MAX_LIMPAR_MENSAGENS = 1000
 
 
 class CleanupCog(commands.Cog):
@@ -27,36 +29,64 @@ class CleanupCog(commands.Cog):
     async def antes_da_limpeza_automatica(self):
         await self.bot.wait_until_ready()
 
-    @commands.command()
-    async def info(self, ctx):
-        limpezas = await buscar_limpezas(str(ctx.guild.id))
+    async def limpar_canal(self, interaction, quantidade):
+        channel = interaction.channel
+        guild = interaction.guild
 
-        if not limpezas:
-            await ctx.send("Esse servidor ainda nao tem limpeza configurada no painel web.")
-            return
+        if not guild or not channel or not hasattr(channel, "purge"):
+            return None, "Use este comando dentro de um canal de texto do servidor."
 
-        linhas = [
-            f"#{limpeza.get('canal_nome', limpeza.get('canal_id'))}: {rotulo_tempo_limpeza(limpeza)}"
-            for limpeza in limpezas
-        ]
-        await ctx.send("Limpezas configuradas:\n" + "\n".join(linhas))
+        if not guild.me:
+            return None, "Nao consegui identificar o cargo do bot neste servidor."
 
-    @app_commands.command(name="info", description="Mostra as limpezas configuradas neste servidor.")
-    async def slash_info(self, interaction: discord.Interaction):
-        limpezas = await buscar_limpezas(str(interaction.guild_id))
+        user_permissions = channel.permissions_for(interaction.user)
+        bot_permissions = channel.permissions_for(guild.me)
 
-        if not limpezas:
-            await interaction.response.send_message(
-                "Esse servidor ainda nao tem limpeza configurada no painel web.",
-                ephemeral=True,
+        if not user_permissions.manage_messages:
+            return None, "Voce precisa da permissao `Gerenciar mensagens` para usar `/limpar`."
+
+        if not bot_permissions.manage_messages or not bot_permissions.read_message_history:
+            return None, "O bot precisa de `Gerenciar mensagens` e `Ler historico de mensagens` neste canal."
+
+        limite = min(max(int(quantidade), 1), MAX_LIMPAR_MENSAGENS)
+
+        try:
+            apagadas = await channel.purge(
+                limit=limite,
+                check=lambda mensagem: not mensagem.pinned,
+                bulk=True,
+                reason=f"Limpeza manual AMZ solicitada por {interaction.user} ({interaction.user.id})",
             )
+        except discord.Forbidden:
+            return None, "O Discord negou a limpeza. Confira a hierarquia/permissoes do cargo do bot."
+        except discord.HTTPException as erro:
+            return None, f"O Discord recusou a limpeza: `{erro}`"
+
+        return len(apagadas), None
+
+    @app_commands.command(name="limpar", description="Apaga mensagens recentes do canal atual.")
+    @app_commands.describe(quantidade="Quantidade de mensagens para apagar. Maximo: 1000.")
+    @app_commands.default_permissions(manage_messages=True)
+    @app_commands.guild_only()
+    async def slash_limpar(self, interaction: discord.Interaction, quantidade: app_commands.Range[int, 1, 1000]):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        apagadas, erro = await self.limpar_canal(interaction, quantidade)
+
+        if erro:
+            await interaction.followup.send(erro, ephemeral=True)
             return
 
-        linhas = [
-            f"#{limpeza.get('canal_nome', limpeza.get('canal_id'))}: {rotulo_tempo_limpeza(limpeza)}"
-            for limpeza in limpezas
-        ]
-        await interaction.response.send_message("Limpezas configuradas:\n" + "\n".join(linhas), ephemeral=True)
+        embed = discord.Embed(
+            title="Limpeza concluida",
+            description="Mensagens fixadas foram preservadas.",
+            color=discord.Color.from_rgb(255, 255, 255),
+        )
+        embed.add_field(name="Canal", value=getattr(interaction.channel, "mention", "Canal atual"), inline=True)
+        embed.add_field(name="Solicitadas", value=str(quantidade), inline=True)
+        embed.add_field(name="Apagadas", value=str(apagadas), inline=True)
+        embed.set_footer(text=f"Limite do comando: {MAX_LIMPAR_MENSAGENS} mensagens")
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
 
 async def setup(bot):
