@@ -4,6 +4,9 @@
 const API_URL = 'https://amz-studios-api.onrender.com';
 const DISCORD_CLIENT_ID = '1479103284064026787';
 const DISCORD_REDIRECT_PADRAO = 'https://muniz-amz.github.io/amz-studios/';
+const DISCORD_LOGIN_SCOPES = 'identify guilds';
+const DISCORD_BOT_INVITE_SCOPES = 'bot applications.commands';
+const DISCORD_BOT_PERMISSIONS = '8';
 const MAX_MINUTOS_LIMPEZA = 1440;
 const ADMIN_TOKEN_KEY = 'amz_admin_token';
 const MODELO_AVISOS_AMZ = {
@@ -117,8 +120,21 @@ function obterDiscordLoginUrl() {
     url.searchParams.set('client_id', DISCORD_CLIENT_ID);
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('redirect_uri', obterRedirectUriDiscord());
-    url.searchParams.set('scope', 'identify guilds');
+    url.searchParams.set('scope', DISCORD_LOGIN_SCOPES);
     return url.toString();
+}
+
+function obterDiscordBotInviteUrl() {
+    const url = new URL('https://discord.com/oauth2/authorize');
+    url.searchParams.set('client_id', DISCORD_CLIENT_ID);
+    url.searchParams.set('permissions', DISCORD_BOT_PERMISSIONS);
+    url.searchParams.set('integration_type', '0');
+    url.searchParams.set('scope', DISCORD_BOT_INVITE_SCOPES);
+    return url.toString();
+}
+
+function abrirConviteBot() {
+    window.open(obterDiscordBotInviteUrl(), '_blank', 'noopener,noreferrer');
 }
 
 function prepararLoginDiscord() {
