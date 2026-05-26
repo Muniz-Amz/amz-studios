@@ -2504,11 +2504,18 @@ section {
     text-transform: uppercase;
 }
 
-.admin-ban-button {
+.admin-member-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.admin-action-button {
     min-height: 36px;
-    border: 1px solid rgba(255, 103, 103, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.22);
     background: transparent;
-    color: #ff6767;
+    color: rgba(255, 255, 255, 0.78);
     padding: 0 12px;
     font-size: 9px;
     font-weight: 900;
@@ -2516,12 +2523,32 @@ section {
     text-transform: uppercase;
 }
 
-.admin-ban-button:hover:not(:disabled) {
+.admin-action-button.timeout {
+    border-color: rgba(255, 242, 0, 0.48);
+    color: #fff200;
+}
+
+.admin-action-button.kick {
+    border-color: rgba(255, 180, 90, 0.5);
+    color: #ffb45a;
+}
+
+.admin-action-button.ban {
+    border-color: rgba(255, 103, 103, 0.5);
+    color: #ff6767;
+}
+
+.admin-action-button:hover:not(:disabled) {
+    background: #ffffff;
+    color: #000000;
+}
+
+.admin-action-button.ban:hover:not(:disabled) {
     background: #ff6767;
     color: #000000;
 }
 
-.admin-ban-button:disabled {
+.admin-action-button:disabled {
     cursor: not-allowed;
     opacity: 0.34;
 }
@@ -2582,7 +2609,8 @@ section {
     }
 
     .admin-members-toolbar button,
-    .admin-ban-button {
+    .admin-member-actions,
+    .admin-action-button {
         width: 100%;
     }
 }

@@ -7,7 +7,7 @@ import os
 import platform
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import discord
 import requests
@@ -432,6 +432,9 @@ def permissoes_bot_servidor(guild):
         "administrador": permissoes.administrator,
         "gerenciar_servidor": permissoes.manage_guild,
         "gerenciar_mensagens": permissoes.manage_messages,
+        "banir_membros": permissoes.ban_members,
+        "expulsar_membros": permissoes.kick_members,
+        "castigar_membros": permissoes.moderate_members,
         "ver_canais": permissoes.view_channel,
         "enviar_mensagens": permissoes.send_messages,
         "ler_historico": permissoes.read_message_history,
@@ -486,29 +489,67 @@ def montar_info_cargo(cargo):
     }
 
 
-def bot_pode_banir_membro(guild, member):
+def bot_pode_moderar_membro(guild, member):
     membro_bot = guild.me
 
     if not membro_bot:
         return False, "Bot nao encontrado no servidor."
 
-    if not membro_bot.guild_permissions.ban_members:
-        return False, "Bot nao tem permissao de banir membros."
-
     if member.id == guild.owner_id:
-        return False, "Nao e possivel banir o dono do servidor."
+        return False, "Nao e possivel moderar o dono do servidor."
 
     if bot.user and member.id == bot.user.id:
-        return False, "O bot nao pode banir a si mesmo."
+        return False, "O bot nao pode moderar a si mesmo."
 
     if member.top_role >= membro_bot.top_role:
         return False, "Cargo do membro esta igual ou acima do cargo do bot."
 
+    return True, "Pode moderar."
+
+
+def bot_pode_banir_membro(guild, member):
+    pode_moderar, motivo = bot_pode_moderar_membro(guild, member)
+
+    if not pode_moderar:
+        return False, motivo
+
+    if not guild.me.guild_permissions.ban_members:
+        return False, "Bot nao tem permissao de banir membros."
+
     return True, "Pode banir."
+
+
+def bot_pode_expulsar_membro(guild, member):
+    pode_moderar, motivo = bot_pode_moderar_membro(guild, member)
+
+    if not pode_moderar:
+        return False, motivo
+
+    if not guild.me.guild_permissions.kick_members:
+        return False, "Bot nao tem permissao de expulsar membros."
+
+    return True, "Pode expulsar."
+
+
+def bot_pode_castigar_membro(guild, member):
+    pode_moderar, motivo = bot_pode_moderar_membro(guild, member)
+
+    if not pode_moderar:
+        return False, motivo
+
+    if not guild.me.guild_permissions.moderate_members:
+        return False, "Bot nao tem permissao de castigar membros."
+
+    if member.guild_permissions.administrator:
+        return False, "Discord nao aplica castigo em administradores."
+
+    return True, "Pode castigar."
 
 
 def montar_info_membro(member, guild):
     pode_banir, motivo_bloqueio = bot_pode_banir_membro(guild, member)
+    pode_expulsar, motivo_expulsar = bot_pode_expulsar_membro(guild, member)
+    pode_castigar, motivo_castigar = bot_pode_castigar_membro(guild, member)
     cargos = [
         {
             "id": str(cargo.id),
@@ -542,6 +583,10 @@ def montar_info_membro(member, guild):
         "moderacao": {
             "pode_banir": pode_banir,
             "motivo_bloqueio": motivo_bloqueio,
+            "pode_expulsar": pode_expulsar,
+            "motivo_expulsar": motivo_expulsar,
+            "pode_castigar": pode_castigar,
+            "motivo_castigar": motivo_castigar,
         },
     }
 
@@ -589,28 +634,34 @@ def listar_membros_admin_sync(server_id, limite):
     return futuro.result(timeout=25)
 
 
-async def banir_membro_admin_async(server_id, user_id, motivo):
+async def obter_membro_admin_async(server_id, user_id):
     guild = obter_guild_bot(server_id)
 
     if not guild:
-        return False, "Servidor nao encontrado pelo bot."
-
-    if not guild.me or not guild.me.guild_permissions.ban_members:
-        return False, "Bot nao tem permissao de banir membros neste servidor."
+        return None, None, "Servidor nao encontrado pelo bot."
 
     try:
         user_id_int = int(user_id)
     except (TypeError, ValueError):
-        return False, "ID do membro invalido."
+        return None, None, "ID do membro invalido."
 
     try:
         member = guild.get_member(user_id_int) or await guild.fetch_member(user_id_int)
     except discord.NotFound:
-        return False, "Membro nao encontrado no servidor."
+        return None, None, "Membro nao encontrado no servidor."
     except discord.Forbidden:
-        return False, "Discord negou acesso ao membro. Verifique a intent de membros."
+        return None, None, "Discord negou acesso ao membro. Verifique a intent de membros."
     except discord.HTTPException as erro:
-        return False, f"Discord recusou a busca do membro: {erro}"
+        return None, None, f"Discord recusou a busca do membro: {erro}"
+
+    return guild, member, None
+
+
+async def banir_membro_admin_async(server_id, user_id, motivo):
+    guild, member, erro = await obter_membro_admin_async(server_id, user_id)
+
+    if erro:
+        return False, erro
 
     pode_banir, motivo_bloqueio = bot_pode_banir_membro(guild, member)
 
@@ -631,6 +682,72 @@ async def banir_membro_admin_async(server_id, user_id, motivo):
 
 def banir_membro_admin_sync(server_id, user_id, motivo):
     futuro = asyncio.run_coroutine_threadsafe(banir_membro_admin_async(server_id, user_id, motivo), bot.loop)
+    return futuro.result(timeout=25)
+
+
+async def expulsar_membro_admin_async(server_id, user_id, motivo):
+    guild, member, erro = await obter_membro_admin_async(server_id, user_id)
+
+    if erro:
+        return False, erro
+
+    pode_expulsar, motivo_bloqueio = bot_pode_expulsar_membro(guild, member)
+
+    if not pode_expulsar:
+        return False, motivo_bloqueio
+
+    motivo_limpo = str(motivo or "Expulso pelo painel ADM AMZ.").strip()[:480]
+    razao = f"Painel ADM AMZ: {motivo_limpo}"
+
+    try:
+        await member.kick(reason=razao)
+        return True, f"{member} foi expulso de {guild.name}."
+    except discord.Forbidden:
+        return False, "Discord negou a expulsao. Confira permissao e hierarquia do cargo do bot."
+    except discord.HTTPException as erro:
+        return False, f"Discord recusou a expulsao: {erro}"
+
+
+def expulsar_membro_admin_sync(server_id, user_id, motivo):
+    futuro = asyncio.run_coroutine_threadsafe(expulsar_membro_admin_async(server_id, user_id, motivo), bot.loop)
+    return futuro.result(timeout=25)
+
+
+async def castigar_membro_admin_async(server_id, user_id, minutos, motivo):
+    guild, member, erro = await obter_membro_admin_async(server_id, user_id)
+
+    if erro:
+        return False, erro
+
+    pode_castigar, motivo_bloqueio = bot_pode_castigar_membro(guild, member)
+
+    if not pode_castigar:
+        return False, motivo_bloqueio
+
+    try:
+        minutos_int = int(minutos or 10)
+    except (TypeError, ValueError):
+        minutos_int = 10
+
+    minutos_int = min(max(minutos_int, 1), 10080)
+    ate = datetime.now(timezone.utc) + timedelta(minutes=minutos_int)
+    motivo_limpo = str(motivo or "Castigo aplicado pelo painel ADM AMZ.").strip()[:480]
+    razao = f"Painel ADM AMZ: {motivo_limpo}"
+
+    try:
+        if hasattr(member, "timeout"):
+            await member.timeout(ate, reason=razao)
+        else:
+            await member.edit(timed_out_until=ate, reason=razao)
+        return True, f"{member} foi castigado por {minutos_int} minuto(s)."
+    except discord.Forbidden:
+        return False, "Discord negou o castigo. Confira permissao e hierarquia do cargo do bot."
+    except discord.HTTPException as erro:
+        return False, f"Discord recusou o castigo: {erro}"
+
+
+def castigar_membro_admin_sync(server_id, user_id, minutos, motivo):
+    futuro = asyncio.run_coroutine_threadsafe(castigar_membro_admin_async(server_id, user_id, minutos, motivo), bot.loop)
     return futuro.result(timeout=25)
 
 
@@ -932,6 +1049,49 @@ def admin_banir_membro(server_id, user_id):
         return jsonify({"status": "sucesso", "mensagem": mensagem}), 200
     except Exception as erro_ban:
         return jsonify({"status": "erro", "mensagem": str(erro_ban)}), 500
+
+
+@app.route("/api/admin/servidores/<server_id>/membros/<user_id>/kick", methods=["POST"])
+def admin_expulsar_membro(server_id, user_id):
+    erro = validar_admin_painel()
+
+    if erro:
+        return erro
+
+    dados = request.json or {}
+    motivo = dados.get("motivo", "")
+
+    try:
+        sucesso, mensagem = expulsar_membro_admin_sync(server_id, user_id, motivo)
+
+        if not sucesso:
+            return jsonify({"status": "erro", "mensagem": mensagem}), 403
+
+        return jsonify({"status": "sucesso", "mensagem": mensagem}), 200
+    except Exception as erro_kick:
+        return jsonify({"status": "erro", "mensagem": str(erro_kick)}), 500
+
+
+@app.route("/api/admin/servidores/<server_id>/membros/<user_id>/timeout", methods=["POST"])
+def admin_castigar_membro(server_id, user_id):
+    erro = validar_admin_painel()
+
+    if erro:
+        return erro
+
+    dados = request.json or {}
+    motivo = dados.get("motivo", "")
+    minutos = dados.get("minutos", 10)
+
+    try:
+        sucesso, mensagem = castigar_membro_admin_sync(server_id, user_id, minutos, motivo)
+
+        if not sucesso:
+            return jsonify({"status": "erro", "mensagem": mensagem}), 403
+
+        return jsonify({"status": "sucesso", "mensagem": mensagem}), 200
+    except Exception as erro_timeout:
+        return jsonify({"status": "erro", "mensagem": str(erro_timeout)}), 500
 
 
 @app.route("/api/auth/callback", methods=["POST"])

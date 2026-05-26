@@ -13,6 +13,7 @@ COMANDOS_HELP = {
         ("/info", "Mostra status resumido do bot, Discord e banco de dados."),
         ("/help", "Mostra esta central de comandos para administradores."),
         ("/deploy", "Solicita redeploy no Render quando o deploy hook estiver configurado."),
+        ("@AMZ Bot", "Envia o link do site/dashboard no canal."),
     ],
     "Moderacao": [
         ("/limpar quantidade", "Apaga de 1 a 1000 mensagens recentes do canal atual."),

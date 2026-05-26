@@ -5,6 +5,7 @@ from database import buscar_boas_vindas
 
 TIPOS_AVISO = {
     "entrada": {
+        "tipo": "entrada",
         "ativo": "entrada_ativa",
         "canal_id": "canal_entrada_id",
         "conteudo": "entrada_conteudo",
@@ -16,6 +17,7 @@ TIPOS_AVISO = {
         "cor_padrao": "#55ff88",
     },
     "saida": {
+        "tipo": "saida",
         "ativo": "saida_ativa",
         "canal_id": "canal_saida_id",
         "conteudo": "saida_conteudo",
@@ -42,9 +44,10 @@ def cor_embed(cor, padrao):
         return discord.Color(int(padrao.lstrip("#"), 16))
 
 
-def formatar_variaveis(template, member):
+def formatar_variaveis(template, member, contexto=None):
     guild = member.guild
     member_count = str(guild.member_count or len(guild.members))
+    contexto = contexto or {}
     valores = {
         "{user}": member.display_name,
         "{username}": member.name,
@@ -55,6 +58,11 @@ def formatar_variaveis(template, member):
         "{server_upper}": guild.name.upper(),
         "{member_count}": member_count,
         "{member_number}": member_count,
+        "{leave_action}": contexto.get("leave_action", "saiu do servidor"),
+        "{leave_reason}": contexto.get("leave_reason", "Sem motivo registrado"),
+        "{moderator}": contexto.get("moderator", "Sistema"),
+        "{moderator_tag}": contexto.get("moderator_tag", "Sistema"),
+        "{audit_action}": contexto.get("audit_action", "Saida voluntaria"),
     }
 
     texto = str(template or "")
@@ -82,10 +90,11 @@ async def obter_canal_texto(guild, canal_id):
     return canal if isinstance(canal, discord.TextChannel) else None
 
 
-def montar_embed(member, config, campos):
-    titulo = formatar_variaveis(config.get(campos["titulo"]), member)
-    mensagem = formatar_variaveis(config.get(campos["mensagem"]), member)
+def montar_embed(member, config, campos, contexto=None):
+    titulo = formatar_variaveis(config.get(campos["titulo"]), member, contexto)
+    mensagem = formatar_variaveis(config.get(campos["mensagem"]), member, contexto)
     imagem_url = config.get(campos["imagem_url"], "")
+    contexto = contexto or {}
 
     embed = discord.Embed(
         title=titulo or None,
@@ -98,6 +107,17 @@ def montar_embed(member, config, campos):
 
     if url_http_valida(imagem_url):
         embed.set_image(url=imagem_url)
+
+    if campos.get("tipo") == "saida" and contexto:
+        embed.add_field(
+            name="Registro de saida",
+            value=(
+                f"Acao: {contexto.get('audit_action', 'Saida voluntaria')}\n"
+                f"Responsavel: {contexto.get('moderator_tag', 'Sistema')}\n"
+                f"Motivo: {contexto.get('leave_reason', 'Sem motivo registrado')}"
+            )[:1024],
+            inline=False,
+        )
 
     embed.set_footer(text=f"ID: {member.id}")
     return embed
@@ -122,7 +142,7 @@ def resultado_aviso(detalhado, ok, mensagem):
     return (ok, mensagem) if detalhado else ok
 
 
-async def enviar_aviso_membro(member, tipo, detalhado=False):
+async def enviar_aviso_membro(member, tipo, detalhado=False, contexto=None):
     campos = TIPOS_AVISO.get(tipo)
 
     if not campos or not member.guild:
@@ -155,8 +175,8 @@ async def enviar_aviso_membro(member, tipo, detalhado=False):
             f"O bot precisa de `Ver canal` e `Enviar mensagens` em {canal.mention}.",
         )
 
-    conteudo = formatar_variaveis(config.get(campos["conteudo"]), member)
-    embed = montar_embed(member, config, campos)
+    conteudo = formatar_variaveis(config.get(campos["conteudo"]), member, contexto)
+    embed = montar_embed(member, config, campos, contexto)
     allowed_mentions = discord.AllowedMentions(users=True, roles=False, everyone=False)
 
     try:

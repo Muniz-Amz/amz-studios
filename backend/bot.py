@@ -13,6 +13,7 @@ EXTENSIONS = (
     "cogs.admin",
     "cogs.media",
     "cogs.welcome",
+    "cogs.mention",
 )
 SINCRONIZAR_SLASH_GLOBAL = os.getenv("AMZ_SYNC_GLOBAL_SLASH", "false").strip().lower() in (
     "1",

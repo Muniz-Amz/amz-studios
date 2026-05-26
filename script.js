@@ -13,9 +13,9 @@ const MODELO_AVISOS_AMZ = {
     entrada_conteudo: '**Bem-vindo** {mention} **{server_upper}** ! Agora temos **{member_count} Membros.**',
     entrada_titulo: '',
     entrada_mensagem: '**Voce e o {member_count} a entrar no servidor!**',
-    saida_conteudo: '**Saiu** **{user}** de **{server_upper}**. Agora temos **{member_count} Membros.**',
+    saida_conteudo: '**{user}** {leave_action} de **{server_upper}**. Agora temos **{member_count} Membros.**',
     saida_titulo: '',
-    saida_mensagem: '**{user_tag} saiu do servidor.**'
+    saida_mensagem: '**Registro:** {audit_action}\n**Responsavel:** {moderator_tag}\n**Motivo:** {leave_reason}'
 };
 const BOAS_VINDAS_PADRAO = {
     entrada_ativa: false,
@@ -37,7 +37,7 @@ const BOAS_VINDAS_PADRAO = {
     saida_cor: '#ff6767',
     saida_mostrar_avatar: true
 };
-const VARIAVEIS_BOAS_VINDAS = ['{mention}', '{user}', '{username}', '{user_tag}', '{id}', '{server}', '{server_upper}', '{member_count}', '{member_number}'];
+const VARIAVEIS_BOAS_VINDAS = ['{mention}', '{user}', '{username}', '{user_tag}', '{id}', '{server}', '{server_upper}', '{member_count}', '{member_number}', '{leave_action}', '{audit_action}', '{leave_reason}', '{moderator}', '{moderator_tag}'];
 
 function normalizarMinutosLimpeza(minutos) {
     const valor = Number.parseInt(minutos, 10);
@@ -919,7 +919,12 @@ function formatarPreviewBoasVindas(texto) {
         '{server}': serverName,
         '{server_upper}': serverName.toUpperCase(),
         '{member_count}': '100',
-        '{member_number}': '100'
+        '{member_number}': '100',
+        '{leave_action}': 'foi expulso',
+        '{audit_action}': 'Expulsao',
+        '{leave_reason}': 'Teste do painel',
+        '{moderator}': 'Administrador',
+        '{moderator_tag}': 'admin#0000'
     };
 
     return Object.entries(valores).reduce((resultado, [chave, valor]) => {
@@ -2034,6 +2039,9 @@ function renderizarPermissoesAdmin(permissoes = {}) {
         administrador: 'Administrador',
         gerenciar_servidor: 'Gerenciar servidor',
         gerenciar_mensagens: 'Gerenciar mensagens',
+        banir_membros: 'Banir membros',
+        expulsar_membros: 'Expulsar membros',
+        castigar_membros: 'Castigar membros',
         ver_canais: 'Ver canais',
         enviar_mensagens: 'Enviar mensagens',
         ler_historico: 'Ler historico',
@@ -2113,7 +2121,7 @@ function renderizarServidorAdmin(servidor) {
                         <i class="ph ph-users-three"></i>
                         Carregar membros
                     </button>
-                    <small>Banimento exige permissao Banir Membros e cargo do bot acima do membro.</small>
+                    <small>Acoes exigem permissao do bot e cargo acima do membro.</small>
                 </div>
                 <div class="admin-member-list" id="admin-members-${escaparHTML(servidor.id)}">
                     <span class="admin-member-empty">Clique para carregar a lista de membros.</span>
@@ -2214,7 +2222,11 @@ function renderizarMembroAdmin(serverId, membro) {
         ? membro.cargos.slice(0, 6).map((cargo) => `<span>${escaparHTML(cargo.nome)}</span>`).join('')
         : '<span>Sem cargos</span>';
     const podeBanir = Boolean(membro.moderacao?.pode_banir);
-    const motivo = membro.moderacao?.motivo_bloqueio || 'Indisponivel';
+    const podeExpulsar = Boolean(membro.moderacao?.pode_expulsar);
+    const podeCastigar = Boolean(membro.moderacao?.pode_castigar);
+    const motivoBanir = membro.moderacao?.motivo_bloqueio || 'Indisponivel';
+    const motivoExpulsar = membro.moderacao?.motivo_expulsar || 'Indisponivel';
+    const motivoCastigar = membro.moderacao?.motivo_castigar || 'Indisponivel';
 
     return `
         <div class="admin-member-row" data-member-id="${escaparHTML(membro.id)}" data-member-name="${escaparHTML(membro.display || membro.nome)}">
@@ -2225,54 +2237,121 @@ function renderizarMembroAdmin(serverId, membro) {
                 <small>ID ${escaparHTML(membro.id)} | Entrou: ${escaparHTML(formatarDataHora(membro.entrou_em))} | Criado: ${escaparHTML(formatarDataHora(membro.criado_em))}</small>
                 <div class="admin-member-roles">${cargos}</div>
             </div>
-            <button type="button"
-                    class="admin-ban-button"
-                    ${podeBanir ? '' : 'disabled'}
-                    title="${escaparHTML(motivo)}"
-                    onclick="banirMembroAdmin('${escaparHTML(serverId)}', '${escaparHTML(membro.id)}')">
-                Banir
-            </button>
+            <div class="admin-member-actions">
+                <button type="button"
+                        class="admin-action-button timeout"
+                        ${podeCastigar ? '' : 'disabled'}
+                        title="${escaparHTML(motivoCastigar)}"
+                        onclick="castigarMembroAdmin('${escaparHTML(serverId)}', '${escaparHTML(membro.id)}')">
+                    Castigar
+                </button>
+                <button type="button"
+                        class="admin-action-button kick"
+                        ${podeExpulsar ? '' : 'disabled'}
+                        title="${escaparHTML(motivoExpulsar)}"
+                        onclick="expulsarMembroAdmin('${escaparHTML(serverId)}', '${escaparHTML(membro.id)}')">
+                    Expulsar
+                </button>
+                <button type="button"
+                        class="admin-action-button ban"
+                        ${podeBanir ? '' : 'disabled'}
+                        title="${escaparHTML(motivoBanir)}"
+                        onclick="banirMembroAdmin('${escaparHTML(serverId)}', '${escaparHTML(membro.id)}')">
+                    Banir
+                </button>
+            </div>
         </div>
     `;
 }
 
-async function banirMembroAdmin(serverId, userId) {
+async function executarAcaoMembroAdmin(serverId, userId, acao, config) {
     const token = obterAdminToken();
     const row = document.querySelector(`[data-member-id="${userId}"]`);
     const nome = row?.dataset.memberName || userId;
 
     if (!token) return;
 
-    const confirmar = window.confirm(`Banir ${nome} do servidor? Essa acao e imediata.`);
+    const confirmar = window.confirm(`${config.confirmacao} ${nome}? Essa acao e imediata.`);
 
     if (!confirmar) return;
 
-    const motivo = window.prompt('Motivo do banimento:', 'Banido pelo painel ADM AMZ.');
+    const body = {};
+    const motivo = window.prompt(config.motivoLabel, config.motivoPadrao);
 
     if (motivo === null) return;
 
+    body.motivo = motivo;
+
+    if (config.pedirMinutos) {
+        const minutosTexto = window.prompt('Tempo do castigo em minutos (1 a 10080):', '60');
+
+        if (minutosTexto === null) return;
+
+        const minutos = Number.parseInt(minutosTexto, 10);
+        if (!Number.isFinite(minutos) || minutos < 1 || minutos > 10080) {
+            alert('Informe um tempo entre 1 e 10080 minutos.');
+            return;
+        }
+
+        body.minutos = minutos;
+    }
+
     try {
-        const response = await fetch(`${API_URL}/api/admin/servidores/${encodeURIComponent(serverId)}/membros/${encodeURIComponent(userId)}/ban`, {
+        const response = await fetch(`${API_URL}/api/admin/servidores/${encodeURIComponent(serverId)}/membros/${encodeURIComponent(userId)}/${acao}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ motivo })
+            body: JSON.stringify(body)
         });
         const dados = await lerJsonResposta(response);
 
         if (response.ok && dados.status === 'sucesso') {
-            alert(dados.mensagem || 'Membro banido.');
+            alert(dados.mensagem || config.sucesso);
             await carregarMembrosAdmin(serverId);
             return;
         }
 
-        alert(dados.mensagem || dados.erro || 'Nao foi possivel banir o membro.');
+        alert(dados.mensagem || dados.erro || config.erro);
     } catch (erro) {
-        console.error('Erro ao banir membro:', erro);
-        alert('Erro ao conectar na API para banir membro.');
+        console.error(`Erro ao executar ${acao}:`, erro);
+        alert(`Erro ao conectar na API para ${config.verbo}.`);
     }
+}
+
+function banirMembroAdmin(serverId, userId) {
+    return executarAcaoMembroAdmin(serverId, userId, 'ban', {
+        confirmacao: 'Banir',
+        motivoLabel: 'Motivo do banimento:',
+        motivoPadrao: 'Banido pelo painel ADM AMZ.',
+        sucesso: 'Membro banido.',
+        erro: 'Nao foi possivel banir o membro.',
+        verbo: 'banir'
+    });
+}
+
+function expulsarMembroAdmin(serverId, userId) {
+    return executarAcaoMembroAdmin(serverId, userId, 'kick', {
+        confirmacao: 'Expulsar',
+        motivoLabel: 'Motivo da expulsao:',
+        motivoPadrao: 'Expulso pelo painel ADM AMZ.',
+        sucesso: 'Membro expulso.',
+        erro: 'Nao foi possivel expulsar o membro.',
+        verbo: 'expulsar'
+    });
+}
+
+function castigarMembroAdmin(serverId, userId) {
+    return executarAcaoMembroAdmin(serverId, userId, 'timeout', {
+        confirmacao: 'Castigar',
+        motivoLabel: 'Motivo do castigo:',
+        motivoPadrao: 'Castigo aplicado pelo painel ADM AMZ.',
+        sucesso: 'Castigo aplicado.',
+        erro: 'Nao foi possivel castigar o membro.',
+        verbo: 'castigar',
+        pedirMinutos: true
+    });
 }
 
 function renderizarBoasVindasAdmin(config = {}) {
