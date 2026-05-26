@@ -159,8 +159,8 @@ const DASHBOARD_SECTIONS = {
         description: 'Exclusao automatica de mensagens por canal.'
     },
     server: {
-        title: 'Avisos',
-        description: 'Configure entrada, saida, canal, mensagem e imagem/GIF.'
+        title: 'Entrada e Saida',
+        description: 'Configure boas-vindas, saida, canal, mensagem e imagem/GIF.'
     },
     role: {
         title: 'Role Toggles',
@@ -686,15 +686,15 @@ function renderizarTemplateBoasVindas(tipo, titulo, descricao) {
 function renderizarPainelBoasVindas(serverName) {
     return `
         <div class="vm-panel-heading">
-            <span>Avisos do servidor</span>
+            <span>Entrada e Saida</span>
             <strong>${escaparHTML(serverName)}</strong>
         </div>
 
         <div class="welcome-config-panel">
             <div class="welcome-intro">
                 <div>
-                    <strong>Entrada e saida</strong>
-                    <span>Escolha canais, textos, cores e imagens/GIFs para avisar sua comunidade.</span>
+                    <strong>Boas-vindas e despedida</strong>
+                    <span>Escolha canais, textos, cores e imagens/GIFs para quando membros entram ou saem.</span>
                 </div>
                 <div class="welcome-vars">
                     ${renderizarVariaveisBoasVindas()}

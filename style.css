@@ -447,6 +447,40 @@ body {
     font-size: 21px;
 }
 
+.vm-dashboard-card-welcome {
+    grid-template-columns: 34px minmax(0, 1fr);
+}
+
+.vm-dashboard-card-icon-pair {
+    width: 34px;
+    height: 40px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    display: grid;
+    place-items: center;
+    position: relative;
+}
+
+.vm-dashboard-card-icon-pair i {
+    position: absolute;
+    font-size: 17px;
+}
+
+.vm-dashboard-card-icon-pair i:first-child {
+    left: 6px;
+    top: 6px;
+}
+
+.vm-dashboard-card-icon-pair i:last-child {
+    right: 6px;
+    bottom: 6px;
+    opacity: 0.58;
+}
+
+.vm-dashboard-card-welcome:hover .vm-dashboard-card-icon-pair,
+.vm-dashboard-card-welcome.active .vm-dashboard-card-icon-pair {
+    border-color: rgba(255, 255, 255, 0.55);
+}
+
 .vm-dashboard-card strong {
     display: block;
     color: #ffffff;
