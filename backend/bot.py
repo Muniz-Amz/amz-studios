@@ -14,7 +14,14 @@ EXTENSIONS = (
     "cogs.media",
     "cogs.welcome",
 )
-SINCRONIZAR_SLASH_GLOBAL = os.getenv("AMZ_SYNC_GLOBAL_SLASH", "true").strip().lower() in (
+SINCRONIZAR_SLASH_GLOBAL = os.getenv("AMZ_SYNC_GLOBAL_SLASH", "false").strip().lower() in (
+    "1",
+    "true",
+    "sim",
+    "yes",
+    "on",
+)
+LIMPAR_SLASH_GLOBAL = os.getenv("AMZ_CLEAR_GLOBAL_SLASH", "true").strip().lower() in (
     "1",
     "true",
     "sim",
@@ -36,12 +43,29 @@ class AMZBot(commands.Bot):
         self.last_ready_at = None
         self.last_slash_sync_at = None
 
+    async def clear_global_slash_commands(self):
+        comandos_locais = list(self.tree.get_commands(guild=None))
+
+        if not comandos_locais:
+            return
+
+        self.tree.clear_commands(guild=None)
+        await self.tree.sync()
+
+        for comando in comandos_locais:
+            self.tree.add_command(comando, override=True)
+
+        self.last_slash_sync_at = datetime.now(timezone.utc)
+        print("[BOT] Slash commands globais removidos para evitar duplicidade.")
+
     async def setup_hook(self):
         for extension in EXTENSIONS:
             await self.load_extension(extension)
             print(f"[BOT] Extensao carregada: {extension}")
 
-        if SINCRONIZAR_SLASH_GLOBAL:
+        if LIMPAR_SLASH_GLOBAL:
+            await self.clear_global_slash_commands()
+        elif SINCRONIZAR_SLASH_GLOBAL:
             comandos = await self.tree.sync()
             self.last_slash_sync_at = datetime.now(timezone.utc)
             print(f"[BOT] {len(comandos)} slash commands globais sincronizados.")
