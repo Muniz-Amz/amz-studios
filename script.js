@@ -1686,6 +1686,13 @@ function adicionarOuAtualizarRegraAutoResposta() {
         moderacaoAtual.automacoes.autoResponses.push(regra);
     }
 
+    const autoResponseToggle = document.getElementById('automation_enabled_autoResponse');
+    if (autoResponseToggle) autoResponseToggle.checked = true;
+
+    moderacaoAtual.automacoes.options = moderacaoAtual.automacoes.options.map((opcao) => (
+        opcao.id === 'autoResponse' ? { ...opcao, enabled: true } : opcao
+    ));
+
     automacaoRegraEditandoId = '';
     limparEditorAutoResposta(false);
     renderizarListaAutoRespostas();

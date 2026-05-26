@@ -18,6 +18,8 @@ COMANDOS_HELP = {
     "Moderacao": [
         ("/limpar quantidade", "Apaga de 1 a 1000 mensagens recentes do canal atual."),
         ("/testaravisos tipo", "Envia um teste do aviso de entrada ou saida no canal configurado."),
+        ("Painel ADM", "Banir, expulsar, castigar e consultar membros pelo site."),
+        ("Logs", "Registra mensagens apagadas/editadas, bans, castigos, canais e cargos."),
     ],
     "Midia": [
         ("/gifimg arquivo", "Transforma uma imagem enviada em GIF."),
