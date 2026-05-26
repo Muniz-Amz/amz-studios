@@ -11,6 +11,10 @@
             document.getElementById('amz-favicon').href = '/amz-studios/assets/logo.ico?v=6';
             document.getElementById('amz-shortcut-icon').href = '/amz-studios/assets/logo.ico?v=6';
         }
+
+        if (window.location.hash && window.location.hash.toLowerCase() === '#amz-admin') {
+            window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}#amz-admin`);
+        }
     </script>
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -434,7 +438,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
 
     <script>
         const amzScript = document.createElement('script');
-        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=15' : 'script.js?v=15';
+        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=16' : 'script.js?v=16';
         document.body.appendChild(amzScript);
     </script>
 </body>
