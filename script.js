@@ -1457,6 +1457,20 @@ function renderizarServidorAdmin(servidor) {
             </details>
 
             <details class="admin-details">
+                <summary>Membros (${escaparHTML(servidor.membros ?? '--')})</summary>
+                <div class="admin-members-toolbar">
+                    <button type="button" onclick="carregarMembrosAdmin('${escaparHTML(servidor.id)}')">
+                        <i class="ph ph-users-three"></i>
+                        Carregar membros
+                    </button>
+                    <small>Banimento exige permissao Banir Membros e cargo do bot acima do membro.</small>
+                </div>
+                <div class="admin-member-list" id="admin-members-${escaparHTML(servidor.id)}">
+                    <span class="admin-member-empty">Clique para carregar a lista de membros.</span>
+                </div>
+            </details>
+
+            <details class="admin-details">
                 <summary>Limpezas (${escaparHTML(limpezas.length)})</summary>
                 <div class="admin-detail-list">
                     ${limpezas.map(renderizarLimpezaAdmin).join('') || '<span>Nenhuma limpeza configurada.</span>'}
@@ -1486,6 +1500,122 @@ function renderizarCargoAdmin(cargo) {
             <small>ID ${escaparHTML(cargo.id)} | Cor ${escaparHTML(cargo.cor)} | Gerenciado: ${cargo.gerenciado ? 'sim' : 'nao'}</small>
         </div>
     `;
+}
+
+async function carregarMembrosAdmin(serverId) {
+    const container = document.getElementById(`admin-members-${serverId}`);
+    const token = obterAdminToken();
+
+    if (!container || !token) return;
+
+    container.innerHTML = '<span class="admin-member-empty">Carregando membros...</span>';
+
+    try {
+        const response = await fetch(`${API_URL}/api/admin/servidores/${encodeURIComponent(serverId)}/membros`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const dados = await lerJsonResposta(response);
+
+        if (response.ok && dados.status === 'sucesso') {
+            const membros = Array.isArray(dados.membros) ? dados.membros : [];
+            const aviso = dados.aviso ? `<div class="admin-member-warning">${escaparHTML(dados.aviso)}</div>` : '';
+            const meta = `
+                <div class="admin-member-meta">
+                    <span>Origem: ${escaparHTML(dados.origem || '--')}</span>
+                    <span>Mostrando: ${escaparHTML(membros.length)}</span>
+                    <span>Total servidor: ${escaparHTML(dados.total_servidor ?? '--')}</span>
+                    <span>Total cache: ${escaparHTML(dados.total_cache ?? '--')}</span>
+                </div>
+            `;
+
+            container.innerHTML = `
+                ${aviso}
+                ${meta}
+                ${membros.map((membro) => renderizarMembroAdmin(serverId, membro)).join('') || '<span class="admin-member-empty">Nenhum membro encontrado.</span>'}
+            `;
+            return;
+        }
+
+        if (response.status === 401) {
+            limparAdminToken();
+            sairAreaAdmin();
+            return;
+        }
+
+        container.innerHTML = `<span class="admin-member-empty">${escaparHTML(dados.mensagem || dados.erro || 'Nao foi possivel carregar membros.')}</span>`;
+    } catch (erro) {
+        console.error('Erro ao carregar membros:', erro);
+        container.innerHTML = '<span class="admin-member-empty">Erro ao conectar na API.</span>';
+    }
+}
+
+function renderizarMembroAdmin(serverId, membro) {
+    const avatar = membro.avatar_url
+        ? `<img src="${escaparHTML(membro.avatar_url)}" alt="${escaparHTML(membro.display || membro.nome)}">`
+        : `<span>${escaparHTML(obterIniciaisServidor(membro.display || membro.nome))}</span>`;
+    const cargos = Array.isArray(membro.cargos) && membro.cargos.length
+        ? membro.cargos.slice(0, 6).map((cargo) => `<span>${escaparHTML(cargo.nome)}</span>`).join('')
+        : '<span>Sem cargos</span>';
+    const podeBanir = Boolean(membro.moderacao?.pode_banir);
+    const motivo = membro.moderacao?.motivo_bloqueio || 'Indisponivel';
+
+    return `
+        <div class="admin-member-row" data-member-id="${escaparHTML(membro.id)}" data-member-name="${escaparHTML(membro.display || membro.nome)}">
+            <div class="admin-member-avatar">${avatar}</div>
+            <div class="admin-member-main">
+                <strong>${escaparHTML(membro.display || membro.nome)}</strong>
+                <span>${escaparHTML(membro.tag || membro.nome)} ${membro.bot ? '/ BOT' : '/ USER'}</span>
+                <small>ID ${escaparHTML(membro.id)} | Entrou: ${escaparHTML(formatarDataHora(membro.entrou_em))} | Criado: ${escaparHTML(formatarDataHora(membro.criado_em))}</small>
+                <div class="admin-member-roles">${cargos}</div>
+            </div>
+            <button type="button"
+                    class="admin-ban-button"
+                    ${podeBanir ? '' : 'disabled'}
+                    title="${escaparHTML(motivo)}"
+                    onclick="banirMembroAdmin('${escaparHTML(serverId)}', '${escaparHTML(membro.id)}')">
+                Banir
+            </button>
+        </div>
+    `;
+}
+
+async function banirMembroAdmin(serverId, userId) {
+    const token = obterAdminToken();
+    const row = document.querySelector(`[data-member-id="${userId}"]`);
+    const nome = row?.dataset.memberName || userId;
+
+    if (!token) return;
+
+    const confirmar = window.confirm(`Banir ${nome} do servidor? Essa acao e imediata.`);
+
+    if (!confirmar) return;
+
+    const motivo = window.prompt('Motivo do banimento:', 'Banido pelo painel ADM AMZ.');
+
+    if (motivo === null) return;
+
+    try {
+        const response = await fetch(`${API_URL}/api/admin/servidores/${encodeURIComponent(serverId)}/membros/${encodeURIComponent(userId)}/ban`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ motivo })
+        });
+        const dados = await lerJsonResposta(response);
+
+        if (response.ok && dados.status === 'sucesso') {
+            alert(dados.mensagem || 'Membro banido.');
+            await carregarMembrosAdmin(serverId);
+            return;
+        }
+
+        alert(dados.mensagem || dados.erro || 'Nao foi possivel banir o membro.');
+    } catch (erro) {
+        console.error('Erro ao banir membro:', erro);
+        alert('Erro ao conectar na API para banir membro.');
+    }
 }
 
 function renderizarLimpezaAdmin(limpeza) {

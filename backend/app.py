@@ -39,6 +39,7 @@ PERMISSAO_ADMINISTRADOR = 0x8
 PERMISSAO_GERENCIAR_SERVIDOR = 0x20
 ADMIN_PASSWORD = os.getenv("AMZ_ADMIN_PASSWORD", "").strip()
 ADMIN_SESSION_SECONDS = int(os.getenv("AMZ_ADMIN_SESSION_SECONDS", "28800"))
+ADMIN_MEMBERS_LIMIT = int(os.getenv("AMZ_ADMIN_MEMBERS_LIMIT", "500"))
 API_STARTED_AT = datetime.now(timezone.utc)
 
 
@@ -475,6 +476,154 @@ def montar_info_cargo(cargo):
     }
 
 
+def bot_pode_banir_membro(guild, member):
+    membro_bot = guild.me
+
+    if not membro_bot:
+        return False, "Bot nao encontrado no servidor."
+
+    if not membro_bot.guild_permissions.ban_members:
+        return False, "Bot nao tem permissao de banir membros."
+
+    if member.id == guild.owner_id:
+        return False, "Nao e possivel banir o dono do servidor."
+
+    if bot.user and member.id == bot.user.id:
+        return False, "O bot nao pode banir a si mesmo."
+
+    if member.top_role >= membro_bot.top_role:
+        return False, "Cargo do membro esta igual ou acima do cargo do bot."
+
+    return True, "Pode banir."
+
+
+def montar_info_membro(member, guild):
+    pode_banir, motivo_bloqueio = bot_pode_banir_membro(guild, member)
+    cargos = [
+        {
+            "id": str(cargo.id),
+            "nome": cargo.name,
+            "posicao": cargo.position,
+            "cor": str(cargo.color),
+        }
+        for cargo in sorted(member.roles, key=lambda item: item.position, reverse=True)
+        if cargo.name != "@everyone"
+    ]
+
+    return {
+        "id": str(member.id),
+        "nome": member.name,
+        "display": member.display_name,
+        "global_name": getattr(member, "global_name", None),
+        "tag": str(member),
+        "bot": member.bot,
+        "avatar_url": str(member.display_avatar.url) if member.display_avatar else None,
+        "entrou_em": data_iso(member.joined_at),
+        "criado_em": data_iso(member.created_at),
+        "cargo_topo": member.top_role.name if member.top_role else None,
+        "cargos": cargos,
+        "permissoes": {
+            "administrador": member.guild_permissions.administrator,
+            "banir_membros": member.guild_permissions.ban_members,
+            "expulsar_membros": member.guild_permissions.kick_members,
+            "gerenciar_servidor": member.guild_permissions.manage_guild,
+            "gerenciar_mensagens": member.guild_permissions.manage_messages,
+        },
+        "moderacao": {
+            "pode_banir": pode_banir,
+            "motivo_bloqueio": motivo_bloqueio,
+        },
+    }
+
+
+async def listar_membros_admin_async(server_id, limite):
+    guild = obter_guild_bot(server_id)
+
+    if not guild:
+        return None, "Servidor nao encontrado pelo bot.", "erro"
+
+    limite = min(max(int(limite or ADMIN_MEMBERS_LIMIT), 1), ADMIN_MEMBERS_LIMIT)
+    membros_por_id = {}
+    origem = "cache"
+
+    for member in guild.members:
+        membros_por_id[member.id] = member
+
+    try:
+        async for member in guild.fetch_members(limit=limite):
+            membros_por_id[member.id] = member
+        origem = "discord_api"
+    except discord.Forbidden:
+        origem = "cache_sem_intent"
+    except discord.HTTPException:
+        origem = "cache_api_indisponivel"
+
+    membros = sorted(
+        membros_por_id.values(),
+        key=lambda item: (item.bot, item.display_name.lower(), item.id),
+    )[:limite]
+
+    return {
+        "server_id": str(guild.id),
+        "server_name": guild.name,
+        "origem": origem,
+        "limite": limite,
+        "total_cache": len(guild.members),
+        "total_servidor": guild.member_count,
+        "membros": [montar_info_membro(member, guild) for member in membros],
+    }, None, origem
+
+
+def listar_membros_admin_sync(server_id, limite):
+    futuro = asyncio.run_coroutine_threadsafe(listar_membros_admin_async(server_id, limite), bot.loop)
+    return futuro.result(timeout=25)
+
+
+async def banir_membro_admin_async(server_id, user_id, motivo):
+    guild = obter_guild_bot(server_id)
+
+    if not guild:
+        return False, "Servidor nao encontrado pelo bot."
+
+    if not guild.me or not guild.me.guild_permissions.ban_members:
+        return False, "Bot nao tem permissao de banir membros neste servidor."
+
+    try:
+        user_id_int = int(user_id)
+    except (TypeError, ValueError):
+        return False, "ID do membro invalido."
+
+    try:
+        member = guild.get_member(user_id_int) or await guild.fetch_member(user_id_int)
+    except discord.NotFound:
+        return False, "Membro nao encontrado no servidor."
+    except discord.Forbidden:
+        return False, "Discord negou acesso ao membro. Verifique a intent de membros."
+    except discord.HTTPException as erro:
+        return False, f"Discord recusou a busca do membro: {erro}"
+
+    pode_banir, motivo_bloqueio = bot_pode_banir_membro(guild, member)
+
+    if not pode_banir:
+        return False, motivo_bloqueio
+
+    motivo_limpo = str(motivo or "Banido pelo painel ADM AMZ.").strip()[:480]
+    razao = f"Painel ADM AMZ: {motivo_limpo}"
+
+    try:
+        await guild.ban(member, reason=razao)
+        return True, f"{member} foi banido de {guild.name}."
+    except discord.Forbidden:
+        return False, "Discord negou o ban. Confira permissao e hierarquia do cargo do bot."
+    except discord.HTTPException as erro:
+        return False, f"Discord recusou o ban: {erro}"
+
+
+def banir_membro_admin_sync(server_id, user_id, motivo):
+    futuro = asyncio.run_coroutine_threadsafe(banir_membro_admin_async(server_id, user_id, motivo), bot.loop)
+    return futuro.result(timeout=25)
+
+
 def buscar_limpezas_sync(server_id):
     try:
         futuro = asyncio.run_coroutine_threadsafe(buscar_limpezas(str(server_id)), bot.loop)
@@ -530,6 +679,7 @@ def montar_status_configuracoes():
         "RENDER_DEPLOY_HOOK_URL",
         "AMZ_ADMIN_PASSWORD",
         "AMZ_ADMIN_SESSION_SECRET",
+        "AMZ_ADMIN_MEMBERS_LIMIT",
         "AMZ_SLASH_GUILD_IDS",
     )
 
@@ -660,6 +810,58 @@ def admin_status():
         "sistema": montar_status_sistema(),
         "servidores": servidores,
     }), 200
+
+
+@app.route("/api/admin/servidores/<server_id>/membros", methods=["GET"])
+def admin_listar_membros(server_id):
+    erro = validar_admin_painel()
+
+    if erro:
+        return erro
+
+    try:
+        limite = int(request.args.get("limit", ADMIN_MEMBERS_LIMIT))
+    except (TypeError, ValueError):
+        limite = ADMIN_MEMBERS_LIMIT
+
+    try:
+        dados, mensagem, origem = listar_membros_admin_sync(server_id, limite)
+
+        if not dados:
+            return jsonify({"status": "erro", "mensagem": mensagem}), 404
+
+        aviso = None
+        if origem in ("cache_sem_intent", "cache_api_indisponivel"):
+            aviso = "Lista pode estar incompleta. Ative Server Members Intent no Discord Developer Portal."
+
+        return jsonify({
+            "status": "sucesso",
+            "aviso": aviso,
+            **dados,
+        }), 200
+    except Exception as erro_membros:
+        return jsonify({"status": "erro", "mensagem": str(erro_membros)}), 500
+
+
+@app.route("/api/admin/servidores/<server_id>/membros/<user_id>/ban", methods=["POST"])
+def admin_banir_membro(server_id, user_id):
+    erro = validar_admin_painel()
+
+    if erro:
+        return erro
+
+    dados = request.json or {}
+    motivo = dados.get("motivo", "")
+
+    try:
+        sucesso, mensagem = banir_membro_admin_sync(server_id, user_id, motivo)
+
+        if not sucesso:
+            return jsonify({"status": "erro", "mensagem": mensagem}), 403
+
+        return jsonify({"status": "sucesso", "mensagem": mensagem}), 200
+    except Exception as erro_ban:
+        return jsonify({"status": "erro", "mensagem": str(erro_ban)}), 500
 
 
 @app.route("/api/auth/callback", methods=["POST"])

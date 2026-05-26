@@ -59,6 +59,7 @@ class AMZBot(commands.Bot):
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 
 bot = AMZBot(command_prefix=os.getenv("AMZ_COMMAND_PREFIX", "!"), intents=intents)
 
