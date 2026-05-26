@@ -205,48 +205,6 @@ const MODERACAO_PADRAO = {
         canais: true,
         cargos: true
     },
-    automod: {
-        ativo: false,
-        bloquear_links: false,
-        bloquear_convites: true,
-        bloquear_palavras: true,
-        anti_spam: true,
-        anti_caps: false,
-        max_mencoes: 6,
-        max_caps_percent: 85,
-        castigo_minutos: 10,
-        apagar_mensagem: true,
-        avisar_usuario: true,
-        castigar_usuario: false
-    },
-    blacklist: {
-        palavras: [],
-        canais_ignorados: [],
-        cargos_imunes: []
-    },
-    permissoes: {
-        cargos_admin: [],
-        cargos_moderador: [],
-        permitir_ban: true,
-        permitir_expulsar: true,
-        permitir_castigar: true,
-        permitir_limpar: true
-    },
-    bot_profile: {
-        responder_mencao: true,
-        dashboard_url: 'https://muniz-amz.github.io/amz-studios/#dashboard',
-        cor_principal: '#ffffff',
-        rodape: 'AMZ Studios'
-    },
-    interface: {
-        modo_compacto: false,
-        mostrar_ids: true,
-        mostrar_avancado: true
-    },
-    profiles: {
-        backup_automatico: false,
-        ultimo_backup: ''
-    },
     auditoria: criarAuditoriaPadrao(),
     seguranca: criarSegurancaPadrao(),
     automacoes: criarAutomacoesPadrao()
@@ -408,34 +366,6 @@ const DASHBOARD_SECTIONS = {
     automations: {
         title: 'Automações',
         description: 'Ações automáticas do servidor.'
-    },
-    misc: {
-        title: 'AutoMod',
-        description: 'Filtros contra links, spam, convites e caps.'
-    },
-    bot: {
-        title: 'Perfil do Bot',
-        description: 'Resposta por mencao, cor e link do dashboard.'
-    },
-    interface: {
-        title: 'Interface',
-        description: 'Preferencias visuais do painel.'
-    },
-    blacklist: {
-        title: 'Blacklist',
-        description: 'Palavras, canais ignorados e cargos imunes.'
-    },
-    global: {
-        title: 'Permissoes',
-        description: 'Cargos e poderes de moderacao.'
-    },
-    profiles: {
-        title: 'Backups',
-        description: 'Perfis e exportacao das configuracoes.'
-    },
-    upgrade: {
-        title: 'Recursos',
-        description: 'Resumo do pacote de moderacao.'
     }
 };
 const MODERACAO_SECTIONS = {
@@ -445,7 +375,7 @@ const MODERACAO_SECTIONS = {
         fields: [
             { type: 'toggle', path: 'logs.ativo', label: 'Ativar logs de moderacao', hint: 'Liga os registros automáticos do servidor.' },
             { type: 'channel', path: 'logs.canal_mensagens_id', namePath: 'logs.canal_mensagens_nome', label: 'Canal de mensagens', hint: 'Mensagens apagadas e editadas.' },
-            { type: 'channel', path: 'logs.canal_moderacao_id', namePath: 'logs.canal_moderacao_nome', label: 'Canal de punicoes', hint: 'Bans, expulsões, castigos e AutoMod.' },
+            { type: 'channel', path: 'logs.canal_moderacao_id', namePath: 'logs.canal_moderacao_nome', label: 'Canal de punicoes', hint: 'Bans, expulsões e castigos.' },
             { type: 'channel', path: 'logs.canal_servidor_id', namePath: 'logs.canal_servidor_nome', label: 'Canal de auditoria', hint: 'Canais, cargos e alterações do servidor.' },
             { type: 'toggle', path: 'logs.mensagens_deletadas', label: 'Logar mensagens deletadas' },
             { type: 'toggle', path: 'logs.mensagens_editadas', label: 'Logar mensagens editadas' },
@@ -456,77 +386,6 @@ const MODERACAO_SECTIONS = {
             { type: 'toggle', path: 'logs.canais', label: 'Logar canais criados/deletados' },
             { type: 'toggle', path: 'logs.cargos', label: 'Logar cargos criados/deletados' }
         ]
-    },
-    misc: {
-        label: 'AutoMod',
-        description: 'Filtros automáticos para apagar mensagens problemáticas e punir abuso.',
-        fields: [
-            { type: 'toggle', path: 'automod.ativo', label: 'Ativar AutoMod' },
-            { type: 'toggle', path: 'automod.bloquear_convites', label: 'Bloquear convites Discord' },
-            { type: 'toggle', path: 'automod.bloquear_links', label: 'Bloquear links' },
-            { type: 'toggle', path: 'automod.bloquear_palavras', label: 'Bloquear palavras da blacklist' },
-            { type: 'toggle', path: 'automod.anti_spam', label: 'Anti-spam/flood' },
-            { type: 'toggle', path: 'automod.anti_caps', label: 'Anti-caps lock' },
-            { type: 'number', path: 'automod.max_mencoes', label: 'Máximo de menções', min: 1, max: 50 },
-            { type: 'number', path: 'automod.max_caps_percent', label: 'Percentual de caps', min: 1, max: 100 },
-            { type: 'number', path: 'automod.castigo_minutos', label: 'Castigo em minutos', min: 1, max: 10080 },
-            { type: 'toggle', path: 'automod.apagar_mensagem', label: 'Apagar mensagem detectada' },
-            { type: 'toggle', path: 'automod.avisar_usuario', label: 'Avisar usuário no canal' },
-            { type: 'toggle', path: 'automod.castigar_usuario', label: 'Castigar usuário automaticamente' }
-        ]
-    },
-    blacklist: {
-        label: 'Blacklist',
-        description: 'Listas usadas pelo AutoMod. Separe itens por linha.',
-        fields: [
-            { type: 'textarea-list', path: 'blacklist.palavras', label: 'Palavras bloqueadas', hint: 'Uma palavra/termo por linha.' },
-            { type: 'textarea-list', path: 'blacklist.canais_ignorados', label: 'IDs de canais ignorados', hint: 'Canais onde o AutoMod não atua.' },
-            { type: 'textarea-list', path: 'blacklist.cargos_imunes', label: 'IDs de cargos imunes', hint: 'Cargos ignorados pelo AutoMod.' }
-        ]
-    },
-    bot: {
-        label: 'Perfil do Bot',
-        description: 'Controla como o bot responde quando é mencionado.',
-        fields: [
-            { type: 'toggle', path: 'bot_profile.responder_mencao', label: 'Responder quando marcarem o bot' },
-            { type: 'text', path: 'bot_profile.dashboard_url', label: 'Link do dashboard' },
-            { type: 'color', path: 'bot_profile.cor_principal', label: 'Cor dos embeds' },
-            { type: 'text', path: 'bot_profile.rodape', label: 'Rodapé dos embeds' }
-        ]
-    },
-    interface: {
-        label: 'Interface',
-        description: 'Preferências de visualização para o painel.',
-        fields: [
-            { type: 'toggle', path: 'interface.modo_compacto', label: 'Modo compacto' },
-            { type: 'toggle', path: 'interface.mostrar_ids', label: 'Mostrar IDs técnicos' },
-            { type: 'toggle', path: 'interface.mostrar_avancado', label: 'Mostrar opções avançadas' }
-        ]
-    },
-    global: {
-        label: 'Permissoes por Cargo',
-        description: 'Defina IDs de cargos e quais ações ficam liberadas para a moderação.',
-        fields: [
-            { type: 'textarea-list', path: 'permissoes.cargos_admin', label: 'Cargos administradores', hint: 'IDs de cargos com acesso total.' },
-            { type: 'textarea-list', path: 'permissoes.cargos_moderador', label: 'Cargos moderadores', hint: 'IDs de cargos de moderação.' },
-            { type: 'toggle', path: 'permissoes.permitir_ban', label: 'Permitir banimento' },
-            { type: 'toggle', path: 'permissoes.permitir_expulsar', label: 'Permitir expulsão' },
-            { type: 'toggle', path: 'permissoes.permitir_castigar', label: 'Permitir castigo' },
-            { type: 'toggle', path: 'permissoes.permitir_limpar', label: 'Permitir limpeza manual' }
-        ]
-    },
-    profiles: {
-        label: 'Backups e Perfis',
-        description: 'Base para salvar perfis de configuração do servidor.',
-        fields: [
-            { type: 'toggle', path: 'profiles.backup_automatico', label: 'Backup automático' },
-            { type: 'text', path: 'profiles.ultimo_backup', label: 'Último backup', disabled: true }
-        ]
-    },
-    upgrade: {
-        label: 'Recursos do Bot',
-        description: 'Pacote atual de ferramentas configuradas no AMZ Bot.',
-        fields: []
     }
 };
 
@@ -1110,6 +969,12 @@ function normalizarAutomacoesLocal(automacoes = {}) {
 
 function normalizarModeracaoLocal(config = {}) {
     const normalizada = mesclarConfig(MODERACAO_PADRAO, config || {});
+    delete normalizada.automod;
+    delete normalizada.blacklist;
+    delete normalizada.permissoes;
+    delete normalizada.bot_profile;
+    delete normalizada.interface;
+    delete normalizada.profiles;
     normalizada.auditoria = normalizarAuditoriaLocal(normalizada.auditoria);
     normalizada.seguranca = normalizarSegurancaLocal(normalizada.seguranca);
     normalizada.automacoes = normalizarAutomacoesLocal(normalizada.automacoes);
@@ -1953,24 +1818,6 @@ function renderizarCampoModeracao(campo) {
 
 function renderizarPainelModeracao(secao, serverName) {
     const modulo = MODERACAO_SECTIONS[secao] || MODERACAO_SECTIONS.role;
-
-    if (secao === 'upgrade') {
-        return `
-            <div class="vm-panel-heading">
-                <span>${escaparHTML(modulo.label)}</span>
-                <strong>${escaparHTML(serverName)}</strong>
-            </div>
-            <div class="mod-config-panel">
-                <div class="mod-intro">
-                    <strong>AMZ Bot completo</strong>
-                    <span>Limpeza, entrada/saida, logs, AutoMod, blacklist, permissoes, painel ADM, midia e comandos slash.</span>
-                </div>
-                <div class="mod-feature-grid">
-                    ${['Logs de mensagens', 'Ban/kick/castigo', 'AutoMod', 'Blacklist', 'Resposta por mencao', 'Painel ADM', 'Conversao de midia', 'Backups'].map((item) => `<span>${escaparHTML(item)}</span>`).join('')}
-                </div>
-            </div>
-        `;
-    }
 
     return `
         <div class="vm-panel-heading">
