@@ -221,6 +221,7 @@ body {
 .vm-sidebar-group {
     display: grid;
     gap: 8px;
+    position: relative;
 }
 
 .vm-sidebar-label {
@@ -826,6 +827,128 @@ section {
 .vm-server-picker:hover,
 .vm-server-picker:focus {
     border-color: rgba(255, 255, 255, 0.42);
+}
+
+.vm-server-picker[aria-expanded="true"] i {
+    transform: rotate(180deg);
+}
+
+.vm-server-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 30;
+    width: 100%;
+    max-height: min(420px, calc(100vh - 160px));
+    display: grid;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #1f1f27;
+    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42);
+    overflow: hidden;
+}
+
+.vm-server-search {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    background: #3b3b45;
+    color: rgba(255, 255, 255, 0.58);
+}
+
+.vm-server-search input {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: #ffffff;
+    outline: none;
+    font-size: 14px;
+}
+
+.vm-server-search input::placeholder {
+    color: rgba(255, 255, 255, 0.58);
+}
+
+.vm-server-list {
+    display: grid;
+    gap: 4px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.vm-server-option {
+    width: 100%;
+    min-height: 54px;
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr) 18px;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    color: #ffffff;
+    text-align: left;
+    border: 1px solid transparent;
+    background: transparent;
+}
+
+.vm-server-option:hover,
+.vm-server-option.active {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.vm-server-option-icon {
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.vm-server-option-icon.fallback {
+    display: grid;
+    place-items: center;
+    background: #090909;
+    font-size: 9px;
+    font-weight: 950;
+}
+
+.vm-server-option span {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.vm-server-option strong {
+    overflow: hidden;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 950;
+    letter-spacing: 0.04em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vm-server-option small {
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.vm-server-option i {
+    color: #ffffff;
+    font-size: 16px;
+}
+
+.vm-server-empty {
+    padding: 14px 8px;
+    color: rgba(255, 255, 255, 0.46);
+    font-size: 11px;
+    line-height: 1.5;
 }
 
 .vm-sidebar-link,
@@ -2203,6 +2326,11 @@ section {
 
     .vm-server-picker {
         min-height: 48px;
+    }
+
+    .vm-server-dropdown {
+        position: static;
+        max-height: 320px;
     }
 
     .vm-sidebar-nav {

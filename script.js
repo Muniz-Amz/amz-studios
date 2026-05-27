@@ -7,6 +7,8 @@ const DISCORD_REDIRECT_PADRAO = 'https://muniz-amz.github.io/amz-studios/';
 const DISCORD_LOGIN_SCOPES = 'identify guilds';
 const DISCORD_BOT_INVITE_SCOPES = 'bot applications.commands';
 const DISCORD_BOT_PERMISSIONS = '8';
+const DISCORD_PERMISSION_ADMINISTRATOR = BigInt(0x8);
+const DISCORD_PERMISSION_MANAGE_GUILD = BigInt(0x20);
 const MAX_MINUTOS_LIMPEZA = 1440;
 const ADMIN_TOKEN_KEY = 'amz_admin_token';
 const MODELO_AVISOS_AMZ = {
@@ -406,7 +408,10 @@ function prepararLoginDiscord() {
 
 function obterServidoresDemo() {
     return [
-        { id: 'demo-celestial', nome: 'Celestial Trindade', icon_url: '' }
+        { id: 'demo-farm', nome: '[Grupin de farm]', icon_url: '', owner: false, permissions: '8' },
+        { id: 'demo-yokai', nome: 'Yokai', icon_url: '', owner: false, permissions: '8' },
+        { id: 'demo-celestial', nome: 'Celestial Trindade', icon_url: '', owner: true, permissions: '8' },
+        { id: 'demo-ketto', nome: 'CELESTIAL//KETTO', icon_url: '', owner: false, permissions: '8' }
     ];
 }
 
@@ -521,6 +526,24 @@ function renderizarAvatarServidor(nome, iconUrl, classe = 'server-avatar') {
     }
 
     return `<span class="${classe} fallback">${escaparHTML(obterIniciaisServidor(nome))}</span>`;
+}
+
+function obterPermissoesServidor(servidor = {}) {
+    try {
+        return BigInt(servidor.permissions ?? servidor.permissoes ?? 0);
+    } catch (erro) {
+        return BigInt(0);
+    }
+}
+
+function obterRotuloPermissaoServidor(servidor = {}) {
+    if (servidor.owner === true || servidor.dono === true) return 'Owner';
+
+    const permissoes = obterPermissoesServidor(servidor);
+    if ((permissoes & DISCORD_PERMISSION_ADMINISTRATOR) === DISCORD_PERMISSION_ADMINISTRATOR) return 'Administrador';
+    if ((permissoes & DISCORD_PERMISSION_MANAGE_GUILD) === DISCORD_PERMISSION_MANAGE_GUILD) return 'Gerenciar servidor';
+
+    return 'Administrador';
 }
 
 function hashAtualNormalizado() {
@@ -756,11 +779,101 @@ function acessarDemoLocal() {
     renderizarServidores(servidoresDemo);
 }
 
+function obterServidorAtualId() {
+    const painelSecao = document.getElementById('dashboard-section-panel');
+    return painelSecao?.dataset.serverId || document.getElementById('vm-server-picker')?.dataset.serverId || '';
+}
+
+function fecharServidorDropdown() {
+    const dropdown = document.getElementById('vm-server-dropdown');
+    const botao = document.getElementById('vm-server-picker');
+
+    if (dropdown) dropdown.classList.add('hidden');
+    if (botao) botao.setAttribute('aria-expanded', 'false');
+}
+
+function abrirServidorDropdown() {
+    const dropdown = document.getElementById('vm-server-dropdown');
+    const botao = document.getElementById('vm-server-picker');
+    const busca = document.getElementById('vm-server-search-input');
+
+    if (!dropdown || !botao) return;
+
+    renderizarMenuServidor(busca?.value || '');
+    dropdown.classList.remove('hidden');
+    botao.setAttribute('aria-expanded', 'true');
+    requestAnimationFrame(() => busca?.focus());
+}
+
+function toggleServidorDropdown(evento) {
+    evento?.preventDefault();
+    evento?.stopPropagation();
+
+    const dropdown = document.getElementById('vm-server-dropdown');
+    if (!dropdown) return;
+
+    if (dropdown.classList.contains('hidden')) {
+        abrirServidorDropdown();
+    } else {
+        fecharServidorDropdown();
+    }
+}
+
+function renderizarMenuServidor(filtro = '') {
+    const lista = document.getElementById('vm-server-list');
+    if (!lista) return;
+
+    const termo = String(filtro || '').trim().toLowerCase();
+    const servidores = obterServidoresCache();
+    const atualId = obterServidorAtualId();
+    const filtrados = servidores.filter((servidor) => String(servidor.nome || '').toLowerCase().includes(termo));
+
+    if (!servidores.length) {
+        lista.innerHTML = '<div class="vm-server-empty">Entre com o Discord para carregar seus servidores.</div>';
+        return;
+    }
+
+    if (!filtrados.length) {
+        lista.innerHTML = '<div class="vm-server-empty">Nenhum servidor encontrado.</div>';
+        return;
+    }
+
+    lista.innerHTML = filtrados.map((servidor) => {
+        const nomeServidor = String(servidor.nome || 'Servidor sem nome');
+        const idServidor = String(servidor.id || '');
+        const iconServidor = obterIconeServidor(servidor);
+        const ativo = idServidor && idServidor === atualId;
+
+        return `
+            <button type="button"
+                    class="vm-server-option ${ativo ? 'active' : ''}"
+                    data-server-picker-item
+                    data-server-id="${escaparHTML(idServidor)}"
+                    data-server-name="${escaparHTML(nomeServidor)}"
+                    data-server-icon="${escaparHTML(iconServidor)}">
+                ${renderizarAvatarServidor(nomeServidor, iconServidor, 'vm-server-option-icon')}
+                <span>
+                    <strong>${escaparHTML(nomeServidor)}</strong>
+                    <small>${escaparHTML(obterRotuloPermissaoServidor(servidor))}</small>
+                </span>
+                ${ativo ? '<i class="ph ph-check"></i>' : ''}
+            </button>
+        `;
+    }).join('');
+
+    lista.querySelectorAll('[data-server-picker-item]').forEach((botao) => {
+        botao.addEventListener('click', () => {
+            configurarServidor(botao.dataset.serverId, botao.dataset.serverName, botao.dataset.serverIcon);
+        });
+    });
+}
+
 function renderizarServidores(servidores) {
     const container = document.getElementById('container-servidores');
     
     if (servidores.length === 0) {
         container.innerHTML = '<p class="text-white/40 text-xs py-4">Você não é Administrador de nenhum servidor em comum.</p>';
+        renderizarMenuServidor();
         return;
     }
 
@@ -792,6 +905,8 @@ function renderizarServidores(servidores) {
             configurarServidor(botao.dataset.serverId, botao.dataset.serverName, botao.dataset.serverIcon);
         });
     });
+
+    renderizarMenuServidor();
 }
 
 // ==========================================
@@ -809,7 +924,8 @@ function configurarServidor(id, nome, iconUrl = '') {
     document.getElementById('lista-servidores').classList.add('hidden');
     document.getElementById('config-limpeza').classList.remove('hidden');
     document.getElementById('nome-servidor-atual').innerText = nome;
-    atualizarServidorAtualNaSidebar(nome, iconUrl);
+    atualizarServidorAtualNaSidebar(nome, iconUrl, id);
+    fecharServidorDropdown();
 
     const nomeDashboard = document.getElementById('dashboard-server-name');
     if (nomeDashboard) nomeDashboard.innerText = nome;
@@ -824,11 +940,18 @@ function configurarServidor(id, nome, iconUrl = '') {
     selecionarSecaoDashboard('setup');
 }
 
-function atualizarServidorAtualNaSidebar(nome, iconUrl = '') {
+function atualizarServidorAtualNaSidebar(nome, iconUrl = '', serverId = '') {
     const nomeAtual = document.getElementById('nome-servidor-atual');
     const avatarAtual = document.getElementById('icone-servidor-atual');
+    const botaoServidor = document.getElementById('vm-server-picker');
 
     if (nomeAtual) nomeAtual.innerText = nome;
+    if (botaoServidor) {
+        botaoServidor.dataset.serverId = serverId;
+        botaoServidor.dataset.serverName = nome;
+        botaoServidor.dataset.serverIcon = iconUrl;
+    }
+
     if (!avatarAtual) return;
 
     if (iconUrl) {
@@ -836,6 +959,8 @@ function atualizarServidorAtualNaSidebar(nome, iconUrl = '') {
     } else {
         avatarAtual.innerHTML = escaparHTML(obterIniciaisServidor(nome));
     }
+
+    renderizarMenuServidor(document.getElementById('vm-server-search-input')?.value || '');
 }
 
 function selecionarSecaoDashboard(secao = 'setup') {
@@ -4207,6 +4332,18 @@ function renderizarLimpezaAdmin(limpeza) {
 window.addEventListener('hashchange', () => {
     if (hashAtualNormalizado() === '#amz-admin') {
         abrirAreaAdmin();
+    }
+});
+
+document.addEventListener('click', (evento) => {
+    if (!evento.target.closest('.vm-sidebar-group')) {
+        fecharServidorDropdown();
+    }
+});
+
+document.addEventListener('keydown', (evento) => {
+    if (evento.key === 'Escape') {
+        fecharServidorDropdown();
     }
 });
 

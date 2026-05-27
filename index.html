@@ -152,13 +152,20 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                     <aside class="vm-sidebar">
                         <div class="vm-sidebar-group">
                             <p class="vm-sidebar-label">SERVER SETTINGS</p>
-                            <button type="button" class="vm-server-picker" onclick="abrirListaServidores()">
+                            <button type="button" class="vm-server-picker" id="vm-server-picker" onclick="toggleServidorDropdown(event)" aria-expanded="false" aria-controls="vm-server-dropdown">
                                 <span class="vm-server-current">
                                     <span id="icone-servidor-atual" class="vm-server-current-icon">AMZ</span>
                                     <span id="nome-servidor-atual">---</span>
                                 </span>
                                 <i class="ph ph-caret-down"></i>
                             </button>
+                            <div class="vm-server-dropdown hidden" id="vm-server-dropdown">
+                                <label class="vm-server-search">
+                                    <i class="ph ph-magnifying-glass"></i>
+                                    <input type="search" id="vm-server-search-input" placeholder="Search servers..." oninput="renderizarMenuServidor(this.value)">
+                                </label>
+                                <div class="vm-server-list" id="vm-server-list"></div>
+                            </div>
                         </div>
 
                         <nav class="vm-sidebar-nav" aria-label="Configuracoes do servidor">

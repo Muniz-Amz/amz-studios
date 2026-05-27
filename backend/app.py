@@ -325,6 +325,8 @@ def montar_servidores_autorizados(token):
                 "nome": guild.get("name", bot_guild.name),
                 "icon": guild.get("icon"),
                 "icon_url": montar_icon_url(guild_id, guild.get("icon")),
+                "owner": bool(guild.get("owner")),
+                "permissions": str(guild.get("permissions", "0")),
             })
 
     return {
