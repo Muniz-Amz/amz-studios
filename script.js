@@ -109,17 +109,76 @@ const antiRaidSettings = [
     { id: 'suspiciousLinks', title: 'Bloquear links suspeitos', description: 'Detecta e bloqueia links suspeitos enviados no servidor.', enabled: true, type: 'links', value: 'Apagar e alertar', fields: [{ id: 'action', label: 'Ação para links suspeitos', type: 'select', value: 'Apagar e alertar', options: ['Apenas apagar mensagem', 'Apagar e alertar', 'Silenciar usuário', 'Expulsar usuário', 'Banir usuário'] }, { id: 'whitelistDomains', label: 'Lista branca de domínios permitidos', type: 'textarea-list', value: [] }, { id: 'blacklistDomains', label: 'Lista negra de domínios bloqueados', type: 'textarea-list', value: [] }] }
 ];
 const automationSettings = [
-    { id: 'autoRole', title: 'Auto cargo', description: 'Define cargos automáticos para novos membros ao entrarem no servidor.', enabled: false, type: 'role', fields: [{ id: 'roleId', label: 'Cargo', type: 'role', value: '' }] },
-    { id: 'autoResponse', title: 'Auto resposta', description: 'Responde automaticamente quando uma palavra-chave for detectada.', enabled: false, type: 'auto-response', fields: [] },
-    { id: 'scheduledMessage', title: 'Mensagem agendada', description: 'Envia mensagens automáticas em horários definidos.', enabled: false, type: 'scheduled-message', fields: [{ id: 'channelId', label: 'Canal', type: 'channel', value: '' }, { id: 'message', label: 'Mensagem', type: 'textarea', value: '' }, { id: 'schedule', label: 'Dia e horario', type: 'datetime-local', value: '' }] },
-    { id: 'autoThread', title: 'Auto thread', description: 'Cria threads automaticamente em canais configurados.', enabled: false, type: 'thread', fields: [{ id: 'channelId', label: 'Canal', type: 'channel', value: '' }, { id: 'threadName', label: 'Nome padrão da thread', type: 'text', value: '' }] },
-    { id: 'commandChannelBlock', title: 'Bloqueio de comandos por canal', description: 'Impede o uso de comandos em canais configurados.', enabled: false, type: 'command-block', fields: [] },
-    { id: 'memberGoalNotice', title: 'Aviso por meta de membros', description: 'Envia uma mensagem automática quando o servidor atingir uma quantidade de membros.', enabled: false, type: 'member-goal', fields: [{ id: 'memberCount', label: 'Número de membros', type: 'number', value: 100, min: 1, max: 10000000 }, { id: 'channelId', label: 'Canal de aviso', type: 'channel', value: '' }, { id: 'message', label: 'Mensagem', type: 'textarea', value: '' }] }
+    {
+        id: 'autoRole',
+        title: 'Auto cargo',
+        description: 'Quando alguem entra no servidor, o bot adiciona o cargo escolhido automaticamente.',
+        enabled: false,
+        type: 'role',
+        notes: ['Afeta apenas novos membros.', 'Se nenhum cargo for escolhido, nada sera aplicado.'],
+        fields: [{ id: 'roleId', label: 'Cargo para novos membros', type: 'role', value: '', hint: 'Cargo que o bot tenta entregar assim que o membro entrar.' }]
+    },
+    {
+        id: 'autoResponse',
+        title: 'Auto resposta',
+        description: 'Quando uma mensagem bater com uma regra ativa, o bot responde no mesmo canal.',
+        enabled: false,
+        type: 'auto-response',
+        notes: ['Cada regra pode ter canal, tipo de deteccao e cooldown proprios.', 'Canal vazio significa que a regra funciona em todos os canais.'],
+        fields: []
+    },
+    {
+        id: 'scheduledMessage',
+        title: 'Mensagem agendada',
+        description: 'Salva uma mensagem para ser enviada no canal escolhido no dia e horario definidos.',
+        enabled: false,
+        type: 'scheduled-message',
+        notes: ['Use uma data futura.', 'O texto sera enviado exatamente para o canal selecionado.'],
+        fields: [
+            { id: 'channelId', label: 'Canal de envio', type: 'channel', value: '', hint: 'Canal onde a mensagem agendada sera publicada.' },
+            { id: 'message', label: 'Mensagem que sera enviada', type: 'textarea', value: '', hint: 'Texto final que o bot deve publicar.' },
+            { id: 'schedule', label: 'Dia e horario do envio', type: 'datetime-local', value: '', hint: 'Escolha pelo calendario para evitar data em formato errado.' }
+        ]
+    },
+    {
+        id: 'autoThread',
+        title: 'Auto thread',
+        description: 'Cria uma thread automaticamente em mensagens novas do canal configurado.',
+        enabled: false,
+        type: 'thread',
+        notes: ['Use em canais de sugestoes, suporte ou midia.', 'O nome padrao pode usar um texto fixo para todas as threads.'],
+        fields: [
+            { id: 'channelId', label: 'Canal monitorado', type: 'channel', value: '', hint: 'Canal onde novas mensagens devem virar threads.' },
+            { id: 'threadName', label: 'Nome padrao da thread', type: 'text', value: '', hint: 'Nome usado ao criar a thread automaticamente.' }
+        ]
+    },
+    {
+        id: 'commandChannelBlock',
+        title: 'Bloqueio de comandos por canal',
+        description: 'Bloqueia comandos nos canais escolhidos. Administradores e moderadores continuam liberados.',
+        enabled: false,
+        type: 'command-block',
+        notes: ['Crie varias regras para canais diferentes.', 'Lista de comandos vazia bloqueia todos os comandos nos canais da regra.'],
+        fields: []
+    },
+    {
+        id: 'memberGoalNotice',
+        title: 'Aviso por meta de membros',
+        description: 'Envia um aviso quando o servidor atingir a quantidade de membros configurada.',
+        enabled: false,
+        type: 'member-goal',
+        notes: ['A meta deve ser maior que o total atual de membros.', 'A mensagem vai para o canal de aviso escolhido.'],
+        fields: [
+            { id: 'memberCount', label: 'Meta de membros', type: 'number', value: 100, min: 1, max: 10000000, hint: 'Numero de membros que dispara o aviso.' },
+            { id: 'channelId', label: 'Canal de aviso', type: 'channel', value: '', hint: 'Onde o bot deve publicar quando a meta for atingida.' },
+            { id: 'message', label: 'Mensagem do aviso', type: 'textarea', value: '', hint: 'Texto que sera enviado ao bater a meta.' }
+        ]
+    }
 ];
 const autoResponseDetectionTypes = [
-    { value: 'contains', label: 'Contém a palavra' },
+    { value: 'contains', label: 'Contem a palavra' },
     { value: 'exact', label: 'Palavra exata' },
-    { value: 'startsWith', label: 'Começa com' },
+    { value: 'startsWith', label: 'Comeca com' },
     { value: 'endsWith', label: 'Termina com' }
 ];
 
@@ -1100,12 +1159,14 @@ function valorCampoConfig(config, campo) {
 function renderizarCampoConfiguravel(escopo, opcaoId, campo) {
     const id = `${escopo}_${opcaoId}_${campo.id}`;
     const attrs = `data-${escopo}-field data-option-id="${escaparHTML(opcaoId)}" data-field-id="${escaparHTML(campo.id)}" data-field-type="${escaparHTML(campo.type)}"`;
+    const hint = campo.hint ? `<small>${escaparHTML(campo.hint)}</small>` : '';
 
     if (campo.type === 'channel') {
         return `
             <label class="advanced-field">
                 <span>${escaparHTML(campo.label)}</span>
                 ${ChannelSelect({ id, attrs })}
+                ${hint}
             </label>
         `;
     }
@@ -1115,6 +1176,7 @@ function renderizarCampoConfiguravel(escopo, opcaoId, campo) {
             <label class="advanced-field">
                 <span>${escaparHTML(campo.label)}</span>
                 ${RoleSelect({ id, attrs })}
+                ${hint}
             </label>
         `;
     }
@@ -1124,6 +1186,7 @@ function renderizarCampoConfiguravel(escopo, opcaoId, campo) {
             <label class="advanced-field advanced-field-wide">
                 <span>${escaparHTML(campo.label)}</span>
                 ${ChannelSelect({ id, attrs, multiple: true })}
+                ${hint}
             </label>
         `;
     }
@@ -1133,6 +1196,7 @@ function renderizarCampoConfiguravel(escopo, opcaoId, campo) {
             <label class="advanced-field advanced-field-wide">
                 <span>${escaparHTML(campo.label)}</span>
                 <textarea id="${escaparHTML(id)}" rows="4" ${attrs}></textarea>
+                ${hint}
             </label>
         `;
     }
@@ -1144,6 +1208,7 @@ function renderizarCampoConfiguravel(escopo, opcaoId, campo) {
                 <select id="${escaparHTML(id)}" ${attrs}>
                     ${(campo.options || []).map((opcao) => `<option value="${escaparHTML(opcao)}">${escaparHTML(opcao)}</option>`).join('')}
                 </select>
+                ${hint}
             </label>
         `;
     }
@@ -1154,6 +1219,7 @@ function renderizarCampoConfiguravel(escopo, opcaoId, campo) {
         <label class="advanced-field">
             <span>${escaparHTML(campo.label)}</span>
             <input id="${escaparHTML(id)}" type="${inputType}" ${attrs} ${campo.min !== undefined ? `min="${escaparHTML(campo.min)}"` : ''} ${campo.max !== undefined ? `max="${escaparHTML(campo.max)}"` : ''}>
+            ${hint}
         </label>
     `;
 }
@@ -1429,42 +1495,54 @@ function AutomationRuleEditor() {
                 <i class="ph ph-chat-circle-dots"></i>
                 <div>
                     <strong>Auto resposta por palavra-chave</strong>
-                    <p>Crie multiplas regras com canal, detecção e cooldown proprios.</p>
+                    <p>O bot le mensagens novas e responde quando o texto combinar com uma regra ativa.</p>
                 </div>
             </div>
             <div class="automation-rule-form">
                 <label class="advanced-toggle-inline">
-                    <span>Regra ativa</span>
+                    <span>
+                        Regra ativa
+                        <small>Desligada fica salva, mas nao responde.</small>
+                    </span>
                     ${ToggleSwitch('auto_response_rule_enabled', true)}
                 </label>
                 <label class="advanced-field">
                     <span>Palavra-chave</span>
                     <input id="auto_response_keyword" type="text" placeholder="arena">
+                    <small>Texto que o bot vai procurar na mensagem do usuario.</small>
                 </label>
                 <label class="advanced-field advanced-field-wide">
                     <span>Resposta automática</span>
                     <textarea id="auto_response_response" rows="4" placeholder="A arena abre todos os dias às 20h! Use /arena para participar."></textarea>
+                    <small>Mensagem que o bot envia quando a regra for acionada.</small>
                 </label>
                 <label class="advanced-field">
-                    <span>Canal onde funciona</span>
+                    <span>Canal da regra</span>
                     ${ChannelSelect({ id: 'auto_response_channel' })}
+                    <small>Vazio = funciona em todos os canais.</small>
                 </label>
                 <label class="advanced-field">
                     <span>Tipo de detecção</span>
                     <select id="auto_response_detection_type">
                         ${autoResponseDetectionTypes.map((tipo) => `<option value="${escaparHTML(tipo.value)}">${escaparHTML(tipo.label)}</option>`).join('')}
                     </select>
+                    <small>Define como a palavra-chave sera comparada com a mensagem.</small>
                 </label>
                 <label class="advanced-field">
                     <span>Cooldown em segundos</span>
                     <input id="auto_response_cooldown" type="number" min="0" max="86400" value="30">
+                    <small>Tempo minimo antes dessa regra responder de novo.</small>
                 </label>
                 <label class="advanced-field">
                     <span>Apagar resposta depois de</span>
                     <input id="auto_response_delete_after" type="number" min="0" max="86400" value="0">
+                    <small>0 deixa a resposta no chat. Outro valor apaga apos esse tempo.</small>
                 </label>
                 <label class="advanced-toggle-inline">
-                    <span>Ignorar administradores/moderadores</span>
+                    <span>
+                        Ignorar administradores/moderadores
+                        <small>Administradores e moderadores nao acionam essa regra quando estiver ligado.</small>
+                    </span>
                     ${ToggleSwitch('auto_response_ignore_staff', false)}
                 </label>
                 <div class="automation-rule-actions">
@@ -1490,21 +1568,26 @@ function CommandBlockRuleEditor() {
                 <i class="ph ph-prohibit"></i>
                 <div>
                     <strong>Regras de bloqueio</strong>
-                    <p>Crie bloqueios separados por canal e, se quiser, por comandos especificos.</p>
+                    <p>Bloqueia comandos nos canais escolhidos; deixe comandos vazio para bloquear todos.</p>
                 </div>
             </div>
             <div class="automation-rule-form">
                 <label class="advanced-toggle-inline">
-                    <span>Regra ativa</span>
+                    <span>
+                        Regra ativa
+                        <small>Desligada fica cadastrada, mas nao bloqueia.</small>
+                    </span>
                     ${ToggleSwitch('command_block_rule_enabled', true)}
                 </label>
                 <label class="advanced-field advanced-field-wide">
                     <span>Canais bloqueados</span>
                     ${ChannelSelect({ id: 'command_block_channels', multiple: true })}
+                    <small>Selecione um ou mais canais onde comandos devem ser bloqueados.</small>
                 </label>
                 <label class="advanced-field advanced-field-wide">
                     <span>Comandos bloqueados</span>
                     <textarea id="command_block_commands" rows="4" placeholder="/play&#10;/limpar&#10;Deixe vazio para bloquear todos os comandos nesses canais."></textarea>
+                    <small>Um comando por linha. Vazio = todos os comandos nesses canais.</small>
                 </label>
                 <div class="automation-rule-actions">
                     <button type="button" onclick="adicionarOuAtualizarBloqueioComando()" id="command_block_save_rule">
@@ -1526,6 +1609,9 @@ function AutomationOptionCard(opcao) {
     const estado = obterSetting(moderacaoAtual.automacoes?.options, opcao.id);
     const campos = (opcao.fields || []).map((campo) => renderizarCampoConfiguravel('automation', opcao.id, campo)).join('');
     const cardAberto = ['auto-response', 'command-block'].includes(opcao.type);
+    const notas = Array.isArray(opcao.notes) && opcao.notes.length
+        ? `<ul class="automation-option-notes">${opcao.notes.map((nota) => `<li>${escaparHTML(nota)}</li>`).join('')}</ul>`
+        : '';
 
     return `
         <article class="automation-option-card ${cardAberto ? 'automation-option-card-wide' : ''}">
@@ -1533,6 +1619,7 @@ function AutomationOptionCard(opcao) {
                 <div>
                     <strong>${escaparHTML(opcao.title)}</strong>
                     <p>${escaparHTML(opcao.description)}</p>
+                    ${notas}
                 </div>
                 ${ToggleSwitch(`automation_enabled_${opcao.id}`, estado.enabled ?? opcao.enabled, `data-automation-enabled data-option-id="${escaparHTML(opcao.id)}"`)}
             </div>
@@ -1556,7 +1643,7 @@ function AutomationsPage(serverName) {
                     <i class="ph ph-lightning"></i>
                     <div>
                         <strong>Ações automáticas do servidor</strong>
-                        <p>Configure cada automação individualmente.</p>
+                        <p>Cada card controla uma automacao separada. Ative, preencha os campos e salve.</p>
                     </div>
                 </div>
                 <div class="automation-option-grid">
@@ -1758,7 +1845,7 @@ function renderizarListaAutoRespostas() {
     }
 
     lista.innerHTML = regras.map((regra) => {
-        const tipo = autoResponseDetectionTypes.find((item) => item.value === regra.detectionType)?.label || 'Contém a palavra';
+        const tipo = autoResponseDetectionTypes.find((item) => item.value === regra.detectionType)?.label || 'Contem a palavra';
         return `
             <article class="automation-rule-item">
                 <div>

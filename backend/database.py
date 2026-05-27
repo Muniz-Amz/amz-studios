@@ -85,12 +85,12 @@ SEGURANCA_ANTI_RAID_PADRAO = [
     {"id": "suspiciousLinks", "title": "Bloquear links suspeitos", "description": "Detecta e bloqueia links suspeitos enviados no servidor.", "enabled": True, "type": "links", "value": "Apagar e alertar", "values": {"action": "Apagar e alertar", "whitelistDomains": [], "blacklistDomains": []}},
 ]
 AUTOMACOES_PADRAO = [
-    {"id": "autoRole", "title": "Auto cargo", "description": "Define cargos automaticos para novos membros ao entrarem no servidor.", "enabled": False, "type": "role", "values": {"roleId": "", "roleIdName": ""}},
-    {"id": "autoResponse", "title": "Auto resposta", "description": "Responde automaticamente quando uma palavra-chave for detectada.", "enabled": False, "type": "auto-response", "values": {}},
-    {"id": "scheduledMessage", "title": "Mensagem agendada", "description": "Envia mensagens automaticas em horarios definidos.", "enabled": False, "type": "scheduled-message", "values": {"channelId": "", "channelIdName": "", "message": "", "schedule": ""}},
-    {"id": "autoThread", "title": "Auto thread", "description": "Cria threads automaticamente em canais configurados.", "enabled": False, "type": "thread", "values": {"channelId": "", "channelIdName": "", "threadName": ""}},
-    {"id": "commandChannelBlock", "title": "Bloqueio de comandos por canal", "description": "Impede o uso de comandos em canais configurados.", "enabled": False, "type": "command-block", "values": {}},
-    {"id": "memberGoalNotice", "title": "Aviso por meta de membros", "description": "Envia uma mensagem automatica quando o servidor atingir uma quantidade de membros.", "enabled": False, "type": "member-goal", "values": {"memberCount": 100, "channelId": "", "channelIdName": "", "message": ""}},
+    {"id": "autoRole", "title": "Auto cargo", "description": "Quando alguem entra no servidor, o bot adiciona o cargo escolhido automaticamente.", "enabled": False, "type": "role", "values": {"roleId": "", "roleIdName": ""}},
+    {"id": "autoResponse", "title": "Auto resposta", "description": "Quando uma mensagem bater com uma regra ativa, o bot responde no mesmo canal.", "enabled": False, "type": "auto-response", "values": {}},
+    {"id": "scheduledMessage", "title": "Mensagem agendada", "description": "Salva uma mensagem para ser enviada no canal escolhido no dia e horario definidos.", "enabled": False, "type": "scheduled-message", "values": {"channelId": "", "channelIdName": "", "message": "", "schedule": ""}},
+    {"id": "autoThread", "title": "Auto thread", "description": "Cria uma thread automaticamente em mensagens novas do canal configurado.", "enabled": False, "type": "thread", "values": {"channelId": "", "channelIdName": "", "threadName": ""}},
+    {"id": "commandChannelBlock", "title": "Bloqueio de comandos por canal", "description": "Bloqueia comandos nos canais escolhidos. Administradores e moderadores continuam liberados.", "enabled": False, "type": "command-block", "values": {}},
+    {"id": "memberGoalNotice", "title": "Aviso por meta de membros", "description": "Envia um aviso quando o servidor atingir a quantidade de membros configurada.", "enabled": False, "type": "member-goal", "values": {"memberCount": 100, "channelId": "", "channelIdName": "", "message": ""}},
 ]
 DETECCOES_AUTO_RESPOSTA = {"contains", "exact", "startsWith", "endsWith"}
 LOG_EVENT_CHANNEL_FIELDS = (
