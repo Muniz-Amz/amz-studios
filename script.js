@@ -121,7 +121,7 @@ const automationSettings = [
     {
         id: 'autoResponse',
         title: 'Auto resposta',
-        description: 'Quando uma mensagem bater com uma regra ativa, o bot responde no mesmo canal.',
+        description: 'Quando uma mensagem bater com uma auto resposta ligada, o bot responde no mesmo canal.',
         enabled: false,
         type: 'auto-response',
         notes: ['Cada regra pode ter canal, tipo de deteccao e cooldown proprios.', 'Canal vazio significa que a regra funciona em todos os canais.'],
@@ -1495,14 +1495,14 @@ function AutomationRuleEditor() {
                 <i class="ph ph-chat-circle-dots"></i>
                 <div>
                     <strong>Auto resposta por palavra-chave</strong>
-                    <p>O bot le mensagens novas e responde quando o texto combinar com uma regra ativa.</p>
+                    <p>O bot le mensagens novas e responde quando o texto combinar com uma auto resposta ligada.</p>
                 </div>
             </div>
             <div class="automation-rule-form">
                 <label class="advanced-toggle-inline">
                     <span>
-                        Regra ativa
-                        <small>Desligada fica salva, mas nao responde.</small>
+                        Ativar esta auto resposta
+                        <small>Ligado: o bot responde. Desligado: a regra fica salva, mas nao funciona.</small>
                     </span>
                     ${ToggleSwitch('auto_response_rule_enabled', true)}
                 </label>
@@ -1574,8 +1574,8 @@ function CommandBlockRuleEditor() {
             <div class="automation-rule-form">
                 <label class="advanced-toggle-inline">
                     <span>
-                        Regra ativa
-                        <small>Desligada fica cadastrada, mas nao bloqueia.</small>
+                        Ativar este bloqueio
+                        <small>Ligado: comandos sao bloqueados nesses canais. Desligado: fica salvo, mas nao bloqueia.</small>
                     </span>
                     ${ToggleSwitch('command_block_rule_enabled', true)}
                 </label>
