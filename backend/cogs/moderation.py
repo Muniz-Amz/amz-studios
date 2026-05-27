@@ -1,7 +1,9 @@
 import asyncio
+import ipaddress
 import re
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 import discord
 from discord.ext import commands
@@ -10,9 +12,41 @@ from database import buscar_moderacao, registrar_historico_auditoria
 
 
 URL_RE = re.compile(r"https?://|www\.", re.IGNORECASE)
+URL_EXTRACT_RE = re.compile(r"(https?://[^\s<>()]+|www\.[^\s<>()]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s<>()]*)?)", re.IGNORECASE)
 INVITE_RE = re.compile(r"(discord\.gg/|discord(?:app)?\.com/invite/)", re.IGNORECASE)
 SPAM_WINDOW_SECONDS = 8
 SPAM_LIMIT = 5
+SUSPICIOUS_SHORTENER_DOMAINS = {
+    "bit.ly",
+    "bitly.com",
+    "tinyurl.com",
+    "t.co",
+    "is.gd",
+    "cutt.ly",
+    "ow.ly",
+    "rebrand.ly",
+    "shorturl.at",
+    "buff.ly",
+    "adf.ly",
+    "goo.gl",
+}
+TRUSTED_LINK_DOMAINS = {
+    "discord.com",
+    "discord.gg",
+    "discordapp.com",
+    "github.com",
+    "youtube.com",
+    "youtu.be",
+    "twitch.tv",
+    "x.com",
+    "twitter.com",
+}
+SUSPICIOUS_LINK_KEYWORDS = re.compile(
+    r"(free[-_ ]?nitro|nitro[-_ ]?free|steam[-_ ]?gift|airdrop|claim[-_ ]?reward|verify[-_ ]?account|"
+    r"login[-_ ]?verify|wallet[-_ ]?connect|metamask|robux|gift[-_ ]?card|giveaway|scam|phishing|"
+    r"presente|premio|brinde)",
+    re.IGNORECASE,
+)
 LOG_EVENT_CHANNEL_KEYS = {
     "mensagens_deletadas": "canal_mensagens_deletadas_id",
     "mensagens_editadas": "canal_mensagens_editadas_id",
@@ -43,6 +77,39 @@ def contem_palavra_bloqueada(conteudo, palavras):
         if item and item in texto:
             return item
     return None
+
+
+def normalizar_dominio(valor):
+    dominio = str(valor or "").strip().lower()
+    dominio = re.sub(r"^https?://", "", dominio)
+    dominio = dominio.split("/")[0].split(":")[0].strip(".")
+
+    try:
+        return dominio.encode("idna").decode("ascii")
+    except UnicodeError:
+        return dominio
+
+
+def dominio_em_lista(dominio, dominios):
+    alvo = normalizar_dominio(dominio)
+    if not alvo:
+        return False
+
+    for item in dominios or []:
+        permitido = normalizar_dominio(item)
+        if permitido and (alvo == permitido or alvo.endswith(f".{permitido}")):
+            return True
+
+    return False
+
+
+def extrair_links(conteudo):
+    links = []
+    for match in URL_EXTRACT_RE.finditer(str(conteudo or "")):
+        bruto = match.group(0).strip(".,;:!?)]}>\"'")
+        if bruto:
+            links.append(bruto)
+    return links
 
 
 def caps_percentual(conteudo):
@@ -117,6 +184,20 @@ class ModerationCog(commands.Cog):
             if opcao.get("id") == automacao_id:
                 return opcao.get("values") or {}
         return {}
+
+    def setting_seguranca(self, config, setting_id):
+        settings = config.get("seguranca", {}).get("antiRaid", {}).get("settings", [])
+        for setting in settings:
+            if setting.get("id") == setting_id:
+                return setting
+        return {}
+
+    def valores_seguranca(self, config, setting_id):
+        return self.setting_seguranca(config, setting_id).get("values") or {}
+
+    def seguranca_ativa(self, config, setting_id):
+        setting = self.setting_seguranca(config, setting_id)
+        return bool(setting and setting.get("enabled"))
 
     def comando_bloqueado(self, config, channel_id, command_name):
         if not self.automacao_ativa(config, "commandChannelBlock"):
@@ -281,6 +362,13 @@ class ModerationCog(commands.Cog):
 
         return await self.resolver_canal_texto(guild, canal_id)
 
+    async def canal_seguranca(self, guild, config):
+        if not self.seguranca_ativa(config, "securityLogChannel"):
+            return None
+
+        canal_id = self.valores_seguranca(config, "securityLogChannel").get("channelId")
+        return await self.resolver_canal_texto(guild, canal_id)
+
     def evento_auditoria(self, config, event_id):
         auditoria = config.get("auditoria", {})
         for evento in auditoria.get("events", []):
@@ -323,9 +411,16 @@ class ModerationCog(commands.Cog):
         if usar_auditoria:
             canal = await self.canal_auditoria(guild, config, event_id)
         else:
-            if tipo == "auditoria" or not logs.get("ativo"):
+            if tipo == "seguranca":
+                canal = await self.canal_seguranca(guild, config)
+                if not canal and logs.get("ativo"):
+                    canal = await self.canal_log(guild, config, "moderacao", log_key)
+                if not canal:
+                    return
+            elif tipo == "auditoria" or not logs.get("ativo"):
                 return
-            canal = await self.canal_log(guild, config, tipo, log_key)
+            else:
+                canal = await self.canal_log(guild, config, tipo, log_key)
 
         if not canal:
             if usar_auditoria:
@@ -398,6 +493,141 @@ class ModerationCog(commands.Cog):
                 continue
 
         return None
+
+    def link_suspeito(self, link, config):
+        valores = self.valores_seguranca(config, "suspiciousLinks")
+        permitidos = valores.get("whitelistDomains") or []
+        bloqueados = valores.get("blacklistDomains") or []
+        auto_detection = valores.get("autoDetection", True)
+        url = link if re.match(r"^https?://", link, re.IGNORECASE) else f"https://{link}"
+
+        try:
+            parsed = urlparse(url)
+        except ValueError:
+            return "link com formato invalido"
+
+        dominio = normalizar_dominio(parsed.hostname or "")
+        if not dominio:
+            return None
+
+        if dominio_em_lista(dominio, permitidos):
+            return None
+
+        if dominio_em_lista(dominio, bloqueados):
+            return f"dominio bloqueado: {dominio}"
+
+        if not auto_detection:
+            return None
+
+        if parsed.username or parsed.password:
+            return "link tenta esconder o destino com usuario/senha"
+
+        if dominio in SUSPICIOUS_SHORTENER_DOMAINS:
+            return f"encurtador suspeito: {dominio}"
+
+        try:
+            ipaddress.ip_address(dominio)
+            return f"link com IP direto: {dominio}"
+        except ValueError:
+            pass
+
+        if dominio.startswith("xn--") or ".xn--" in dominio:
+            return f"dominio internacionalizado suspeito: {dominio}"
+
+        partes = [parte for parte in dominio.split(".") if parte]
+        if len(partes) >= 5:
+            return f"muitos subdominios: {dominio}"
+
+        texto_link = f"{dominio} {parsed.path} {parsed.query}".lower()
+        if dominio_em_lista(dominio, TRUSTED_LINK_DOMAINS):
+            return None
+
+        if SUSPICIOUS_LINK_KEYWORDS.search(texto_link):
+            return f"padrao de phishing/scam: {dominio}"
+
+        if "discord" in dominio and not dominio_em_lista(dominio, {"discord.com", "discord.gg", "discordapp.com"}):
+            return f"dominio parecido com Discord: {dominio}"
+
+        return None
+
+    def detectar_link_suspeito(self, conteudo, config):
+        if not self.seguranca_ativa(config, "suspiciousLinks"):
+            return None
+
+        for link in extrair_links(conteudo):
+            motivo = self.link_suspeito(link, config)
+            if motivo:
+                return motivo
+
+        return None
+
+    async def punir_link_suspeito(self, message, config, motivo):
+        valores = self.valores_seguranca(config, "suspiciousLinks")
+        acao_configurada = str(valores.get("action") or "Apagar e alertar").strip().lower()
+        acoes = []
+
+        try:
+            await message.delete()
+            acoes.append("mensagem apagada")
+        except (discord.Forbidden, discord.HTTPException):
+            acoes.append("falha ao apagar")
+
+        if "alertar" in acao_configurada:
+            try:
+                await message.channel.send(
+                    f"{message.author.mention}, seu link foi bloqueado por parecer suspeito.",
+                    delete_after=8,
+                    allowed_mentions=discord.AllowedMentions(users=True, roles=False, everyone=False),
+                )
+                acoes.append("usuario alertado")
+            except discord.HTTPException:
+                acoes.append("falha ao alertar")
+
+        if "silenciar" in acao_configurada and isinstance(message.author, discord.Member):
+            minutos = int(config.get("automod", {}).get("castigo_minutos", 10) or 10)
+            ate = datetime.now(timezone.utc) + timedelta(minutes=min(max(minutos, 1), 10080))
+            try:
+                if hasattr(message.author, "timeout"):
+                    await message.author.timeout(ate, reason=f"AMZ Seguranca: {motivo}")
+                else:
+                    await message.author.edit(timed_out_until=ate, reason=f"AMZ Seguranca: {motivo}")
+                acoes.append(f"silenciado {minutos}min")
+            except (discord.Forbidden, discord.HTTPException):
+                acoes.append("falha ao silenciar")
+
+        if "expulsar" in acao_configurada and isinstance(message.author, discord.Member):
+            try:
+                await message.author.kick(reason=f"AMZ Seguranca: {motivo}")
+                acoes.append("usuario expulso")
+            except (discord.Forbidden, discord.HTTPException):
+                acoes.append("falha ao expulsar")
+
+        if "banir" in acao_configurada and isinstance(message.author, discord.Member):
+            try:
+                try:
+                    await message.author.ban(reason=f"AMZ Seguranca: {motivo}", delete_message_seconds=0)
+                except TypeError:
+                    await message.author.ban(reason=f"AMZ Seguranca: {motivo}", delete_message_days=0)
+                acoes.append("usuario banido")
+            except (discord.Forbidden, discord.HTTPException):
+                acoes.append("falha ao banir")
+
+        await self.enviar_log(
+            message.guild,
+            config,
+            "seguranca",
+            "Link suspeito bloqueado",
+            f"{message.author} em {message.channel.mention}",
+            discord.Color.red(),
+            [
+                ("Motivo", motivo, False),
+                ("Acao configurada", valores.get("action") or "Apagar e alertar", True),
+                ("Acoes executadas", ", ".join(acoes) or "nenhuma", False),
+                ("Conteudo", message.content or "--", False),
+            ],
+            event_id="links_suspeitos_bloqueados",
+            responsavel=message.author,
+        )
 
     async def punir_automod(self, message, config, motivo):
         automod = config.get("automod", {})
@@ -502,10 +732,15 @@ class ModerationCog(commands.Cog):
 
         await self.aplicar_auto_respostas(message, config)
 
-        if not automod.get("ativo") or str(message.channel.id) in ids_lista(blacklist.get("canais_ignorados")):
+        if self.usuario_imune(message.author, config):
             return
 
-        if self.usuario_imune(message.author, config):
+        motivo_link = self.detectar_link_suspeito(message.content, config)
+        if motivo_link:
+            await self.punir_link_suspeito(message, config, motivo_link)
+            return
+
+        if not automod.get("ativo") or str(message.channel.id) in ids_lista(blacklist.get("canais_ignorados")):
             return
 
         motivo = self.detectar_violacao(message, config)

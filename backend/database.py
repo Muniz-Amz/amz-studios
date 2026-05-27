@@ -82,7 +82,7 @@ SEGURANCA_ANTI_RAID_PADRAO = [
     {"id": "blockUnknownBots", "title": "Bloquear bots desconhecidos", "description": "Impede a entrada de bots nao autorizados no servidor.", "enabled": True, "type": "toggle", "value": True, "values": {}},
     {"id": "notifyAdmins", "title": "Notificar administradores", "description": "Envia alerta para administradores quando uma raid for detectada.", "enabled": True, "type": "toggle", "value": True, "values": {}},
     {"id": "securityLogChannel", "title": "Canal de logs", "description": "Define o canal onde os alertas e logs de seguranca serao enviados.", "enabled": True, "type": "channel", "value": "", "values": {"channelId": "", "channelIdName": ""}},
-    {"id": "suspiciousLinks", "title": "Bloquear links suspeitos", "description": "Detecta e bloqueia links suspeitos enviados no servidor.", "enabled": True, "type": "links", "value": "Apagar e alertar", "values": {"action": "Apagar e alertar", "whitelistDomains": [], "blacklistDomains": []}},
+    {"id": "suspiciousLinks", "title": "Bloquear links suspeitos", "description": "Detecta automaticamente phishing, scam, encurtadores suspeitos e dominios disfarcados.", "enabled": True, "type": "links", "value": "Apagar e alertar", "values": {"action": "Apagar e alertar", "autoDetection": True, "whitelistDomains": [], "blacklistDomains": []}},
 ]
 AUTOMACOES_PADRAO = [
     {"id": "autoRole", "title": "Auto cargo", "description": "Quando alguem entra no servidor, o bot adiciona o cargo escolhido automaticamente.", "enabled": False, "type": "role", "values": {"roleId": "", "roleIdName": ""}},

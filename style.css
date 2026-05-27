@@ -1586,7 +1586,8 @@ section {
     line-height: 1.5;
 }
 
-.automation-option-notes {
+.automation-option-notes,
+.security-option-notes {
     display: grid;
     gap: 4px;
     margin: 8px 0 0;
@@ -1595,6 +1596,7 @@ section {
 }
 
 .automation-option-notes li,
+.security-option-notes li,
 .advanced-field small,
 .advanced-toggle-inline small {
     color: rgba(255, 255, 255, 0.38);
@@ -1634,6 +1636,23 @@ section {
     align-items: flex-start;
     justify-content: space-between;
     gap: 14px;
+}
+
+.advanced-control-card > div {
+    min-width: 0;
+}
+
+.advanced-control-card > select {
+    flex: 0 1 280px;
+    width: min(100%, 280px);
+    min-width: 220px;
+    min-height: 42px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #050505;
+    color: #ffffff;
+    outline: none;
+    padding: 10px;
+    font-size: 12px;
 }
 
 .advanced-field-grid,
@@ -1699,6 +1718,7 @@ section {
 .advanced-field input:focus,
 .advanced-field select:focus,
 .advanced-field textarea:focus,
+.advanced-control-card > select:focus,
 .automation-rule-form input:focus,
 .automation-rule-form select:focus,
 .automation-rule-form textarea:focus {
@@ -1941,6 +1961,12 @@ section {
         width: 100%;
         justify-content: space-between;
         white-space: normal;
+    }
+
+    .advanced-control-card > select {
+        flex-basis: auto;
+        min-width: 0;
+        width: 100%;
     }
 
     .audit-history-item,

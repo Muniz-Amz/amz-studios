@@ -105,8 +105,21 @@ const antiRaidSettings = [
     { id: 'lockdownTime', title: 'Tempo de Lockdown', description: 'Define por quanto tempo o servidor ficará em lockdown.', enabled: true, type: 'number', value: 10, fields: [{ id: 'minutes', label: 'Tempo em minutos', type: 'number', value: 10, min: 1, max: 1440 }] },
     { id: 'blockUnknownBots', title: 'Bloquear bots desconhecidos', description: 'Impede a entrada de bots não autorizados no servidor.', enabled: true, type: 'toggle', value: true },
     { id: 'notifyAdmins', title: 'Notificar administradores', description: 'Envia alerta para administradores quando uma raid for detectada.', enabled: true, type: 'toggle', value: true },
-    { id: 'securityLogChannel', title: 'Canal de logs', description: 'Define o canal onde os alertas e logs de segurança serão enviados.', enabled: true, type: 'channel', value: '', fields: [{ id: 'channelId', label: 'Canal de logs', type: 'channel', value: '' }] },
-    { id: 'suspiciousLinks', title: 'Bloquear links suspeitos', description: 'Detecta e bloqueia links suspeitos enviados no servidor.', enabled: true, type: 'links', value: 'Apagar e alertar', fields: [{ id: 'action', label: 'Ação para links suspeitos', type: 'select', value: 'Apagar e alertar', options: ['Apenas apagar mensagem', 'Apagar e alertar', 'Silenciar usuário', 'Expulsar usuário', 'Banir usuário'] }, { id: 'whitelistDomains', label: 'Lista branca de domínios permitidos', type: 'textarea-list', value: [] }, { id: 'blacklistDomains', label: 'Lista negra de domínios bloqueados', type: 'textarea-list', value: [] }] }
+    { id: 'securityLogChannel', title: 'Canal de logs', description: 'Define o canal onde os alertas e logs de segurança serão enviados.', enabled: true, type: 'channel', value: '', fields: [{ id: 'channelId', label: 'Canal de logs', type: 'channel', value: '', hint: 'Canal que recebe alertas de raid, links suspeitos e ações automáticas.' }] },
+    {
+        id: 'suspiciousLinks',
+        title: 'Bloquear links suspeitos',
+        description: 'Detecta automaticamente phishing, scam, encurtadores suspeitos e dominios disfarçados.',
+        enabled: true,
+        type: 'links',
+        value: 'Apagar e alertar',
+        notes: ['Nao precisa preencher dominios para funcionar.', 'As listas abaixo sao opcionais: use apenas para liberar ou bloquear dominios especificos.'],
+        fields: [
+            { id: 'action', label: 'O que fazer quando detectar', type: 'select', value: 'Apagar e alertar', options: ['Apenas apagar mensagem', 'Apagar e alertar', 'Silenciar usuário', 'Expulsar usuário', 'Banir usuário'], hint: 'Ação aplicada quando o bot identificar um link suspeito.' },
+            { id: 'whitelistDomains', label: 'Dominios sempre permitidos (opcional)', type: 'textarea-list', value: [], hint: 'Dominios confiaveis que nunca devem ser bloqueados, um por linha.' },
+            { id: 'blacklistDomains', label: 'Dominios sempre bloqueados (opcional)', type: 'textarea-list', value: [], hint: 'Dominios que sempre devem ser bloqueados, um por linha.' }
+        ]
+    }
 ];
 const automationSettings = [
     {
@@ -1421,6 +1434,9 @@ function SecuritySummary() {
 function SecurityOptionCard(opcao) {
     const estado = obterSetting(moderacaoAtual.seguranca?.antiRaid?.settings, opcao.id);
     const campos = (opcao.fields || []).map((campo) => renderizarCampoConfiguravel('security', opcao.id, campo)).join('');
+    const notas = Array.isArray(opcao.notes) && opcao.notes.length
+        ? `<ul class="security-option-notes">${opcao.notes.map((nota) => `<li>${escaparHTML(nota)}</li>`).join('')}</ul>`
+        : '';
 
     return `
         <article class="security-option-card">
@@ -1428,6 +1444,7 @@ function SecurityOptionCard(opcao) {
                 <div>
                     <strong>${escaparHTML(opcao.title)}</strong>
                     <p>${escaparHTML(opcao.description)}</p>
+                    ${notas}
                 </div>
                 ${ToggleSwitch(`security_enabled_${opcao.id}`, estado.enabled ?? opcao.enabled, `data-security-enabled data-option-id="${escaparHTML(opcao.id)}"`)}
             </div>
