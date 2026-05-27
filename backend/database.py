@@ -88,10 +88,8 @@ AUTOMACOES_PADRAO = [
     {"id": "autoRole", "title": "Auto cargo", "description": "Define cargos automaticos para novos membros ao entrarem no servidor.", "enabled": False, "type": "role", "values": {"roleId": "", "roleIdName": ""}},
     {"id": "autoResponse", "title": "Auto resposta", "description": "Responde automaticamente quando uma palavra-chave for detectada.", "enabled": False, "type": "auto-response", "values": {}},
     {"id": "scheduledMessage", "title": "Mensagem agendada", "description": "Envia mensagens automaticas em horarios definidos.", "enabled": False, "type": "scheduled-message", "values": {"channelId": "", "channelIdName": "", "message": "", "schedule": ""}},
-    {"id": "autoReaction", "title": "Auto reacao", "description": "Adiciona reacoes automaticamente em mensagens de canais especificos.", "enabled": False, "type": "reaction", "values": {"channelId": "", "channelIdName": "", "emoji": ""}},
     {"id": "autoThread", "title": "Auto thread", "description": "Cria threads automaticamente em canais configurados.", "enabled": False, "type": "thread", "values": {"channelId": "", "channelIdName": "", "threadName": ""}},
-    {"id": "ruleCleanup", "title": "Auto limpeza por regra", "description": "Remove mensagens automaticamente de acordo com regras configuradas.", "enabled": False, "type": "cleanup-rule", "values": {"channelId": "", "channelIdName": "", "ruleType": "Mensagens antigas", "amountOrTime": ""}},
-    {"id": "commandChannelBlock", "title": "Bloqueio de comandos por canal", "description": "Impede o uso de comandos em canais nao permitidos.", "enabled": False, "type": "blocked-channels", "values": {"blockedChannelIds": []}},
+    {"id": "commandChannelBlock", "title": "Bloqueio de comandos por canal", "description": "Impede o uso de comandos em canais configurados.", "enabled": False, "type": "command-block", "values": {}},
     {"id": "memberGoalNotice", "title": "Aviso por meta de membros", "description": "Envia uma mensagem automatica quando o servidor atingir uma quantidade de membros.", "enabled": False, "type": "member-goal", "values": {"memberCount": 100, "channelId": "", "channelIdName": "", "message": ""}},
 ]
 DETECCOES_AUTO_RESPOSTA = {"contains", "exact", "startsWith", "endsWith"}
@@ -203,6 +201,7 @@ PADRAO_MODERACAO = {
         "lastExecution": "",
         "options": copy.deepcopy(AUTOMACOES_PADRAO),
         "autoResponses": [],
+        "commandBlockRules": [],
     },
 }
 
@@ -533,6 +532,33 @@ def _normalizar_auto_respostas(valores):
     return [regra for regra in regras if regra["keyword"] and regra["response"]]
 
 
+def _normalizar_bloqueios_comandos(valores):
+    if not isinstance(valores, list):
+        return []
+
+    regras = []
+    for indice, regra in enumerate(valores[:50]):
+        if not isinstance(regra, dict):
+            continue
+
+        canais = _normalizar_lista_texto(regra.get("channelIds") or regra.get("channel_ids"), 100, 32)
+        nomes = _normalizar_lista_texto(regra.get("channelNames") or regra.get("channel_names"), 100, 120)
+        comandos = _normalizar_lista_texto(regra.get("commands") or regra.get("comandos"), 100, 80)
+
+        if not canais:
+            continue
+
+        regras.append({
+            "id": _limitar_texto(regra.get("id"), 80, f"command-block-{indice + 1}"),
+            "enabled": _normalizar_bool(regra.get("enabled", regra.get("ativo", True))),
+            "channelIds": canais,
+            "channelNames": nomes,
+            "commands": comandos,
+        })
+
+    return regras
+
+
 def _normalizar_automacoes(dados):
     automacoes = dados if isinstance(dados, dict) else {}
 
@@ -540,6 +566,7 @@ def _normalizar_automacoes(dados):
         "lastExecution": _limitar_texto(automacoes.get("lastExecution") or automacoes.get("last_execution"), 120),
         "options": _normalizar_opcoes_configuraveis(AUTOMACOES_PADRAO, automacoes.get("options")),
         "autoResponses": _normalizar_auto_respostas(automacoes.get("autoResponses") or automacoes.get("auto_responses")),
+        "commandBlockRules": _normalizar_bloqueios_comandos(automacoes.get("commandBlockRules") or automacoes.get("command_block_rules")),
     }
 
 

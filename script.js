@@ -111,11 +111,9 @@ const antiRaidSettings = [
 const automationSettings = [
     { id: 'autoRole', title: 'Auto cargo', description: 'Define cargos automáticos para novos membros ao entrarem no servidor.', enabled: false, type: 'role', fields: [{ id: 'roleId', label: 'Cargo', type: 'role', value: '' }] },
     { id: 'autoResponse', title: 'Auto resposta', description: 'Responde automaticamente quando uma palavra-chave for detectada.', enabled: false, type: 'auto-response', fields: [] },
-    { id: 'scheduledMessage', title: 'Mensagem agendada', description: 'Envia mensagens automáticas em horários definidos.', enabled: false, type: 'scheduled-message', fields: [{ id: 'channelId', label: 'Canal', type: 'channel', value: '' }, { id: 'message', label: 'Mensagem', type: 'textarea', value: '' }, { id: 'schedule', label: 'Data ou intervalo', type: 'text', value: '' }] },
-    { id: 'autoReaction', title: 'Auto reação', description: 'Adiciona reações automaticamente em mensagens de canais específicos.', enabled: false, type: 'reaction', fields: [{ id: 'channelId', label: 'Canal', type: 'channel', value: '' }, { id: 'emoji', label: 'Emoji', type: 'text', value: '' }] },
+    { id: 'scheduledMessage', title: 'Mensagem agendada', description: 'Envia mensagens automáticas em horários definidos.', enabled: false, type: 'scheduled-message', fields: [{ id: 'channelId', label: 'Canal', type: 'channel', value: '' }, { id: 'message', label: 'Mensagem', type: 'textarea', value: '' }, { id: 'schedule', label: 'Dia e horario', type: 'datetime-local', value: '' }] },
     { id: 'autoThread', title: 'Auto thread', description: 'Cria threads automaticamente em canais configurados.', enabled: false, type: 'thread', fields: [{ id: 'channelId', label: 'Canal', type: 'channel', value: '' }, { id: 'threadName', label: 'Nome padrão da thread', type: 'text', value: '' }] },
-    { id: 'ruleCleanup', title: 'Auto limpeza por regra', description: 'Remove mensagens automaticamente de acordo com regras configuradas.', enabled: false, type: 'cleanup-rule', fields: [{ id: 'channelId', label: 'Canal', type: 'channel', value: '' }, { id: 'ruleType', label: 'Tipo de regra', type: 'select', value: 'Mensagens antigas', options: ['Mensagens antigas', 'Limite de quantidade', 'Links', 'Convites', 'Palavras bloqueadas'] }, { id: 'amountOrTime', label: 'Tempo ou quantidade', type: 'text', value: '' }] },
-    { id: 'commandChannelBlock', title: 'Bloqueio de comandos por canal', description: 'Impede o uso de comandos em canais não permitidos.', enabled: false, type: 'blocked-channels', fields: [{ id: 'blockedChannelIds', label: 'Canais bloqueados', type: 'channel-multi', value: [] }] },
+    { id: 'commandChannelBlock', title: 'Bloqueio de comandos por canal', description: 'Impede o uso de comandos em canais configurados.', enabled: false, type: 'command-block', fields: [] },
     { id: 'memberGoalNotice', title: 'Aviso por meta de membros', description: 'Envia uma mensagem automática quando o servidor atingir uma quantidade de membros.', enabled: false, type: 'member-goal', fields: [{ id: 'memberCount', label: 'Número de membros', type: 'number', value: 100, min: 1, max: 10000000 }, { id: 'channelId', label: 'Canal de aviso', type: 'channel', value: '' }, { id: 'message', label: 'Mensagem', type: 'textarea', value: '' }] }
 ];
 const autoResponseDetectionTypes = [
@@ -184,7 +182,8 @@ function criarAutomacoesPadrao() {
             value: JSON.parse(JSON.stringify(opcao.value ?? '')),
             values: criarValoresCamposPadrao(opcao.fields)
         })),
-        autoResponses: []
+        autoResponses: [],
+        commandBlockRules: []
     };
 }
 const MODERACAO_PADRAO = {
@@ -227,6 +226,9 @@ const MODERACAO_PADRAO = {
 };
 let moderacaoAtual = JSON.parse(JSON.stringify(MODERACAO_PADRAO));
 let automacaoRegraEditandoId = '';
+let comandoBloqueioEditandoId = '';
+let moderacaoServidorCarregadoId = '';
+let moderacaoRecursosAtual = { canais: [], cargos: [] };
 
 function normalizarMinutosLimpeza(minutos) {
     const valor = Number.parseInt(minutos, 10);
@@ -724,6 +726,14 @@ function renderizarServidores(servidores) {
 // CONFIGURAÇÕES DO SERVIDOR
 // ==========================================
 function configurarServidor(id, nome, iconUrl = '') {
+    if (moderacaoServidorCarregadoId !== id) {
+        moderacaoAtual = normalizarModeracaoLocal(clonarConfig(MODERACAO_PADRAO));
+        moderacaoServidorCarregadoId = '';
+        moderacaoRecursosAtual = { canais: [], cargos: [] };
+        automacaoRegraEditandoId = '';
+        comandoBloqueioEditandoId = '';
+    }
+
     document.getElementById('lista-servidores').classList.add('hidden');
     document.getElementById('config-limpeza').classList.remove('hidden');
     document.getElementById('nome-servidor-atual').innerText = nome;
@@ -757,6 +767,7 @@ function atualizarServidorAtualNaSidebar(nome, iconUrl = '') {
 }
 
 function selecionarSecaoDashboard(secao = 'setup') {
+    preservarCamposDashboardAtual();
     const info = DASHBOARD_SECTIONS[secao] || DASHBOARD_SECTIONS.setup;
 
     document.querySelectorAll('[data-dashboard-section]').forEach((elemento) => {
@@ -986,6 +997,15 @@ function normalizarAutomacoesLocal(automacoes = {}) {
                 ignoreStaff: Boolean(regra.ignoreStaff ?? regra.ignore_staff),
                 deleteAfterSeconds: Number.parseInt(regra.deleteAfterSeconds ?? regra.delete_after_seconds ?? 0, 10) || 0
             }))
+            : [],
+        commandBlockRules: Array.isArray(automacoes.commandBlockRules || automacoes.command_block_rules)
+            ? (automacoes.commandBlockRules || automacoes.command_block_rules).map((regra) => ({
+                id: regra.id || `command-block-${Date.now()}`,
+                enabled: Boolean(regra.enabled ?? regra.ativo),
+                channelIds: Array.isArray(regra.channelIds || regra.channel_ids) ? (regra.channelIds || regra.channel_ids).map(String) : [],
+                channelNames: Array.isArray(regra.channelNames || regra.channel_names) ? (regra.channelNames || regra.channel_names).map(String) : [],
+                commands: Array.isArray(regra.commands || regra.comandos) ? (regra.commands || regra.comandos).map(String) : []
+            }))
             : []
     };
 }
@@ -1063,6 +1083,12 @@ function obterNomeSelecionado(select, datasetKey) {
     return option?.dataset?.[datasetKey] || '';
 }
 
+function obterNomesSelecionados(select, datasetKey) {
+    return Array.from(select?.selectedOptions || [])
+        .map((option) => option.dataset?.[datasetKey] || option.textContent.trim())
+        .filter(Boolean);
+}
+
 function obterSetting(lista = [], id) {
     return (Array.isArray(lista) ? lista : []).find((item) => item.id === id) || {};
 }
@@ -1122,10 +1148,12 @@ function renderizarCampoConfiguravel(escopo, opcaoId, campo) {
         `;
     }
 
+    const inputType = campo.type === 'number' ? 'number' : campo.type === 'datetime-local' ? 'datetime-local' : 'text';
+
     return `
         <label class="advanced-field">
             <span>${escaparHTML(campo.label)}</span>
-            <input id="${escaparHTML(id)}" type="${campo.type === 'number' ? 'number' : 'text'}" ${attrs} ${campo.min !== undefined ? `min="${escaparHTML(campo.min)}"` : ''} ${campo.max !== undefined ? `max="${escaparHTML(campo.max)}"` : ''}>
+            <input id="${escaparHTML(id)}" type="${inputType}" ${attrs} ${campo.min !== undefined ? `min="${escaparHTML(campo.min)}"` : ''} ${campo.max !== undefined ? `max="${escaparHTML(campo.max)}"` : ''}>
         </label>
     `;
 }
@@ -1381,12 +1409,14 @@ function AutomationSummary() {
     const automacoes = normalizarAutomacoesLocal(moderacaoAtual.automacoes);
     const ativas = automacoes.options.filter((opcao) => opcao.enabled).length;
     const regrasAtivas = automacoes.autoResponses.filter((regra) => regra.enabled).length;
+    const bloqueiosAtivos = automacoes.commandBlockRules.filter((regra) => regra.enabled).length;
 
     return `
         <div class="summary-grid">
             <article><span>Automações ativas</span><strong>${ativas}</strong></article>
             <article><span>Regras de auto resposta</span><strong>${automacoes.autoResponses.length}</strong></article>
             <article><span>Auto respostas ativas</span><strong>${regrasAtivas}</strong></article>
+            <article><span>Bloqueios de comandos</span><strong>${bloqueiosAtivos}</strong></article>
             <article><span>Última execução</span><strong>${escaparHTML(automacoes.lastExecution || 'Nenhuma automação executada')}</strong></article>
         </div>
     `;
@@ -1453,12 +1483,52 @@ function AutomationRuleEditor() {
     `;
 }
 
+function CommandBlockRuleEditor() {
+    return `
+        <div class="automation-rule-editor">
+            <div class="advanced-section-heading">
+                <i class="ph ph-prohibit"></i>
+                <div>
+                    <strong>Regras de bloqueio</strong>
+                    <p>Crie bloqueios separados por canal e, se quiser, por comandos especificos.</p>
+                </div>
+            </div>
+            <div class="automation-rule-form">
+                <label class="advanced-toggle-inline">
+                    <span>Regra ativa</span>
+                    ${ToggleSwitch('command_block_rule_enabled', true)}
+                </label>
+                <label class="advanced-field advanced-field-wide">
+                    <span>Canais bloqueados</span>
+                    ${ChannelSelect({ id: 'command_block_channels', multiple: true })}
+                </label>
+                <label class="advanced-field advanced-field-wide">
+                    <span>Comandos bloqueados</span>
+                    <textarea id="command_block_commands" rows="4" placeholder="/play&#10;/limpar&#10;Deixe vazio para bloquear todos os comandos nesses canais."></textarea>
+                </label>
+                <div class="automation-rule-actions">
+                    <button type="button" onclick="adicionarOuAtualizarBloqueioComando()" id="command_block_save_rule">
+                        <i class="ph ph-plus-circle"></i>
+                        Adicionar bloqueio
+                    </button>
+                    <button type="button" onclick="limparEditorBloqueioComando()">
+                        <i class="ph ph-eraser"></i>
+                        Limpar
+                    </button>
+                </div>
+            </div>
+            <div class="automation-rule-list" id="command-block-rules"></div>
+        </div>
+    `;
+}
+
 function AutomationOptionCard(opcao) {
     const estado = obterSetting(moderacaoAtual.automacoes?.options, opcao.id);
     const campos = (opcao.fields || []).map((campo) => renderizarCampoConfiguravel('automation', opcao.id, campo)).join('');
+    const cardAberto = ['auto-response', 'command-block'].includes(opcao.type);
 
     return `
-        <article class="automation-option-card ${opcao.type === 'auto-response' ? 'automation-option-card-wide' : ''}">
+        <article class="automation-option-card ${cardAberto ? 'automation-option-card-wide' : ''}">
             <div class="advanced-card-heading">
                 <div>
                     <strong>${escaparHTML(opcao.title)}</strong>
@@ -1467,6 +1537,7 @@ function AutomationOptionCard(opcao) {
                 ${ToggleSwitch(`automation_enabled_${opcao.id}`, estado.enabled ?? opcao.enabled, `data-automation-enabled data-option-id="${escaparHTML(opcao.id)}"`)}
             </div>
             ${opcao.type === 'auto-response' ? AutomationRuleEditor() : ''}
+            ${opcao.type === 'command-block' ? CommandBlockRuleEditor() : ''}
             ${campos ? `<div class="advanced-field-grid">${campos}</div>` : ''}
         </article>
     `;
@@ -1583,6 +1654,7 @@ function coletarCamposSeguranca() {
 
 function preencherCamposAutomacoes(canais = [], cargos = []) {
     moderacaoAtual.automacoes = normalizarAutomacoesLocal(moderacaoAtual.automacoes);
+    moderacaoRecursosAtual = { canais, cargos };
     const resumo = document.getElementById('automation-summary');
     if (resumo) resumo.innerHTML = AutomationSummary();
 
@@ -1598,7 +1670,9 @@ function preencherCamposAutomacoes(canais = [], cargos = []) {
     });
 
     preencherChannelSelect(document.getElementById('auto_response_channel'), canais, '');
+    preencherChannelSelect(document.getElementById('command_block_channels'), canais, [], false);
     renderizarListaAutoRespostas();
+    renderizarListaBloqueiosComando();
 }
 
 function preencherPainelConfiguracaoAtual(secao, canais = [], cargos = []) {
@@ -1618,6 +1692,35 @@ function preencherPainelConfiguracaoAtual(secao, canais = [], cargos = []) {
     }
 
     preencherCamposModeracao(canais);
+}
+
+function preservarCamposDashboardAtual() {
+    const painelSecao = document.getElementById('dashboard-section-panel');
+    if (!painelSecao) return;
+    if (painelSecao.dataset.serverId && painelSecao.dataset.serverId !== moderacaoServidorCarregadoId) return;
+
+    try {
+        if (painelSecao.querySelector('.audit-page')) {
+            coletarCamposAuditoria();
+            return;
+        }
+
+        if (painelSecao.querySelector('.security-page')) {
+            coletarCamposSeguranca();
+            return;
+        }
+
+        if (painelSecao.querySelector('.automations-page')) {
+            coletarCamposAutomacoes();
+            return;
+        }
+
+        if (painelSecao.querySelector('.mod-config-panel')) {
+            coletarCamposModeracao();
+        }
+    } catch (erro) {
+        console.warn('Nao consegui preservar os campos atuais:', erro);
+    }
 }
 
 function coletarCamposAutomacoes() {
@@ -1709,12 +1812,7 @@ function adicionarOuAtualizarRegraAutoResposta() {
         moderacaoAtual.automacoes.autoResponses.push(regra);
     }
 
-    const autoResponseToggle = document.getElementById('automation_enabled_autoResponse');
-    if (autoResponseToggle) autoResponseToggle.checked = true;
-
-    moderacaoAtual.automacoes.options = moderacaoAtual.automacoes.options.map((opcao) => (
-        opcao.id === 'autoResponse' ? { ...opcao, enabled: true } : opcao
-    ));
+    ativarOpcaoAutomacao('autoResponse');
 
     automacaoRegraEditandoId = '';
     limparEditorAutoResposta(false);
@@ -1777,6 +1875,127 @@ function limparEditorAutoResposta(limparStatus = true) {
 
     const botao = document.getElementById('auto_response_save_rule');
     if (botao) botao.innerHTML = '<i class="ph ph-plus-circle"></i> Adicionar nova regra';
+    if (limparStatus) mostrarStatusModeracao('Editor limpo.', 'success');
+}
+
+function ativarOpcaoAutomacao(opcaoId) {
+    const toggle = document.getElementById(`automation_enabled_${opcaoId}`);
+    if (toggle) toggle.checked = true;
+
+    moderacaoAtual.automacoes.options = moderacaoAtual.automacoes.options.map((opcao) => (
+        opcao.id === opcaoId ? { ...opcao, enabled: true } : opcao
+    ));
+}
+
+function renderizarListaBloqueiosComando() {
+    const lista = document.getElementById('command-block-rules');
+    if (!lista) return;
+
+    const regras = normalizarAutomacoesLocal(moderacaoAtual.automacoes).commandBlockRules;
+    moderacaoAtual.automacoes.commandBlockRules = regras;
+
+    if (!regras.length) {
+        lista.innerHTML = '<div class="advanced-empty">Nenhum bloqueio de comandos cadastrado.</div>';
+        return;
+    }
+
+    lista.innerHTML = regras.map((regra) => {
+        const canais = regra.channelNames.length ? regra.channelNames.join(', ') : `${regra.channelIds.length} canal(is)`;
+        const comandos = regra.commands.length ? regra.commands.join(', ') : 'Todos os comandos';
+
+        return `
+            <article class="automation-rule-item">
+                <div>
+                    <strong>${escaparHTML(canais || 'Sem canal')}</strong>
+                    <span>${escaparHTML(comandos)}</span>
+                </div>
+                <em class="${regra.enabled ? 'sent' : 'failed'}">${regra.enabled ? 'ON' : 'OFF'}</em>
+                <button type="button" onclick="editarBloqueioComando('${escaparHTML(regra.id)}')">
+                    <i class="ph ph-pencil-simple"></i>
+                    Editar
+                </button>
+                <button type="button" onclick="excluirBloqueioComando('${escaparHTML(regra.id)}')">
+                    <i class="ph ph-trash"></i>
+                    Excluir
+                </button>
+            </article>
+        `;
+    }).join('');
+}
+
+function obterDadosEditorBloqueioComando() {
+    const canais = document.getElementById('command_block_channels');
+    return {
+        id: comandoBloqueioEditandoId || `command-block-${Date.now()}`,
+        enabled: Boolean(document.getElementById('command_block_rule_enabled')?.checked),
+        channelIds: Array.from(canais?.selectedOptions || []).map((option) => option.value).filter(Boolean),
+        channelNames: obterNomesSelecionados(canais, 'channelName'),
+        commands: textoParaLista(document.getElementById('command_block_commands')?.value || '')
+    };
+}
+
+function adicionarOuAtualizarBloqueioComando() {
+    moderacaoAtual.automacoes = normalizarAutomacoesLocal(moderacaoAtual.automacoes);
+    const regra = obterDadosEditorBloqueioComando();
+
+    if (!regra.channelIds.length) {
+        mostrarStatusModeracao('Selecione pelo menos um canal para criar o bloqueio.');
+        return;
+    }
+
+    const indice = moderacaoAtual.automacoes.commandBlockRules.findIndex((item) => item.id === regra.id);
+    if (indice >= 0) {
+        moderacaoAtual.automacoes.commandBlockRules[indice] = regra;
+    } else {
+        moderacaoAtual.automacoes.commandBlockRules.push(regra);
+    }
+
+    ativarOpcaoAutomacao('commandChannelBlock');
+    comandoBloqueioEditandoId = '';
+    limparEditorBloqueioComando(false);
+    renderizarListaBloqueiosComando();
+    const resumo = document.getElementById('automation-summary');
+    if (resumo) resumo.innerHTML = AutomationSummary();
+    mostrarStatusModeracao('Bloqueio pronto. Salve as automacoes para sincronizar.', 'success');
+}
+
+function editarBloqueioComando(id) {
+    const regra = normalizarAutomacoesLocal(moderacaoAtual.automacoes).commandBlockRules.find((item) => item.id === id);
+    if (!regra) return;
+
+    comandoBloqueioEditandoId = regra.id;
+    document.getElementById('command_block_rule_enabled').checked = regra.enabled;
+    preencherChannelSelect(document.getElementById('command_block_channels'), moderacaoRecursosAtual.canais, regra.channelIds, false);
+    document.getElementById('command_block_commands').value = listaParaTexto(regra.commands);
+
+    const botao = document.getElementById('command_block_save_rule');
+    if (botao) botao.innerHTML = '<i class="ph ph-check-circle"></i> Salvar ediÃ§Ã£o';
+}
+
+function excluirBloqueioComando(id) {
+    if (!window.confirm('Excluir este bloqueio de comandos?')) return;
+    moderacaoAtual.automacoes = normalizarAutomacoesLocal(moderacaoAtual.automacoes);
+    moderacaoAtual.automacoes.commandBlockRules = moderacaoAtual.automacoes.commandBlockRules.filter((regra) => regra.id !== id);
+    if (comandoBloqueioEditandoId === id) comandoBloqueioEditandoId = '';
+    limparEditorBloqueioComando(false);
+    renderizarListaBloqueiosComando();
+    const resumo = document.getElementById('automation-summary');
+    if (resumo) resumo.innerHTML = AutomationSummary();
+}
+
+function limparEditorBloqueioComando(limparStatus = true) {
+    comandoBloqueioEditandoId = '';
+
+    const ativo = document.getElementById('command_block_rule_enabled');
+    if (ativo) ativo.checked = true;
+
+    preencherChannelSelect(document.getElementById('command_block_channels'), moderacaoRecursosAtual.canais, [], false);
+
+    const comandos = document.getElementById('command_block_commands');
+    if (comandos) comandos.value = '';
+
+    const botao = document.getElementById('command_block_save_rule');
+    if (botao) botao.innerHTML = '<i class="ph ph-plus-circle"></i> Adicionar bloqueio';
     if (limparStatus) mostrarStatusModeracao('Editor limpo.', 'success');
 }
 
@@ -1954,6 +2173,44 @@ function chaveModeracaoDemo(serverId) {
     return `moderacao_demo_${serverId}`;
 }
 
+function chaveModeracaoCache(serverId) {
+    return `moderacao_cache_${serverId}`;
+}
+
+function chaveModeracaoRecursosCache(serverId) {
+    return `moderacao_recursos_cache_${serverId}`;
+}
+
+function obterModeracaoCache(serverId) {
+    try {
+        return JSON.parse(localStorage.getItem(chaveModeracaoCache(serverId)) || 'null');
+    } catch {
+        return null;
+    }
+}
+
+function salvarModeracaoCache(serverId, config) {
+    if (!serverId) return;
+    localStorage.setItem(chaveModeracaoCache(serverId), JSON.stringify(normalizarModeracaoLocal(config)));
+}
+
+function obterRecursosModeracaoCache(serverId) {
+    try {
+        const recursos = JSON.parse(localStorage.getItem(chaveModeracaoRecursosCache(serverId)) || '{}');
+        return {
+            canais: Array.isArray(recursos.canais) ? recursos.canais : [],
+            cargos: Array.isArray(recursos.cargos) ? recursos.cargos : []
+        };
+    } catch {
+        return { canais: [], cargos: [] };
+    }
+}
+
+function salvarRecursosModeracaoCache(serverId, canais = [], cargos = []) {
+    if (!serverId) return;
+    localStorage.setItem(chaveModeracaoRecursosCache(serverId), JSON.stringify({ canais, cargos }));
+}
+
 async function carregarModeracaoServidor(secao) {
     const painelSecao = document.getElementById('dashboard-section-panel');
     const serverId = painelSecao?.dataset.serverId || '';
@@ -1966,6 +2223,12 @@ async function carregarModeracaoServidor(secao) {
         return;
     }
 
+    if (moderacaoServidorCarregadoId === serverId) {
+        preencherPainelConfiguracaoAtual(secao, moderacaoRecursosAtual.canais, moderacaoRecursosAtual.cargos);
+        mostrarStatusModeracao('Configuracao pronta. Salve para sincronizar alteracoes.', 'success');
+        return;
+    }
+
     if (token === 'demo-token') {
         try {
             moderacaoAtual = normalizarModeracaoLocal(JSON.parse(localStorage.getItem(chaveModeracaoDemo(serverId)) || '{}'));
@@ -1974,6 +2237,8 @@ async function carregarModeracaoServidor(secao) {
         }
         canais = obterCanaisDemo();
         cargos = obterCargosDemo();
+        moderacaoServidorCarregadoId = serverId;
+        moderacaoRecursosAtual = { canais, cargos };
         preencherPainelConfiguracaoAtual(secao, canais, cargos);
         mostrarStatusModeracao('Modo teste local. Configuracao salva no navegador.', 'success');
         return;
@@ -1982,6 +2247,18 @@ async function carregarModeracaoServidor(secao) {
     if (!token) {
         mostrarStatusModeracao('Sessao expirada. Entre novamente com o Discord.');
         return;
+    }
+
+    const configCache = obterModeracaoCache(serverId);
+    const recursosCache = obterRecursosModeracaoCache(serverId);
+
+    if (configCache) {
+        moderacaoAtual = normalizarModeracaoLocal(configCache);
+        moderacaoRecursosAtual = recursosCache;
+        canais = recursosCache.canais;
+        cargos = recursosCache.cargos;
+        preencherPainelConfiguracaoAtual(secao, recursosCache.canais, recursosCache.cargos);
+        mostrarStatusModeracao('Mostrando configuracao salva enquanto sincronizo com a API.', 'success');
     }
 
     try {
@@ -2002,7 +2279,8 @@ async function carregarModeracaoServidor(secao) {
 
         if (responseConfig.ok && resultadoConfig.status === 'sucesso') {
             moderacaoAtual = normalizarModeracaoLocal(resultadoConfig.moderacao || {});
-        } else {
+            salvarModeracaoCache(serverId, moderacaoAtual);
+        } else if (!configCache) {
             moderacaoAtual = normalizarModeracaoLocal(clonarConfig(MODERACAO_PADRAO));
         }
 
@@ -2014,10 +2292,19 @@ async function carregarModeracaoServidor(secao) {
             cargos = resultadoCargos.cargos || [];
         }
 
+        moderacaoServidorCarregadoId = serverId;
+        moderacaoRecursosAtual = { canais, cargos };
+        salvarRecursosModeracaoCache(serverId, canais, cargos);
         preencherPainelConfiguracaoAtual(secao, canais, cargos);
         mostrarStatusModeracao('Configuracao carregada.', 'success');
     } catch (erro) {
         console.error('Erro ao carregar moderacao:', erro);
+        if (configCache) {
+            moderacaoServidorCarregadoId = serverId;
+            mostrarStatusModeracao('API demorou. Mantive a ultima configuracao salva localmente.', 'success');
+            return;
+        }
+
         moderacaoAtual = normalizarModeracaoLocal(clonarConfig(MODERACAO_PADRAO));
         preencherPainelConfiguracaoAtual(secao, [], []);
         mostrarStatusModeracao('Erro ao conectar na API.');
@@ -2034,6 +2321,8 @@ async function salvarModeracaoServidor() {
 
     coletarCamposModeracao();
     moderacaoAtual = normalizarModeracaoLocal(moderacaoAtual);
+    moderacaoServidorCarregadoId = serverId;
+    salvarModeracaoCache(serverId, moderacaoAtual);
 
     if (token === 'demo-token') {
         localStorage.setItem(chaveModeracaoDemo(serverId), JSON.stringify(moderacaoAtual));
@@ -2060,6 +2349,7 @@ async function salvarModeracaoServidor() {
 
         if (response.ok && resultado.status === 'sucesso') {
             moderacaoAtual = normalizarModeracaoLocal(resultado.moderacao || moderacaoAtual);
+            salvarModeracaoCache(serverId, moderacaoAtual);
             mostrarStatusModeracao('Moderacao salva e sincronizada com o bot.', 'success');
             return;
         }

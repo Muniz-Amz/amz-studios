@@ -58,6 +58,26 @@ class ModerationCog(commands.Cog):
         self.bot = bot
         self.spam_cache = defaultdict(lambda: deque(maxlen=12))
         self.auto_response_cooldowns = {}
+        self._interaction_check_original = None
+
+    async def cog_load(self):
+        self.bot.add_check(self.comando_prefixo_permitido)
+        self._interaction_check_original = self.bot.tree.interaction_check
+
+        async def verificar_interacao(interaction):
+            if self._interaction_check_original:
+                permitido = await self._interaction_check_original(interaction)
+                if not permitido:
+                    return False
+
+            return await self.comando_slash_permitido(interaction)
+
+        self.bot.tree.interaction_check = verificar_interacao
+
+    async def cog_unload(self):
+        self.bot.remove_check(self.comando_prefixo_permitido)
+        if self._interaction_check_original:
+            self.bot.tree.interaction_check = self._interaction_check_original
 
     async def obter_config(self, guild):
         if not guild:
@@ -97,6 +117,71 @@ class ModerationCog(commands.Cog):
             if opcao.get("id") == automacao_id:
                 return opcao.get("values") or {}
         return {}
+
+    def comando_bloqueado(self, config, channel_id, command_name):
+        if not self.automacao_ativa(config, "commandChannelBlock"):
+            return False
+
+        nome_comando = str(command_name or "").strip().lower().lstrip("/!")
+        if not nome_comando:
+            return False
+
+        for regra in config.get("automacoes", {}).get("commandBlockRules", []):
+            if not regra.get("enabled"):
+                continue
+
+            canais = ids_lista(regra.get("channelIds"))
+            if str(channel_id) not in canais:
+                continue
+
+            comandos = {
+                str(comando or "").strip().lower().lstrip("/!")
+                for comando in regra.get("commands", [])
+                if str(comando or "").strip()
+            }
+
+            if not comandos or nome_comando in comandos:
+                return True
+
+        return False
+
+    async def comando_prefixo_permitido(self, ctx):
+        if not ctx.guild or not ctx.command:
+            return True
+
+        config = await self.obter_config(ctx.guild)
+        if self.usuario_staff(ctx.author, config):
+            return True
+
+        if not self.comando_bloqueado(config, ctx.channel.id, ctx.command.qualified_name):
+            return True
+
+        try:
+            await ctx.reply("Este comando esta bloqueado neste canal.", mention_author=False, delete_after=8)
+        except discord.HTTPException:
+            pass
+
+        return False
+
+    async def comando_slash_permitido(self, interaction):
+        if not interaction.guild or not interaction.command:
+            return True
+
+        config = await self.obter_config(interaction.guild)
+        if self.usuario_staff(interaction.user, config):
+            return True
+
+        command_name = getattr(interaction.command, "qualified_name", None) or getattr(interaction.command, "name", None)
+        if not self.comando_bloqueado(config, interaction.channel_id, command_name):
+            return True
+
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.send_message("Este comando esta bloqueado neste canal.", ephemeral=True)
+        except discord.HTTPException:
+            pass
+
+        return False
 
     def auditoria_ativa_ou_log_legado(self, config, chave_legada):
         if config.get("auditoria", {}).get("enabled"):
