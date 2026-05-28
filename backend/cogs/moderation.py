@@ -16,6 +16,29 @@ URL_EXTRACT_RE = re.compile(r"(https?://[^\s<>()]+|www\.[^\s<>()]+|(?:[a-z0-9-]+
 INVITE_RE = re.compile(r"(discord\.gg/|discord(?:app)?\.com/invite/)", re.IGNORECASE)
 SPAM_WINDOW_SECONDS = 8
 SPAM_LIMIT = 5
+CONFIG_CACHE_TTL_SECONDS = 8
+AUDIT_RATE_LIMIT_WINDOW_SECONDS = 10
+AUDIT_RATE_LIMIT_DEFAULT = 12
+AUDIT_RATE_LIMITS = {
+    "mensagem_apagada": 8,
+    "mensagem_editada": 8,
+    "voz_entrada": 6,
+    "voz_saida": 6,
+    "voz_movido": 6,
+    "voz_mute": 6,
+    "voz_deafen": 6,
+    "voz_desconectado": 6,
+}
+AUDIT_HIGH_PRIORITY_EVENTS = {
+    "banimentos",
+    "expulsoes",
+    "silenciamentos",
+    "remocao_punicoes",
+    "raid_detectada",
+    "bot_desconhecido_bloqueado",
+    "conta_suspeita_bloqueada",
+    "erro_bot",
+}
 SUSPICIOUS_SHORTENER_DOMAINS = {
     "bit.ly",
     "bitly.com",
@@ -124,6 +147,8 @@ class ModerationCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.spam_cache = defaultdict(lambda: deque(maxlen=12))
+        self.audit_rate_limits = defaultdict(deque)
+        self.config_cache = {}
         self.auto_response_cooldowns = {}
         self._interaction_check_original = None
 
@@ -149,7 +174,20 @@ class ModerationCog(commands.Cog):
     async def obter_config(self, guild):
         if not guild:
             return {}
-        return await buscar_moderacao(str(guild.id))
+
+        guild_id = str(guild.id)
+        agora = datetime.now(timezone.utc).timestamp()
+        cache = self.config_cache.get(guild_id)
+
+        if cache and agora - cache["timestamp"] < CONFIG_CACHE_TTL_SECONDS:
+            return cache["config"]
+
+        config = await buscar_moderacao(guild_id)
+        self.config_cache[guild_id] = {
+            "config": config,
+            "timestamp": agora,
+        }
+        return config
 
     def usuario_imune(self, member, config):
         if not isinstance(member, discord.Member):
@@ -264,10 +302,38 @@ class ModerationCog(commands.Cog):
 
         return False
 
-    def auditoria_ativa_ou_log_legado(self, config, chave_legada):
-        if config.get("auditoria", {}).get("enabled"):
+    def auditoria_evento_ativo(self, config, event_id):
+        if not event_id:
             return True
+
+        auditoria = config.get("auditoria", {})
+        if not auditoria.get("enabled"):
+            return False
+
+        evento = self.evento_auditoria(config, event_id)
+        return bool(evento and evento.get("enabled"))
+
+    def auditoria_ativa_ou_log_legado(self, config, chave_legada, event_id=None):
+        if config.get("auditoria", {}).get("enabled"):
+            return self.auditoria_evento_ativo(config, event_id) if event_id else True
         return config.get("logs", {}).get(chave_legada)
+
+    def auditoria_tem_cota(self, guild_id, event_id):
+        if not guild_id or not event_id or event_id in AUDIT_HIGH_PRIORITY_EVENTS:
+            return True
+
+        limite = AUDIT_RATE_LIMITS.get(event_id, AUDIT_RATE_LIMIT_DEFAULT)
+        agora = datetime.now(timezone.utc).timestamp()
+        janela = self.audit_rate_limits[(guild_id, event_id)]
+
+        while janela and agora - janela[0] > AUDIT_RATE_LIMIT_WINDOW_SECONDS:
+            janela.popleft()
+
+        if len(janela) >= limite:
+            return False
+
+        janela.append(agora)
+        return True
 
     def regra_auto_resposta_corresponde(self, conteudo, regra):
         palavra = str(regra.get("keyword") or "").strip().lower()
@@ -386,6 +452,11 @@ class ModerationCog(commands.Cog):
         canal_id = evento.get("channelId") or auditoria.get("defaultChannelId")
         return await self.resolver_canal_texto(guild, canal_id)
 
+    def mencionar_canal_por_id(self, channel_id):
+        if not channel_id:
+            return "--"
+        return f"<#{channel_id}> (`{channel_id}`)"
+
     def data_hora_log(self):
         return datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
 
@@ -409,6 +480,12 @@ class ModerationCog(commands.Cog):
         usar_auditoria = bool(event_id and config.get("auditoria", {}).get("enabled"))
 
         if usar_auditoria:
+            if not self.auditoria_evento_ativo(config, event_id):
+                return
+
+            if not self.auditoria_tem_cota(guild.id, event_id):
+                return
+
             canal = await self.canal_auditoria(guild, config, event_id)
         else:
             if tipo == "seguranca":
@@ -753,7 +830,7 @@ class ModerationCog(commands.Cog):
             return
 
         config = await self.obter_config(message.guild)
-        if not self.auditoria_ativa_ou_log_legado(config, "mensagens_deletadas"):
+        if not self.auditoria_ativa_ou_log_legado(config, "mensagens_deletadas", "mensagem_apagada"):
             return
 
         anexos = "\n".join(attachment.url for attachment in message.attachments) or "--"
@@ -771,12 +848,78 @@ class ModerationCog(commands.Cog):
         )
 
     @commands.Cog.listener()
+    async def on_raw_message_delete(self, payload):
+        if not payload.guild_id or getattr(payload, "cached_message", None):
+            return
+
+        guild = self.bot.get_guild(payload.guild_id)
+        if not guild:
+            return
+
+        config = await self.obter_config(guild)
+        if not self.auditoria_ativa_ou_log_legado(config, "mensagens_deletadas", "mensagem_apagada"):
+            return
+
+        await self.enviar_log(
+            guild,
+            config,
+            "mensagens",
+            "Mensagem deletada",
+            (
+                f"Canal: {self.mencionar_canal_por_id(payload.channel_id)}\n"
+                f"Mensagem ID: `{payload.message_id}`\n"
+                "Autor: nao disponivel"
+            ),
+            discord.Color.red(),
+            [
+                (
+                    "Conteudo",
+                    "Nao disponivel. A mensagem nao estava no cache do bot quando foi apagada.",
+                    False,
+                )
+            ],
+            event_id="mensagem_apagada",
+            responsavel="Usuario nao identificado",
+            log_key="mensagens_deletadas",
+        )
+
+    @commands.Cog.listener()
+    async def on_raw_bulk_message_delete(self, payload):
+        if not payload.guild_id:
+            return
+
+        guild = self.bot.get_guild(payload.guild_id)
+        if not guild:
+            return
+
+        config = await self.obter_config(guild)
+        if not self.auditoria_ativa_ou_log_legado(config, "mensagens_deletadas", "mensagem_apagada"):
+            return
+
+        ids_mensagens = sorted(str(message_id) for message_id in payload.message_ids)
+        await self.enviar_log(
+            guild,
+            config,
+            "mensagens",
+            "Mensagens deletadas em massa",
+            (
+                f"Canal: {self.mencionar_canal_por_id(payload.channel_id)}\n"
+                f"Quantidade: `{len(ids_mensagens)}`"
+            ),
+            discord.Color.red(),
+            [("Mensagens", texto_curto(", ".join(ids_mensagens), 1024), False)],
+            event_id="mensagem_apagada",
+            responsavel="Usuario nao identificado",
+            log_key="mensagens_deletadas",
+        )
+
+    @commands.Cog.listener()
     async def on_message_edit(self, before, after):
         if not before.guild or before.author.bot or before.content == after.content:
             return
 
         config = await self.obter_config(before.guild)
-        if not self.auditoria_ativa_ou_log_legado(config, "mensagens_editadas"):
+        if not self.auditoria_ativa_ou_log_legado(config, "mensagens_editadas", "mensagem_editada"):
             return
 
         await self.enviar_log(
@@ -795,14 +938,14 @@ class ModerationCog(commands.Cog):
     @commands.Cog.listener()
     async def on_member_ban(self, guild, user):
         config = await self.obter_config(guild)
-        if not self.auditoria_ativa_ou_log_legado(config, "banimentos"):
+        if not self.auditoria_ativa_ou_log_legado(config, "banimentos", "banimentos"):
             return
         await self.enviar_log(guild, config, "moderacao", "Membro banido", f"{user} (`{user.id}`)", discord.Color.dark_red(), event_id="banimentos", responsavel=user, log_key="banimentos")
 
     @commands.Cog.listener()
     async def on_member_remove(self, member):
         config = await self.obter_config(member.guild)
-        if not self.auditoria_ativa_ou_log_legado(config, "expulsoes"):
+        if not self.auditoria_ativa_ou_log_legado(config, "expulsoes", "expulsoes"):
             return
 
         await asyncio.sleep(1.5)
@@ -830,7 +973,7 @@ class ModerationCog(commands.Cog):
     @commands.Cog.listener()
     async def on_member_unban(self, guild, user):
         config = await self.obter_config(guild)
-        if not self.auditoria_ativa_ou_log_legado(config, "desbanimentos"):
+        if not self.auditoria_ativa_ou_log_legado(config, "desbanimentos", "remocao_punicoes"):
             return
         await self.enviar_log(guild, config, "moderacao", "Membro desbanido", f"{user} (`{user.id}`)", discord.Color.green(), event_id="remocao_punicoes", responsavel=user, log_key="desbanimentos")
 
@@ -859,17 +1002,18 @@ class ModerationCog(commands.Cog):
         config = await self.obter_config(after.guild)
 
         if before.timed_out_until != after.timed_out_until:
-            if self.auditoria_ativa_ou_log_legado(config, "castigos"):
+            event_id = "silenciamentos" if after.timed_out_until else "remocao_punicoes"
+            if self.auditoria_ativa_ou_log_legado(config, "castigos", event_id):
                 estado = "Castigo aplicado" if after.timed_out_until else "Castigo removido"
                 valor = after.timed_out_until.isoformat() if after.timed_out_until else "sem castigo"
-                await self.enviar_log(after.guild, config, "moderacao", estado, f"{after} (`{after.id}`)\nAte: {valor}", discord.Color.orange(), event_id="silenciamentos" if after.timed_out_until else "remocao_punicoes", responsavel=after, log_key="castigos")
+                await self.enviar_log(after.guild, config, "moderacao", estado, f"{after} (`{after.id}`)\nAte: {valor}", discord.Color.orange(), event_id=event_id, responsavel=after, log_key="castigos")
 
         antes = {role.id: role for role in before.roles}
         depois = {role.id: role for role in after.roles}
         adicionados = [role.name for role_id, role in depois.items() if role_id not in antes]
         removidos = [role.name for role_id, role in antes.items() if role_id not in depois]
 
-        if (adicionados or removidos) and self.auditoria_ativa_ou_log_legado(config, "cargos"):
+        if (adicionados or removidos) and self.auditoria_ativa_ou_log_legado(config, "cargos", "cargo_usuario"):
             await self.enviar_log(
                 after.guild,
                 config,
@@ -889,20 +1033,18 @@ class ModerationCog(commands.Cog):
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel):
         config = await self.obter_config(channel.guild)
-        if self.auditoria_ativa_ou_log_legado(config, "canais"):
+        if self.auditoria_ativa_ou_log_legado(config, "canais", "canal_alterado"):
             await self.enviar_log(channel.guild, config, "servidor", "Canal criado", f"#{channel.name} (`{channel.id}`)", discord.Color.green(), event_id="canal_alterado", log_key="canais")
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel):
         config = await self.obter_config(channel.guild)
-        if self.auditoria_ativa_ou_log_legado(config, "canais"):
+        if self.auditoria_ativa_ou_log_legado(config, "canais", "canal_alterado"):
             await self.enviar_log(channel.guild, config, "servidor", "Canal deletado", f"#{channel.name} (`{channel.id}`)", discord.Color.red(), event_id="canal_alterado", log_key="canais")
 
     @commands.Cog.listener()
     async def on_guild_channel_update(self, before, after):
         config = await self.obter_config(after.guild)
-        if not self.auditoria_ativa_ou_log_legado(config, "canais"):
-            return
 
         mudancas = []
         if before.name != after.name:
@@ -913,6 +1055,10 @@ class ModerationCog(commands.Cog):
             mudancas.append("Permissoes alteradas")
 
         if mudancas:
+            event_id = "permissoes_alteradas" if any("Permissoes" in item for item in mudancas) else "canal_alterado"
+            if not self.auditoria_ativa_ou_log_legado(config, "canais", event_id):
+                return
+
             await self.enviar_log(
                 after.guild,
                 config,
@@ -921,27 +1067,25 @@ class ModerationCog(commands.Cog):
                 f"#{after.name} (`{after.id}`)",
                 discord.Color.gold(),
                 [("Mudancas", "\n".join(mudancas), False)],
-                event_id="permissoes_alteradas" if any("Permissoes" in item for item in mudancas) else "canal_alterado",
+                event_id=event_id,
                 log_key="canais",
             )
 
     @commands.Cog.listener()
     async def on_guild_role_create(self, role):
         config = await self.obter_config(role.guild)
-        if self.auditoria_ativa_ou_log_legado(config, "cargos"):
+        if self.auditoria_ativa_ou_log_legado(config, "cargos", "cargo_alterado"):
             await self.enviar_log(role.guild, config, "servidor", "Cargo criado", f"{role.name} (`{role.id}`)", discord.Color.green(), event_id="cargo_alterado", log_key="cargos")
 
     @commands.Cog.listener()
     async def on_guild_role_delete(self, role):
         config = await self.obter_config(role.guild)
-        if self.auditoria_ativa_ou_log_legado(config, "cargos"):
+        if self.auditoria_ativa_ou_log_legado(config, "cargos", "cargo_alterado"):
             await self.enviar_log(role.guild, config, "servidor", "Cargo deletado", f"{role.name} (`{role.id}`)", discord.Color.red(), event_id="cargo_alterado", log_key="cargos")
 
     @commands.Cog.listener()
     async def on_guild_role_update(self, before, after):
         config = await self.obter_config(after.guild)
-        if not self.auditoria_ativa_ou_log_legado(config, "cargos"):
-            return
 
         mudancas = []
         if before.name != after.name:
@@ -950,6 +1094,10 @@ class ModerationCog(commands.Cog):
             mudancas.append("Permissoes alteradas")
 
         if mudancas:
+            event_id = "permissoes_alteradas" if any("Permissoes" in item for item in mudancas) else "cargo_alterado"
+            if not self.auditoria_ativa_ou_log_legado(config, "cargos", event_id):
+                return
+
             await self.enviar_log(
                 after.guild,
                 config,
@@ -958,7 +1106,7 @@ class ModerationCog(commands.Cog):
                 f"{after.name} (`{after.id}`)",
                 discord.Color.gold(),
                 [("Mudancas", "\n".join(mudancas), False)],
-                event_id="permissoes_alteradas" if any("Permissoes" in item for item in mudancas) else "cargo_alterado",
+                event_id=event_id,
                 log_key="cargos",
             )
 
@@ -988,7 +1136,7 @@ class ModerationCog(commands.Cog):
         canal_antes = before.channel
         canal_depois = after.channel
 
-        if before.mute != after.mute:
+        if before.mute != after.mute and self.auditoria_evento_ativo(config, "voz_mute"):
             entry = await self.buscar_auditoria_recente(
                 member.guild,
                 member.id,
@@ -1014,7 +1162,7 @@ class ModerationCog(commands.Cog):
                 responsavel,
             )
 
-        if before.deaf != after.deaf:
+        if before.deaf != after.deaf and self.auditoria_evento_ativo(config, "voz_deafen"):
             entry = await self.buscar_auditoria_recente(
                 member.guild,
                 member.id,
@@ -1041,33 +1189,45 @@ class ModerationCog(commands.Cog):
             )
 
         if canal_antes is None and canal_depois is not None:
-            await self.enviar_log_voz(
-                member.guild,
-                config,
-                "voz_entrada",
-                "[VOZ] Usuario entrou em call",
-                f"Usuario: {member.mention}",
-                [
-                    ("Usuario", f"{member} (`{member.id}`)", True),
-                    ("Canal de voz", canal_depois.name, True),
-                    ("Data", data_hora, True),
-                ],
-                member,
-            )
+            if self.auditoria_evento_ativo(config, "voz_entrada"):
+                await self.enviar_log_voz(
+                    member.guild,
+                    config,
+                    "voz_entrada",
+                    "[VOZ] Usuario entrou em call",
+                    f"Usuario: {member.mention}",
+                    [
+                        ("Usuario", f"{member} (`{member.id}`)", True),
+                        ("Canal de voz", canal_depois.name, True),
+                        ("Data", data_hora, True),
+                    ],
+                    member,
+                )
             return
 
         if canal_antes is not None and canal_depois is None:
-            entry = await self.buscar_auditoria_recente(
-                member.guild,
-                member.id,
-                [getattr(discord.AuditLogAction, "member_disconnect", None)],
-            )
+            registrar_saida = self.auditoria_evento_ativo(config, "voz_saida")
+            registrar_desconexao = self.auditoria_evento_ativo(config, "voz_desconectado")
+            if not registrar_saida and not registrar_desconexao:
+                return
+
+            entry = None
+            if registrar_desconexao:
+                entry = await self.buscar_auditoria_recente(
+                    member.guild,
+                    member.id,
+                    [getattr(discord.AuditLogAction, "member_disconnect", None)],
+                )
             responsavel = entry.user if entry else None
             desconectado_por_outro = responsavel and responsavel.id != member.id
+            event_id = "voz_desconectado" if desconectado_por_outro else "voz_saida"
+            if not self.auditoria_evento_ativo(config, event_id):
+                return
+
             await self.enviar_log_voz(
                 member.guild,
                 config,
-                "voz_desconectado" if desconectado_por_outro else "voz_saida",
+                event_id,
                 "[VOZ] Usuario desconectado da call" if desconectado_por_outro else "[VOZ] Usuario saiu da call",
                 f"Usuario afetado: {member.mention}",
                 [
@@ -1082,7 +1242,12 @@ class ModerationCog(commands.Cog):
             )
             return
 
-        if canal_antes is not None and canal_depois is not None and canal_antes.id != canal_depois.id:
+        if (
+            canal_antes is not None
+            and canal_depois is not None
+            and canal_antes.id != canal_depois.id
+            and self.auditoria_evento_ativo(config, "voz_movido")
+        ):
             entry = await self.buscar_auditoria_recente(
                 member.guild,
                 member.id,

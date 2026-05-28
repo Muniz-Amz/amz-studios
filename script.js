@@ -11,6 +11,11 @@ const DISCORD_PERMISSION_ADMINISTRATOR = BigInt(0x8);
 const DISCORD_PERMISSION_MANAGE_GUILD = BigInt(0x20);
 const MAX_MINUTOS_LIMPEZA = 1440;
 const ADMIN_TOKEN_KEY = 'amz_admin_token';
+const SITE_THEME_KEY = 'amz_site_theme';
+const SITE_THEMES = new Set(['dark', 'light']);
+const GIF_LIBRARY_DB = 'amz_gif_library';
+const GIF_LIBRARY_STORE = 'gifs';
+const GIF_LIBRARY_MAX_BYTES = 15 * 1024 * 1024;
 const MODELO_AVISOS_AMZ = {
     entrada_conteudo: '**Bem-vindo** {mention} **{server_upper}** ! Agora temos **{member_count} Membros.**',
     entrada_titulo: '',
@@ -548,6 +553,251 @@ function obterRotuloPermissaoServidor(servidor = {}) {
 
 function hashAtualNormalizado() {
     return String(window.location.hash || '').toLowerCase();
+}
+
+function obterTemaSiteSalvo() {
+    try {
+        const tema = localStorage.getItem(SITE_THEME_KEY);
+        return SITE_THEMES.has(tema) ? tema : 'dark';
+    } catch {
+        return 'dark';
+    }
+}
+
+function aplicarTemaSite(tema, salvar = true) {
+    const temaNormalizado = SITE_THEMES.has(tema) ? tema : 'dark';
+    const proximoTema = temaNormalizado === 'dark' ? 'light' : 'dark';
+    const rotulo = proximoTema === 'light' ? 'Claro' : 'Escuro';
+
+    document.documentElement.dataset.siteTheme = temaNormalizado;
+    document.body?.classList.toggle('site-theme-light', temaNormalizado === 'light');
+
+    if (salvar) {
+        try {
+            localStorage.setItem(SITE_THEME_KEY, temaNormalizado);
+        } catch {
+            // Preferencia visual; se o navegador bloquear storage, seguimos com o tema atual.
+        }
+    }
+
+    const botao = document.getElementById('site-theme-toggle');
+    const icone = document.getElementById('site-theme-icon');
+    const label = document.getElementById('site-theme-label');
+
+    if (botao) {
+        botao.setAttribute('aria-pressed', String(temaNormalizado === 'light'));
+        botao.setAttribute('aria-label', `Ativar tema ${rotulo.toLowerCase()}`);
+        botao.title = `Ativar tema ${rotulo.toLowerCase()}`;
+    }
+
+    if (icone) {
+        icone.className = proximoTema === 'light' ? 'ph ph-sun' : 'ph ph-moon';
+    }
+
+    if (label) {
+        label.innerText = rotulo;
+    }
+}
+
+function alternarTemaSite() {
+    const temaAtual = document.documentElement.dataset.siteTheme === 'light' ? 'light' : 'dark';
+    aplicarTemaSite(temaAtual === 'dark' ? 'light' : 'dark');
+}
+
+let gifLibraryObjectUrls = [];
+
+function mostrarStatusGifBiblioteca(mensagem = '', tipo = '') {
+    const status = document.getElementById('gif-library-status');
+    if (!status) return;
+
+    status.innerText = mensagem;
+    status.dataset.status = tipo;
+}
+
+function formatarTamanhoArquivo(bytes = 0) {
+    const tamanho = Number(bytes) || 0;
+    if (tamanho >= 1024 * 1024) return `${(tamanho / 1024 / 1024).toFixed(1)} MB`;
+    if (tamanho >= 1024) return `${Math.ceil(tamanho / 1024)} KB`;
+    return `${tamanho} B`;
+}
+
+function arquivoParaDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+    });
+}
+
+function abrirBancoGifBiblioteca() {
+    return new Promise((resolve, reject) => {
+        if (!window.indexedDB) {
+            reject(new Error('IndexedDB indisponivel neste navegador.'));
+            return;
+        }
+
+        const request = indexedDB.open(GIF_LIBRARY_DB, 1);
+
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(GIF_LIBRARY_STORE)) {
+                db.createObjectStore(GIF_LIBRARY_STORE, { keyPath: 'id' });
+            }
+        };
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function executarGifStore(modo, callback) {
+    const db = await abrirBancoGifBiblioteca();
+
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(GIF_LIBRARY_STORE, modo);
+        const store = tx.objectStore(GIF_LIBRARY_STORE);
+        const request = callback(store);
+
+        tx.oncomplete = () => {
+            db.close();
+            resolve(request?.result);
+        };
+        tx.onerror = () => {
+            db.close();
+            reject(tx.error);
+        };
+        tx.onabort = () => {
+            db.close();
+            reject(tx.error);
+        };
+    });
+}
+
+function limparGifObjectUrls() {
+    gifLibraryObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+    gifLibraryObjectUrls = [];
+}
+
+async function listarGifsLocais() {
+    const gifs = await executarGifStore('readonly', (store) => store.getAll());
+    return (gifs || []).sort((a, b) => String(b.criadoEm || '').localeCompare(String(a.criadoEm || '')));
+}
+
+async function obterGifLocal(id) {
+    return executarGifStore('readonly', (store) => store.get(id));
+}
+
+async function salvarGifLocal(evento) {
+    const input = evento?.target;
+    const arquivo = input?.files?.[0];
+
+    if (!arquivo) return;
+
+    try {
+        if (arquivo.type !== 'image/gif' && !arquivo.name.toLowerCase().endsWith('.gif')) {
+            mostrarStatusGifBiblioteca('Envie um arquivo GIF.', 'erro');
+            return;
+        }
+
+        if (arquivo.size > GIF_LIBRARY_MAX_BYTES) {
+            mostrarStatusGifBiblioteca(`Limite local: ${formatarTamanhoArquivo(GIF_LIBRARY_MAX_BYTES)}.`, 'erro');
+            return;
+        }
+
+        const registro = {
+            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            nome: arquivo.name || 'gif-salvo.gif',
+            tamanho: arquivo.size,
+            tipo: arquivo.type || 'image/gif',
+            criadoEm: new Date().toISOString(),
+            blob: arquivo,
+        };
+
+        await executarGifStore('readwrite', (store) => store.put(registro));
+        mostrarStatusGifBiblioteca('GIF salvo neste navegador.', 'sucesso');
+        await renderizarGifBiblioteca();
+    } catch (erro) {
+        console.error('Erro ao salvar GIF local:', erro);
+        mostrarStatusGifBiblioteca('Nao consegui salvar o GIF neste navegador.', 'erro');
+    } finally {
+        if (input) input.value = '';
+    }
+}
+
+async function copiarGifDataUrl(id) {
+    try {
+        const gif = await obterGifLocal(id);
+        if (!gif?.blob) return;
+
+        const dataUrl = await arquivoParaDataUrl(gif.blob);
+        await navigator.clipboard.writeText(dataUrl);
+        mostrarStatusGifBiblioteca('Data URL copiada.', 'sucesso');
+    } catch (erro) {
+        console.error('Erro ao copiar GIF:', erro);
+        mostrarStatusGifBiblioteca('Nao consegui copiar. Use baixar.', 'erro');
+    }
+}
+
+async function removerGifLocal(id) {
+    try {
+        await executarGifStore('readwrite', (store) => store.delete(id));
+        mostrarStatusGifBiblioteca('GIF removido dos salvos locais.', 'sucesso');
+        await renderizarGifBiblioteca();
+    } catch (erro) {
+        console.error('Erro ao remover GIF:', erro);
+        mostrarStatusGifBiblioteca('Nao consegui remover o GIF.', 'erro');
+    }
+}
+
+async function renderizarGifBiblioteca() {
+    const grid = document.getElementById('gif-library-grid');
+    if (!grid) return;
+
+    try {
+        limparGifObjectUrls();
+        const gifs = await listarGifsLocais();
+
+        if (!gifs.length) {
+            grid.innerHTML = '<div class="site-gif-empty"><span>Nenhum GIF salvo neste navegador.</span></div>';
+            mostrarStatusGifBiblioteca('');
+            return;
+        }
+
+        grid.innerHTML = gifs.map((gif) => {
+            const url = URL.createObjectURL(gif.blob);
+            gifLibraryObjectUrls.push(url);
+            return `
+                <article class="site-gif-card">
+                    <div class="site-gif-preview">
+                        <img src="${url}" alt="${escaparHTML(gif.nome)}">
+                    </div>
+                    <div>
+                        <strong title="${escaparHTML(gif.nome)}">${escaparHTML(gif.nome)}</strong>
+                        <small>${escaparHTML(formatarTamanhoArquivo(gif.tamanho))}</small>
+                    </div>
+                    <div class="site-gif-card-actions">
+                        <a href="${url}" download="${escaparHTML(gif.nome)}">
+                            <i class="ph ph-download-simple"></i>
+                            Baixar
+                        </a>
+                        <button type="button" onclick="copiarGifDataUrl('${escaparHTML(gif.id)}')">
+                            <i class="ph ph-copy"></i>
+                            Copiar
+                        </button>
+                        <button type="button" class="danger" onclick="removerGifLocal('${escaparHTML(gif.id)}')">
+                            <i class="ph ph-trash"></i>
+                            Apagar
+                        </button>
+                    </div>
+                </article>
+            `;
+        }).join('');
+    } catch (erro) {
+        console.error('Erro ao renderizar GIFs locais:', erro);
+        grid.innerHTML = '<div class="site-gif-empty"><span>Salvos locais indisponiveis.</span></div>';
+        mostrarStatusGifBiblioteca('IndexedDB indisponivel neste navegador.', 'erro');
+    }
 }
 
 // ==========================================
@@ -3601,8 +3851,10 @@ async function enviarConfiguracao() {
 // INICIALIZAÇÃO
 // ==========================================
 function inicializarAplicacao() {
+    aplicarTemaSite(obterTemaSiteSalvo(), false);
     configurarNavegacaoTopo();
     carregarStatusPublico();
+    renderizarGifBiblioteca();
 
     const urlParams = new URLSearchParams(window.location.search);
 
@@ -4014,13 +4266,20 @@ function renderizarServidorAdmin(servidor) {
         : 'Nenhuma feature especial';
 
     return `
-        <article class="admin-server-card">
+        <article class="admin-server-card" data-admin-server-id="${escaparHTML(servidor.id)}" data-admin-server-name="${escaparHTML(servidor.nome)}">
             <div class="admin-server-head">
                 <div class="admin-server-avatar">${avatar}</div>
                 <div>
                     <strong>${escaparHTML(servidor.nome)}</strong>
                     <span>ID ${escaparHTML(servidor.id)}</span>
                 </div>
+            </div>
+
+            <div class="admin-server-actions">
+                <button type="button" class="admin-danger-button" onclick="sairServidorBotAdmin('${escaparHTML(servidor.id)}')">
+                    <i class="ph ph-sign-out"></i>
+                    Sair do servidor
+                </button>
             </div>
 
             <div class="admin-server-metrics">
@@ -4086,6 +4345,60 @@ function renderizarServidorAdmin(servidor) {
             </details>
         </article>
     `;
+}
+
+async function sairServidorBotAdmin(serverId) {
+    const token = obterAdminToken();
+    const card = document.querySelector(`[data-admin-server-id="${serverId}"]`);
+    const nomeServidor = card?.dataset.adminServerName || serverId;
+
+    if (!token) return;
+
+    const confirmar = window.confirm(`Fazer o bot sair de "${nomeServidor}"? Esta acao remove o bot do servidor imediatamente.`);
+    if (!confirmar) return;
+
+    const digitado = window.prompt(`Digite exatamente o nome do servidor para confirmar:\n${nomeServidor}`);
+    if (digitado === null) return;
+
+    if (digitado !== nomeServidor) {
+        alert('Confirmacao cancelada. O nome digitado nao confere.');
+        return;
+    }
+
+    const motivo = window.prompt('Motivo interno da saida:', 'Solicitado pelo painel ADM AMZ.');
+    if (motivo === null) return;
+
+    try {
+        const response = await fetch(`${API_URL}/api/admin/servidores/${encodeURIComponent(serverId)}/leave`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                confirmar: digitado,
+                motivo
+            })
+        });
+        const dados = await lerJsonResposta(response);
+
+        if (response.ok && dados.status === 'sucesso') {
+            alert(dados.mensagem || 'Bot saiu do servidor.');
+            await carregarStatusAdmin();
+            return;
+        }
+
+        if (response.status === 401) {
+            limparAdminToken();
+            sairAreaAdmin();
+            return;
+        }
+
+        alert(dados.mensagem || dados.erro || 'Nao foi possivel fazer o bot sair do servidor.');
+    } catch (erro) {
+        console.error('Erro ao sair do servidor:', erro);
+        alert('Erro ao conectar na API para sair do servidor.');
+    }
 }
 
 function renderizarCanalAdmin(canal) {

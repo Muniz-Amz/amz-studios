@@ -15,13 +15,20 @@
         if (window.location.hash && window.location.hash.toLowerCase() === '#amz-admin') {
             window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}#amz-admin`);
         }
+
+        try {
+            const temaSalvo = localStorage.getItem('amz_site_theme');
+            document.documentElement.dataset.siteTheme = temaSalvo === 'light' ? 'light' : 'dark';
+        } catch {
+            document.documentElement.dataset.siteTheme = 'dark';
+        }
     </script>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    <link rel="stylesheet" href="style.css?v=16">
-    <link rel="stylesheet" href="/amz-studios/style.css?v=16">
+    <link rel="stylesheet" href="style.css?v=17">
+    <link rel="stylesheet" href="/amz-studios/style.css?v=17">
 </head>
 <body class="flex flex-col min-h-screen overflow-x-hidden bg-black">
 
@@ -37,6 +44,10 @@
             <button type="button" onclick="abrirListaServidores()" class="site-nav-dashboard">
                 Dashboard
             </button>
+            <button type="button" class="site-theme-toggle" id="site-theme-toggle" onclick="alternarTemaSite()" aria-label="Alternar tema" aria-pressed="false" title="Alternar tema">
+                <i class="ph ph-sun" id="site-theme-icon" aria-hidden="true"></i>
+                <span id="site-theme-label">Claro</span>
+            </button>
         </div>
     </nav>
 
@@ -44,7 +55,7 @@
         <main class="flex-1 pt-20">
             <section id="inicio" class="py-32 px-8">
                 <div class="max-w-6xl mx-auto text-center">
-                    <span class="text-[10px] border border-white/10 px-4 py-2 rounded-full uppercase tracking-[0.4em] text-neutral-600 font-bold">Development Hub</span>
+                    <span class="site-eyebrow text-[10px] border border-white/10 px-4 py-2 rounded-full uppercase tracking-[0.4em] text-neutral-600 font-bold">Development Hub</span>
                     <h1 class="text-7xl md:text-9xl font-black tracking-tighter mt-12 mb-8 leading-none uppercase">CÓDIGO. <br> PERFORMANCE.</h1>
                     <p class="text-lg text-neutral-400 max-w-2xl mx-auto leading-relaxed">
                         AMZ Studios
@@ -53,9 +64,9 @@ Central de Desenvolvimento e Automação.
 Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que você gerencie sua comunidade com máxima eficiência, segurança e total autonomia.
                     </p>
                     <div class="mt-12 flex flex-wrap justify-center gap-6">
-                        <a href="#aplicativos" class="bg-white text-black px-10 py-5 font-bold uppercase text-xs tracking-widest hover:bg-neutral-200 transition">Ver Aplicativos</a>
+                        <a href="#aplicativos" class="site-primary-action bg-white text-black px-10 py-5 font-bold uppercase text-xs tracking-widest hover:bg-neutral-200 transition">Ver Aplicativos</a>
                         
-                        <button onclick="acessarTelaBot()" class="border border-white/10 px-10 py-5 font-bold uppercase text-xs tracking-widest hover:bg-white/5 transition">
+                        <button onclick="acessarTelaBot()" class="site-secondary-action border border-white/10 px-10 py-5 font-bold uppercase text-xs tracking-widest hover:bg-white/5 transition">
                             Acessar Painel do Bot
                         </button>
                     </div>
@@ -77,24 +88,45 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                     </div>
                     
                     <div class="grid md:grid-cols-2 gap-6">
-                        <div class="bw-border p-10 bg-black group relative overflow-hidden">
+                        <div class="site-app-card bw-border p-10 bg-black group relative overflow-hidden">
                             <div class="flex justify-between items-start mb-16">
                                 <i class="ph ph-cpu text-5xl text-white group-hover:scale-110 transition-transform"></i>
-                                <span class="font-mono text-[10px] border border-neutral-700 text-neutral-500 px-3 py-1 uppercase tracking-widest">Windows EXE</span>
+                                <span class="site-chip font-mono text-[10px] border border-neutral-700 text-neutral-500 px-3 py-1 uppercase tracking-widest">Windows EXE</span>
                             </div>
                             <h3 class="text-3xl font-black uppercase mb-3 group-hover:tracking-wider transition-all">Amz Clicker</h3>
                             <p class="text-neutral-500 text-sm mb-10 leading-relaxed max-w-sm">Macro otimizado para farm automático no Roblox. Foco em estabilidade e precisão.</p>
                             
-                            <a href="./assets/meu-site-downloads/Amz Clicker.exe" download class="inline-flex items-center gap-3 bg-white text-black px-6 py-3 font-bold text-xs uppercase tracking-widest hover:bg-neutral-200 transition">
+                            <a href="./assets/meu-site-downloads/Amz Clicker.exe" download class="site-primary-action inline-flex items-center gap-3 bg-white text-black px-6 py-3 font-bold text-xs uppercase tracking-widest hover:bg-neutral-200 transition">
                                 <i class="ph ph-download-simple text-lg"></i> Baixar v1.0
                             </a>
                         </div>
 
-                        <div class="bw-border border-dashed p-10 bg-transparent flex flex-col items-center justify-center text-center opacity-40">
+                        <div class="site-soon-card bw-border border-dashed p-10 bg-transparent flex flex-col items-center justify-center text-center opacity-40">
                             <i class="ph ph-code-block text-5xl text-neutral-700 mb-6"></i>
                             <p class="font-mono text-[10px] uppercase tracking-[0.4em] text-neutral-600">Novo Projeto em Desenvolvimento</p>
                         </div>
                     </div>
+                </div>
+            </section>
+
+            <section id="gifs-salvos" class="site-gif-library py-24 px-8 border-t">
+                <div class="max-w-6xl mx-auto">
+                    <div class="site-gif-library-head">
+                        <div>
+                            <span>Biblioteca local</span>
+                            <h2>GIFs salvos</h2>
+                        </div>
+                        <div class="site-gif-actions">
+                            <input type="file" id="gif-library-input" accept="image/gif" hidden onchange="salvarGifLocal(event)">
+                            <button type="button" onclick="document.getElementById('gif-library-input')?.click()">
+                                <i class="ph ph-plus"></i>
+                                Adicionar GIF
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="site-gif-status" id="gif-library-status"></div>
+                    <div class="site-gif-grid" id="gif-library-grid"></div>
                 </div>
             </section>
         </main>
@@ -412,7 +444,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
 
     <script>
         const amzScript = document.createElement('script');
-        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=21' : 'script.js?v=21';
+        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=22' : 'script.js?v=22';
         document.body.appendChild(amzScript);
     </script>
 </body>

@@ -23,8 +23,10 @@ COMANDOS_HELP = {
     ],
     "Midia": [
         ("/gifimg arquivo", "Transforma uma imagem enviada em GIF."),
+        ("/gifs arquivo", "Mesmo conversor de imagem para GIF, com nome antigo."),
         ("/videogif arquivo", "Transforma um video enviado em GIF."),
         ("/audio arquivo", "Extrai o audio de um video enviado."),
+        ("/videoaudio arquivo", "Mesmo extrator de audio, com nome antigo."),
         ("/midialimites", "Mostra os limites de conversao do bot."),
     ],
 }

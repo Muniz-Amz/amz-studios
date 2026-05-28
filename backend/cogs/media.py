@@ -127,7 +127,7 @@ class MediaCog(commands.Cog):
         except Exception as erro:
             await self.responder_erro(ctx, erro)
 
-    @commands.command(name="foto_gif", aliases=["fotogif", "imagemgif", "imagegif"])
+    @commands.command(name="foto_gif", aliases=["fotogif", "imagemgif", "imagegif", "gifs"])
     async def foto_gif(self, ctx):
         attachment = self.obter_anexo(ctx)
 
@@ -153,7 +153,7 @@ class MediaCog(commands.Cog):
         except Exception as erro:
             await self.responder_erro(ctx, erro)
 
-    @commands.command(name="video_audio", aliases=["audio", "mp3"])
+    @commands.command(name="video_audio", aliases=["videoaudio", "audio", "mp3"])
     async def video_audio(self, ctx):
         attachment = self.obter_anexo(ctx)
 
@@ -182,6 +182,11 @@ class MediaCog(commands.Cog):
     async def slash_gifimg(self, interaction: discord.Interaction, arquivo: discord.Attachment):
         await self.processar_slash(interaction, arquivo, "image_gif")
 
+    @app_commands.command(name="gifs", description="Transforma uma imagem enviada em GIF.")
+    @app_commands.describe(arquivo="Imagem que sera transformada em GIF.")
+    async def slash_gifs(self, interaction: discord.Interaction, arquivo: discord.Attachment):
+        await self.processar_slash(interaction, arquivo, "image_gif")
+
     @app_commands.command(name="videogif", description="Transforma um video enviado em GIF.")
     @app_commands.describe(arquivo="Video que sera transformado em GIF.")
     async def slash_videogif(self, interaction: discord.Interaction, arquivo: discord.Attachment):
@@ -190,6 +195,11 @@ class MediaCog(commands.Cog):
     @app_commands.command(name="audio", description="Extrai o audio de um video enviado.")
     @app_commands.describe(arquivo="Video de onde o audio sera extraido.")
     async def slash_audio(self, interaction: discord.Interaction, arquivo: discord.Attachment):
+        await self.processar_slash(interaction, arquivo, "audio")
+
+    @app_commands.command(name="videoaudio", description="Extrai o audio de um video enviado.")
+    @app_commands.describe(arquivo="Video de onde o audio sera extraido.")
+    async def slash_videoaudio(self, interaction: discord.Interaction, arquivo: discord.Attachment):
         await self.processar_slash(interaction, arquivo, "audio")
 
     @app_commands.command(name="midialimites", description="Mostra os limites dos comandos de midia.")

@@ -776,6 +776,29 @@ def castigar_membro_admin_sync(server_id, user_id, minutos, motivo):
     return futuro.result(timeout=25)
 
 
+async def sair_servidor_admin_async(server_id, motivo):
+    guild = obter_guild_bot(server_id)
+
+    if not guild:
+        return False, "Servidor nao encontrado pelo bot."
+
+    nome = guild.name
+    guild_id = guild.id
+    motivo_limpo = str(motivo or "Solicitado pelo painel ADM AMZ.").strip()[:240]
+
+    try:
+        await guild.leave()
+        print(f"[ADM] Bot saiu do servidor {nome} ({guild_id}). Motivo: {motivo_limpo}")
+        return True, f"Bot saiu de {nome}."
+    except discord.HTTPException as erro:
+        return False, f"Discord recusou a saida do servidor: {erro}"
+
+
+def sair_servidor_admin_sync(server_id, motivo):
+    futuro = asyncio.run_coroutine_threadsafe(sair_servidor_admin_async(server_id, motivo), bot.loop)
+    return futuro.result(timeout=25)
+
+
 def buscar_limpezas_sync(server_id):
     try:
         futuro = asyncio.run_coroutine_threadsafe(buscar_limpezas(str(server_id)), bot.loop)
@@ -1063,6 +1086,38 @@ def admin_listar_membros(server_id):
         }), 200
     except Exception as erro_membros:
         return jsonify({"status": "erro", "mensagem": str(erro_membros)}), 500
+
+
+@app.route("/api/admin/servidores/<server_id>/leave", methods=["POST"])
+def admin_sair_servidor(server_id):
+    erro = validar_admin_painel()
+
+    if erro:
+        return erro
+
+    dados = request.json or {}
+    confirmar = str(dados.get("confirmar") or "").strip()
+    motivo = dados.get("motivo", "")
+    guild = obter_guild_bot(server_id)
+
+    if not guild:
+        return jsonify({"status": "erro", "mensagem": "Servidor nao encontrado pelo bot."}), 404
+
+    if confirmar != guild.name:
+        return jsonify({
+            "status": "erro",
+            "mensagem": "Confirmacao invalida. Digite exatamente o nome do servidor.",
+        }), 400
+
+    try:
+        sucesso, mensagem = sair_servidor_admin_sync(server_id, motivo)
+
+        if not sucesso:
+            return jsonify({"status": "erro", "mensagem": mensagem}), 502
+
+        return jsonify({"status": "sucesso", "mensagem": mensagem}), 200
+    except Exception as erro_saida:
+        return jsonify({"status": "erro", "mensagem": str(erro_saida)}), 500
 
 
 @app.route("/api/admin/servidores/<server_id>/membros/<user_id>/ban", methods=["POST"])
