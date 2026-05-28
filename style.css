@@ -779,6 +779,157 @@ html[data-site-theme] body {
     color: #ff6767;
 }
 
+.amz-save-tray {
+    position: fixed;
+    left: 50%;
+    right: auto;
+    bottom: 22px;
+    width: min(880px, calc(100vw - 32px));
+    z-index: 90;
+    pointer-events: none;
+    transform: translate(-50%, calc(100% + 36px));
+    opacity: 0;
+    transition: transform 0.34s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.24s ease;
+}
+
+.amz-save-tray.visible {
+    pointer-events: auto;
+    transform: translate(-50%, 0);
+    opacity: 1;
+}
+
+.amz-save-tray.saving {
+    transform: translate(-50%, calc(100% + 36px));
+    opacity: 0;
+}
+
+.amz-save-tray-inner {
+    min-height: 72px;
+    background: #2fa7f4;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.32);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 16px 18px;
+}
+
+.amz-save-tray-copy {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.amz-save-tray-copy i {
+    font-size: 22px;
+}
+
+.amz-save-tray-copy strong {
+    font-size: 15px;
+    font-weight: 900;
+    letter-spacing: 0;
+}
+
+.amz-save-tray-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.amz-save-tray-actions button {
+    min-height: 38px;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 18px;
+    font-size: 13px;
+    font-weight: 900;
+    transition: transform 0.18s ease, background 0.18s ease;
+}
+
+.amz-save-tray-actions button:hover {
+    transform: translateY(-1px);
+}
+
+.amz-save-tray-actions button:disabled {
+    cursor: wait;
+    opacity: 0.72;
+    transform: none;
+}
+
+.amz-save-reset {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+}
+
+.amz-save-reset:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.amz-save-confirm {
+    background: #238b46;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+}
+
+.amz-save-confirm:hover {
+    background: #1f7f3f;
+}
+
+.amz-saved-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    z-index: 95;
+    min-height: 54px;
+    background: #ffffff;
+    color: #111111;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 10px 16px 10px 12px;
+    pointer-events: none;
+    transform: translate(-50%, calc(100% + 28px)) scale(0.96);
+    opacity: 0;
+    transition: transform 0.34s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease;
+}
+
+.amz-saved-toast.visible {
+    transform: translate(-50%, 0) scale(1);
+    opacity: 1;
+}
+
+.amz-saved-toast img {
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+}
+
+.amz-saved-toast strong {
+    color: #111111;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 0;
+}
+
+.amz-saved-toast span {
+    color: #8f8f8f;
+    font-size: 18px;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
 .vm-placeholder-panel {
     display: grid;
     gap: 18px;
@@ -3647,6 +3798,31 @@ html[data-site-theme] .admin-server-meta {
 }
 
 @media (max-width: 820px) {
+    .amz-save-tray {
+        bottom: 14px;
+        width: calc(100vw - 24px);
+    }
+
+    .amz-save-tray-inner {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 14px;
+        padding: 14px;
+    }
+
+    .amz-save-tray-copy {
+        align-items: flex-start;
+    }
+
+    .amz-save-tray-actions,
+    .amz-save-tray-actions button {
+        width: 100%;
+    }
+
+    .amz-saved-toast {
+        bottom: 16px;
+    }
+
     .bot-status-strip {
         grid-template-columns: auto 1fr;
         gap: 10px;

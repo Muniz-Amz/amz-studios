@@ -27,8 +27,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    <link rel="stylesheet" href="style.css?v=18">
-    <link rel="stylesheet" href="/amz-studios/style.css?v=18">
+    <link rel="stylesheet" href="style.css?v=19">
+    <link rel="stylesheet" href="/amz-studios/style.css?v=19">
 </head>
 <body class="flex flex-col min-h-screen overflow-x-hidden bg-black">
 
@@ -422,9 +422,33 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
         </main>
     </div>
 
+    <div class="amz-save-tray" id="amz-save-tray" aria-hidden="true" aria-live="polite">
+        <div class="amz-save-tray-inner">
+            <div class="amz-save-tray-copy">
+                <i class="ph ph-warning-circle" aria-hidden="true"></i>
+                <strong id="amz-save-tray-title">Cuidado! Voce tem alteracoes que nao foram salvas</strong>
+            </div>
+            <div class="amz-save-tray-actions">
+                <button type="button" class="amz-save-reset" onclick="redefinirAlteracoesPainel()">
+                    Redefinir
+                </button>
+                <button type="button" class="amz-save-confirm" onclick="salvarConfiguracaoPendente()">
+                    <i class="ph ph-floppy-disk" aria-hidden="true"></i>
+                    Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="amz-saved-toast" id="amz-saved-toast" aria-hidden="true" aria-live="polite">
+        <img src="./assets/logo.png" alt="AMZ">
+        <strong>AMZ</strong>
+        <span>salvo</span>
+    </div>
+
     <script>
         const amzScript = document.createElement('script');
-        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=23' : 'script.js?v=23';
+        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=24' : 'script.js?v=24';
         document.body.appendChild(amzScript);
     </script>
 </body>

@@ -13,6 +13,14 @@ const MAX_MINUTOS_LIMPEZA = 1440;
 const ADMIN_TOKEN_KEY = 'amz_admin_token';
 const SITE_THEME_KEY = 'amz_site_theme';
 const SITE_THEMES = new Set(['dark', 'light']);
+const SAVE_TRAY_SECTIONS = {
+    setup: 'Limpeza',
+    server: 'Avisos',
+    role: 'Moderacao',
+    audit: 'Auditoria',
+    security: 'Seguranca',
+    automations: 'Automacoes'
+};
 const MODELO_AVISOS_AMZ = {
     entrada_conteudo: '**Bem-vindo** {mention} **{server_upper}** ! Agora temos **{member_count} Membros.**',
     entrada_titulo: '',
@@ -305,6 +313,13 @@ let automacaoRegraEditandoId = '';
 let comandoBloqueioEditandoId = '';
 let moderacaoServidorCarregadoId = '';
 let moderacaoRecursosAtual = { canais: [], cargos: [] };
+let saveTrayListenerAtivo = false;
+let saveTrayToastTimer = null;
+let saveTrayEstado = {
+    dirty: false,
+    saving: false,
+    section: ''
+};
 
 function normalizarMinutosLimpeza(minutos) {
     const valor = Number.parseInt(minutos, 10);
@@ -601,6 +616,159 @@ function alternarTemaSite() {
     aplicarTemaSite(temaAtual === 'dark' ? 'light' : 'dark');
 }
 
+function obterSecaoDashboardAtiva() {
+    const ativa = document.querySelector('[data-dashboard-section].active');
+    if (ativa?.dataset.dashboardSection) return ativa.dataset.dashboardSection;
+
+    const painel = document.getElementById('dashboard-section-panel');
+    if (painel?.querySelector('.audit-page')) return 'audit';
+    if (painel?.querySelector('.security-page')) return 'security';
+    if (painel?.querySelector('.automations-page')) return 'automations';
+    if (painel?.querySelector('.welcome-config-panel')) return 'server';
+    if (painel?.querySelector('.mod-config-panel')) return 'role';
+    return 'setup';
+}
+
+function obterRotuloSecaoSalvamento(secao = '') {
+    return SAVE_TRAY_SECTIONS[secao] || 'Configuracao';
+}
+
+function alternarBotoesBarraSalvamento(desativado) {
+    document.querySelectorAll('#amz-save-tray button').forEach((botao) => {
+        botao.disabled = Boolean(desativado);
+    });
+}
+
+function marcarConfiguracaoAlterada(secao = obterSecaoDashboardAtiva()) {
+    const tray = document.getElementById('amz-save-tray');
+    const titulo = document.getElementById('amz-save-tray-title');
+
+    if (!tray || saveTrayEstado.saving) return;
+
+    saveTrayEstado = {
+        dirty: true,
+        saving: false,
+        section: secao || obterSecaoDashboardAtiva()
+    };
+
+    if (titulo) {
+        titulo.innerText = `Cuidado! Voce tem alteracoes em ${obterRotuloSecaoSalvamento(saveTrayEstado.section)} que nao foram salvas`;
+    }
+
+    tray.classList.remove('saving');
+    tray.classList.add('visible');
+    tray.setAttribute('aria-hidden', 'false');
+    alternarBotoesBarraSalvamento(false);
+}
+
+function limparAlteracoesPendentes() {
+    const tray = document.getElementById('amz-save-tray');
+
+    saveTrayEstado = {
+        dirty: false,
+        saving: false,
+        section: ''
+    };
+
+    if (tray) {
+        tray.classList.remove('visible', 'saving');
+        tray.setAttribute('aria-hidden', 'true');
+    }
+
+    alternarBotoesBarraSalvamento(false);
+}
+
+function prepararBarraSalvando() {
+    const tray = document.getElementById('amz-save-tray');
+
+    saveTrayEstado.saving = true;
+    alternarBotoesBarraSalvamento(true);
+
+    if (tray) {
+        tray.classList.add('saving');
+        tray.classList.remove('visible');
+        tray.setAttribute('aria-hidden', 'true');
+    }
+}
+
+function mostrarToastAmzSalvo() {
+    const toast = document.getElementById('amz-saved-toast');
+    if (!toast) return;
+
+    window.clearTimeout(saveTrayToastTimer);
+    toast.classList.add('visible');
+    toast.setAttribute('aria-hidden', 'false');
+
+    saveTrayToastTimer = window.setTimeout(() => {
+        toast.classList.remove('visible');
+        toast.setAttribute('aria-hidden', 'true');
+    }, 2400);
+}
+
+function finalizarSalvamentoConfiguracao() {
+    const tray = document.getElementById('amz-save-tray');
+    const atrasarToast = tray?.classList.contains('saving') || tray?.classList.contains('visible');
+
+    limparAlteracoesPendentes();
+
+    window.setTimeout(mostrarToastAmzSalvo, atrasarToast ? 180 : 0);
+}
+
+async function salvarConfiguracaoPendente() {
+    if (saveTrayEstado.saving) return false;
+
+    const secao = saveTrayEstado.section || obterSecaoDashboardAtiva();
+    const acoes = {
+        setup: enviarConfiguracao,
+        server: salvarBoasVindas,
+        role: salvarModeracaoServidor,
+        audit: salvarAuditoriaServidor,
+        security: salvarSegurancaServidor,
+        automations: salvarAutomacoesServidor
+    };
+    const acao = acoes[secao] || salvarModeracaoServidor;
+
+    prepararBarraSalvando();
+
+    try {
+        const sucesso = await acao();
+        if (sucesso) return true;
+    } catch (erro) {
+        console.error('Erro ao salvar configuracao pendente:', erro);
+    }
+
+    saveTrayEstado.saving = false;
+    alternarBotoesBarraSalvamento(false);
+    marcarConfiguracaoAlterada(secao);
+    return false;
+}
+
+function redefinirAlteracoesPainel() {
+    const secao = saveTrayEstado.section || obterSecaoDashboardAtiva();
+    limparAlteracoesPendentes();
+    selecionarSecaoDashboard(secao, { preservarAtual: false });
+}
+
+function configurarBarraSalvamento() {
+    if (saveTrayListenerAtivo) return;
+    saveTrayListenerAtivo = true;
+
+    document.addEventListener('input', observarMudancaConfiguracao, true);
+    document.addEventListener('change', observarMudancaConfiguracao, true);
+}
+
+function observarMudancaConfiguracao(evento) {
+    const elemento = evento.target;
+
+    if (!(elemento instanceof HTMLElement)) return;
+    if (!elemento.matches('input, select, textarea')) return;
+    if (!elemento.closest('#dashboard-section-panel')) return;
+    if (elemento.closest('.amz-save-tray')) return;
+    if (elemento.type === 'hidden' || elemento.disabled || elemento.dataset.saveIgnore === 'true') return;
+
+    marcarConfiguracaoAlterada(obterSecaoDashboardAtiva());
+}
+
 // ==========================================
 // FUNÇÕES DE NAVEGAÇÃO
 // ==========================================
@@ -635,6 +803,7 @@ function navegarParaSecaoSite(secao) {
     const painel = document.getElementById('painel-loritta');
     const site = document.getElementById('site-principal');
 
+    limparAlteracoesPendentes();
     painel.classList.add('hidden');
     painel.classList.remove('flex');
     document.getElementById('admin-area')?.classList.add('hidden');
@@ -672,6 +841,7 @@ function abrirListaServidores() {
 
 function voltarAoInicioBot() {
     const painel = document.getElementById('painel-loritta');
+    limparAlteracoesPendentes();
     painel.classList.add('hidden');
     painel.classList.remove('flex');
     document.getElementById('site-principal').classList.remove('hidden');
@@ -1014,8 +1184,11 @@ function atualizarServidorAtualNaSidebar(nome, iconUrl = '', serverId = '') {
     renderizarMenuServidor(document.getElementById('vm-server-search-input')?.value || '');
 }
 
-function selecionarSecaoDashboard(secao = 'setup') {
-    preservarCamposDashboardAtual();
+function selecionarSecaoDashboard(secao = 'setup', opcoes = {}) {
+    if (opcoes.preservarAtual !== false) {
+        preservarCamposDashboardAtual();
+    }
+    limparAlteracoesPendentes();
     const info = DASHBOARD_SECTIONS[secao] || DASHBOARD_SECTIONS.setup;
 
     document.querySelectorAll('[data-dashboard-section]').forEach((elemento) => {
@@ -2100,6 +2273,7 @@ function adicionarOuAtualizarRegraAutoResposta() {
     const resumo = document.getElementById('automation-summary');
     if (resumo) resumo.innerHTML = AutomationSummary();
     mostrarStatusModeracao('Regra pronta. Salve as automações para sincronizar.', 'success');
+    marcarConfiguracaoAlterada('automations');
 }
 
 function editarRegraAutoResposta(id) {
@@ -2129,6 +2303,7 @@ function excluirRegraAutoResposta(id) {
     renderizarListaAutoRespostas();
     const resumo = document.getElementById('automation-summary');
     if (resumo) resumo.innerHTML = AutomationSummary();
+    marcarConfiguracaoAlterada('automations');
 }
 
 function limparEditorAutoResposta(limparStatus = true) {
@@ -2237,6 +2412,7 @@ function adicionarOuAtualizarBloqueioComando() {
     const resumo = document.getElementById('automation-summary');
     if (resumo) resumo.innerHTML = AutomationSummary();
     mostrarStatusModeracao('Bloqueio pronto. Salve as automacoes para sincronizar.', 'success');
+    marcarConfiguracaoAlterada('automations');
 }
 
 function editarBloqueioComando(id) {
@@ -2261,6 +2437,7 @@ function excluirBloqueioComando(id) {
     renderizarListaBloqueiosComando();
     const resumo = document.getElementById('automation-summary');
     if (resumo) resumo.innerHTML = AutomationSummary();
+    marcarConfiguracaoAlterada('automations');
 }
 
 function limparEditorBloqueioComando(limparStatus = true) {
@@ -2281,17 +2458,17 @@ function limparEditorBloqueioComando(limparStatus = true) {
 
 async function salvarAuditoriaServidor() {
     coletarCamposAuditoria();
-    await salvarModeracaoServidor();
+    return salvarModeracaoServidor();
 }
 
 async function salvarSegurancaServidor() {
     coletarCamposSeguranca();
-    await salvarModeracaoServidor();
+    return salvarModeracaoServidor();
 }
 
 async function salvarAutomacoesServidor() {
     coletarCamposAutomacoes();
-    await salvarModeracaoServidor();
+    return salvarModeracaoServidor();
 }
 
 function renderizarCampoModeracao(campo) {
@@ -2607,12 +2784,13 @@ async function salvarModeracaoServidor() {
     if (token === 'demo-token') {
         localStorage.setItem(chaveModeracaoDemo(serverId), JSON.stringify(moderacaoAtual));
         mostrarStatusModeracao('Configuracao salva no modo teste local.', 'success');
-        return;
+        finalizarSalvamentoConfiguracao();
+        return true;
     }
 
     if (!token) {
         mostrarStatusModeracao('Sessao expirada. Entre novamente com o Discord.');
-        return;
+        return false;
     }
 
     try {
@@ -2631,13 +2809,16 @@ async function salvarModeracaoServidor() {
             moderacaoAtual = normalizarModeracaoLocal(resultado.moderacao || moderacaoAtual);
             salvarModeracaoCache(serverId, moderacaoAtual);
             mostrarStatusModeracao('Moderacao salva e sincronizada com o bot.', 'success');
-            return;
+            finalizarSalvamentoConfiguracao();
+            return true;
         }
 
         mostrarStatusModeracao(resultado.mensagem || resultado.erro || 'Nao foi possivel salvar a moderacao.');
+        return false;
     } catch (erro) {
         console.error('Erro ao salvar moderacao:', erro);
         mostrarStatusModeracao('Erro ao conectar na API para salvar moderacao.');
+        return false;
     } finally {
         if (icon && iconOriginalClass) icon.className = iconOriginalClass;
     }
@@ -2890,6 +3071,7 @@ function aplicarModeloBoasVindas() {
         canal_saida_nome: atual.canal_saida_nome
     });
     mostrarStatusBoasVindas('Modelo do print aplicado. Salve para enviar assim no Discord.', 'success');
+    marcarConfiguracaoAlterada('server');
 }
 
 function formatarPreviewBoasVindas(texto) {
@@ -3107,20 +3289,21 @@ async function salvarBoasVindas() {
     if (erroValidacao) {
         mostrarStatusBoasVindas(erroValidacao);
         alert(erroValidacao);
-        return;
+        return false;
     }
 
     if (!token) {
         mostrarStatusBoasVindas('Sessao expirada. Entre novamente com o Discord.');
         alert('Sessao expirada. Por favor, logue novamente.');
-        return;
+        return false;
     }
 
     if (token === 'demo-token') {
         const salva = salvarBoasVindasDemo(config.id, config);
         preencherFormularioBoasVindas(salva);
         mostrarStatusBoasVindas('Avisos salvos no modo teste local.', 'success');
-        return;
+        finalizarSalvamentoConfiguracao();
+        return true;
     }
 
     try {
@@ -3141,8 +3324,8 @@ async function salvarBoasVindas() {
         if (response.ok && resultado.status === 'sucesso') {
             preencherFormularioBoasVindas(resultado.boas_vindas || config);
             mostrarStatusBoasVindas('Avisos salvos e sincronizados com o bot.', 'success');
-            alert('Avisos salvos com sucesso!');
-            return;
+            finalizarSalvamentoConfiguracao();
+            return true;
         }
 
         if (response.status === 401) {
@@ -3152,11 +3335,13 @@ async function salvarBoasVindas() {
         const mensagem = resultado.mensagem || resultado.erro || 'Nao foi possivel salvar os avisos.';
         mostrarStatusBoasVindas(mensagem);
         alert(mensagem);
+        return false;
     } catch (erro) {
         console.error('Erro ao salvar avisos:', erro);
         if (icon) icon.classList.remove('animate-spin');
         mostrarStatusBoasVindas('Erro ao conectar na API.');
         alert('Erro ao conectar na API.');
+        return false;
     }
 }
 
@@ -3563,12 +3748,12 @@ async function enviarConfiguracao() {
 
     if (!canalInput) {
         alert('Por favor, selecione um canal.');
-        return;
+        return false;
     }
 
     if (!token) {
         alert('Sessão expirada. Por favor, logue novamente.');
-        return;
+        return false;
     }
 
     if (token === 'demo-token') {
@@ -3586,7 +3771,8 @@ async function enviarConfiguracao() {
             statusMsg.innerText = "Limpeza salva no modo teste local.";
             statusMsg.className = "vm-status-message success";
         }
-        return;
+        finalizarSalvamentoConfiguracao();
+        return true;
     }
 
     const dados = {
@@ -3625,7 +3811,8 @@ async function enviarConfiguracao() {
                 statusMsg.innerText = "Limpeza salva e sincronizada com MongoDB!";
                 statusMsg.className = "vm-status-message success";
             }
-            alert('Limpeza salva com sucesso!');
+            finalizarSalvamentoConfiguracao();
+            return true;
         } else {
             if (response.status === 401) {
                 limparSessaoDiscord();
@@ -3636,6 +3823,7 @@ async function enviarConfiguracao() {
                 statusMsg.className = "vm-status-message error";
             }
             alert('Erro de permissão: ' + (resultado.mensagem || resultado.erro || 'Resposta inválida do servidor.'));
+            return false;
         }
     } catch (e) {
         console.error('Erro ao salvar:', e);
@@ -3645,6 +3833,7 @@ async function enviarConfiguracao() {
             statusMsg.className = "vm-status-message error";
         }
         alert('Erro ao conectar na API.');
+        return false;
     }
 }
 
@@ -3654,6 +3843,7 @@ async function enviarConfiguracao() {
 function inicializarAplicacao() {
     aplicarTemaSite(obterTemaSiteSalvo(), false);
     configurarNavegacaoTopo();
+    configurarBarraSalvamento();
     carregarStatusPublico();
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -3772,6 +3962,7 @@ function mostrarStatusLoginAdmin(mensagem, tipo = 'error') {
 }
 
 function abrirAreaAdmin() {
+    limparAlteracoesPendentes();
     document.getElementById('site-principal')?.classList.add('hidden');
 
     const painel = document.getElementById('painel-loritta');
