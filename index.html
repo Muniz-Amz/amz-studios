@@ -27,8 +27,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    <link rel="stylesheet" href="style.css?v=17">
-    <link rel="stylesheet" href="/amz-studios/style.css?v=17">
+    <link rel="stylesheet" href="style.css?v=18">
+    <link rel="stylesheet" href="/amz-studios/style.css?v=18">
 </head>
 <body class="flex flex-col min-h-screen overflow-x-hidden bg-black">
 
@@ -109,26 +109,6 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                 </div>
             </section>
 
-            <section id="gifs-salvos" class="site-gif-library py-24 px-8 border-t">
-                <div class="max-w-6xl mx-auto">
-                    <div class="site-gif-library-head">
-                        <div>
-                            <span>Biblioteca local</span>
-                            <h2>GIFs salvos</h2>
-                        </div>
-                        <div class="site-gif-actions">
-                            <input type="file" id="gif-library-input" accept="image/gif" hidden onchange="salvarGifLocal(event)">
-                            <button type="button" onclick="document.getElementById('gif-library-input')?.click()">
-                                <i class="ph ph-plus"></i>
-                                Adicionar GIF
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="site-gif-status" id="gif-library-status"></div>
-                    <div class="site-gif-grid" id="gif-library-grid"></div>
-                </div>
-            </section>
         </main>
 
         <footer class="py-16 px-8 border-t border-white/5 bg-[#050505] text-center mt-auto">
@@ -444,7 +424,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
 
     <script>
         const amzScript = document.createElement('script');
-        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=22' : 'script.js?v=22';
+        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=23' : 'script.js?v=23';
         document.body.appendChild(amzScript);
     </script>
 </body>

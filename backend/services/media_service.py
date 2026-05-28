@@ -89,14 +89,12 @@ class MediaService:
         with Image.open(input_path) as imagem:
             imagem = ImageOps.exif_transpose(imagem)
             imagem.thumbnail((self.limits.max_width, self.limits.max_width))
+            imagem = imagem.convert("RGBA")
 
-            if imagem.mode not in ("RGB", "RGBA"):
-                imagem = imagem.convert("RGBA")
-
-            fundo = Image.new("RGBA", imagem.size, (255, 255, 255, 0))
-            fundo.alpha_composite(imagem.convert("RGBA"))
-            frame = fundo.convert("P", palette=Image.ADAPTIVE)
-            frame.save(output_path, format="GIF", save_all=True, duration=1000, loop=0)
+            fundo = Image.new("RGB", imagem.size, (255, 255, 255))
+            fundo.paste(imagem, (0, 0), mask=imagem)
+            frame = fundo.convert("P", palette=Image.Palette.ADAPTIVE, colors=256)
+            frame.save(output_path, format="GIF", optimize=True)
 
         validar_saida(output_path, self.limits)
 
