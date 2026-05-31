@@ -18,3 +18,7 @@ env/
 # Ignorar arquivos de sistema
 .DS_Store
 Thumbs.db
+
+# Logs locais do servidor
+.server-err.log
+.server-out.log
