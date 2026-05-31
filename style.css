@@ -3727,6 +3727,7 @@ html[data-site-theme] .vm-dashboard-card,
 html[data-site-theme] .cleanup-list-empty,
 html[data-site-theme] .cleanup-item,
 html[data-site-theme] .settings-card,
+html[data-site-theme] .summary-grid article,
 html[data-site-theme] .welcome-preview,
 html[data-site-theme] .welcome-toggle-row,
 html[data-site-theme] .welcome-vars code,
@@ -3758,6 +3759,14 @@ html[data-site-theme] .admin-server-metrics span {
 
 html[data-site-theme] .welcome-vars code {
     background: var(--app-elevated) !important;
+}
+
+html[data-site-theme] .summary-grid span {
+    color: var(--app-muted) !important;
+}
+
+html[data-site-theme] .summary-grid strong {
+    color: var(--app-text) !important;
 }
 
 html[data-site-theme] .vm-server-option:hover,
