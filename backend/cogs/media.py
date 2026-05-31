@@ -8,6 +8,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from services.media_service import MediaError, MediaLimits, MediaService, nome_seguro, tipo_anexo, validar_tamanho_entrada
+from services.url_video_service import UrlVideoError, UrlVideoService
 
 
 class MediaCog(commands.Cog):
@@ -15,6 +16,7 @@ class MediaCog(commands.Cog):
         self.bot = bot
         self.limits = MediaLimits()
         self.service = MediaService(self.limits)
+        self.url_video_service = UrlVideoService()
         self.semaphore = asyncio.Semaphore(int(os.getenv("AMZ_MEDIA_CONCURRENCY", "1")))
 
     def obter_anexo(self, ctx):
@@ -213,6 +215,32 @@ class MediaCog(commands.Cog):
             f"- Conversoes simultaneas: 1 por padrao",
             ephemeral=True,
         )
+
+    @app_commands.command(name="baixarvideo", description="Baixa um video por link (Reels/Shorts) e envia no chat.")
+    @app_commands.describe(url="Link do video (Instagram Reels, YouTube Shorts, etc.)")
+    async def slash_baixarvideo(self, interaction: discord.Interaction, url: str):
+        await interaction.response.defer(thinking=True)
+
+        limite_bytes = self.url_video_service.limits.max_output_bytes
+        if interaction.guild and getattr(interaction.guild, "filesize_limit", None):
+            limite_bytes = min(limite_bytes, interaction.guild.filesize_limit)
+
+        try:
+            async with self.semaphore:
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    output_path = await asyncio.to_thread(self.url_video_service.download_video, url, temp_dir, limite_bytes)
+                    await interaction.followup.send(
+                        "Video pronto.",
+                        file=discord.File(output_path, filename=output_path.name),
+                    )
+        except UrlVideoError as erro:
+            await interaction.followup.send(str(erro), ephemeral=True)
+        except Exception as erro:
+            print(f"[MIDIA] Erro inesperado em /baixarvideo: {erro}")
+            await interaction.followup.send(
+                "Nao consegui baixar esse video agora. Tente novamente em alguns segundos.",
+                ephemeral=True,
+            )
 
 
 async def setup(bot):

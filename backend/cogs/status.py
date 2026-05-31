@@ -27,6 +27,7 @@ COMANDOS_HELP = {
         ("/videogif arquivo", "Transforma um video enviado em GIF."),
         ("/audio arquivo", "Extrai o audio de um video enviado."),
         ("/videoaudio arquivo", "Mesmo extrator de audio, com nome antigo."),
+        ("/baixarvideo url", "Baixa um video por link (Reels/Shorts) e envia como arquivo (se couber no limite)."),
         ("/midialimites", "Mostra os limites de conversao do bot."),
     ],
 }

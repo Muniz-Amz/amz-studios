@@ -7,3 +7,4 @@ Pillow
 pymongo
 python-dotenv
 requests
+yt-dlp
