@@ -182,7 +182,15 @@ class ModerationCog(commands.Cog):
         if cache and agora - cache["timestamp"] < CONFIG_CACHE_TTL_SECONDS:
             return cache["config"]
 
-        config = await buscar_moderacao(guild_id)
+        try:
+            config = await asyncio.wait_for(buscar_moderacao(guild_id), timeout=4)
+        except Exception as erro:
+            if cache:
+                print(f"[CONFIG] Falha ao buscar config {guild_id}: {erro}. Usando cache.")
+                return cache["config"]
+            print(f"[CONFIG] Falha ao buscar config {guild_id}: {erro}.")
+            return {}
+
         self.config_cache[guild_id] = {
             "config": config,
             "timestamp": agora,

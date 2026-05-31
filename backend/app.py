@@ -1018,6 +1018,17 @@ def status_bot():
     return jsonify(status_publico_bot()), 200
 
 
+@app.route("/", methods=["GET"])
+def root():
+    return jsonify({
+        "status": "sucesso",
+        "servico": "amz-studios-api",
+        "online": bot_online(),
+        "status_url": "/api/status",
+        "atualizado_em": agora_iso(),
+    }), 200
+
+
 @app.route("/api/admin/login", methods=["POST"])
 def admin_login():
     if not ADMIN_PASSWORD:
@@ -1474,7 +1485,7 @@ async def main():
 
     loop.run_in_executor(
         None,
-        lambda: werkzeug.serving.run_simple("0.0.0.0", port, app, use_debugger=False, use_reloader=False),
+        lambda: werkzeug.serving.run_simple("0.0.0.0", port, app, use_debugger=False, use_reloader=False, threaded=True),
     )
     print(f"[API] Servidor Flask iniciado na porta {port}")
 

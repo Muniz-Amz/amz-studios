@@ -2878,13 +2878,15 @@ function renderizarPainelBoasVindas(serverName) {
                     <strong>Boas-vindas e despedida</strong>
                     <span>Escolha canais, textos, cores e imagens/GIFs para quando membros entram ou saem.</span>
                 </div>
-                <div class="welcome-vars">
-                    ${renderizarVariaveisBoasVindas()}
+                <div class="welcome-tools">
+                    <div class="welcome-vars">
+                        ${renderizarVariaveisBoasVindas()}
+                    </div>
+                    <button type="button" class="welcome-model-button" onclick="aplicarModeloBoasVindas()">
+                        <i class="ph ph-sparkle"></i>
+                        Aplicar modelo do print
+                    </button>
                 </div>
-                <button type="button" class="welcome-model-button" onclick="aplicarModeloBoasVindas()">
-                    <i class="ph ph-sparkle"></i>
-                    Aplicar modelo do print
-                </button>
             </div>
 
             <div class="welcome-toggle-grid">

@@ -1622,7 +1622,7 @@ section {
 
 .welcome-intro {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 420px);
     align-items: start;
     gap: 16px;
 }
@@ -1654,6 +1654,12 @@ section {
     gap: 6px;
 }
 
+.welcome-tools {
+    display: grid;
+    justify-items: end;
+    gap: 12px;
+}
+
 .welcome-vars code {
     border: 1px solid rgba(255, 255, 255, 0.12);
     color: rgba(255, 255, 255, 0.72);
@@ -1663,8 +1669,6 @@ section {
 }
 
 .welcome-model-button {
-    grid-column: 2;
-    justify-self: end;
     min-height: 34px;
     border: 1px solid rgba(255, 255, 255, 0.18);
     background: #ffffff;
@@ -1679,6 +1683,8 @@ section {
     letter-spacing: 0.12em;
     text-transform: uppercase;
     transition: all 0.2s ease;
+    white-space: normal;
+    text-align: center;
 }
 
 .welcome-model-button:hover {
@@ -2416,9 +2422,12 @@ section {
         justify-content: flex-start;
     }
 
+    .welcome-tools {
+        justify-items: stretch;
+        width: 100%;
+    }
+
     .welcome-model-button {
-        grid-column: auto;
-        justify-self: stretch;
         width: 100%;
     }
 }
@@ -3699,8 +3708,16 @@ html[data-site-theme] .admin-login-panel {
     color: var(--app-text) !important;
 }
 
+html[data-site-theme] .vm-sidebar-label {
+    color: var(--app-muted) !important;
+}
+
 html[data-site-theme] .server-card,
 html[data-site-theme] .server-config-card,
+html[data-site-theme] .vm-alert,
+html[data-site-theme] .vm-settings-panel,
+html[data-site-theme] .vm-server-picker,
+html[data-site-theme] .vm-server-search,
 html[data-site-theme] .vm-server-trigger,
 html[data-site-theme] .vm-server-dropdown,
 html[data-site-theme] .vm-server-option,
@@ -3712,6 +3729,7 @@ html[data-site-theme] .cleanup-item,
 html[data-site-theme] .settings-card,
 html[data-site-theme] .welcome-preview,
 html[data-site-theme] .welcome-toggle-row,
+html[data-site-theme] .welcome-vars code,
 html[data-site-theme] .mod-intro,
 html[data-site-theme] .mod-field,
 html[data-site-theme] .mod-toggle-row,
@@ -3738,7 +3756,13 @@ html[data-site-theme] .admin-server-metrics span {
     box-shadow: none !important;
 }
 
+html[data-site-theme] .welcome-vars code {
+    background: var(--app-elevated) !important;
+}
+
 html[data-site-theme] .vm-server-option:hover,
+html[data-site-theme] .vm-server-picker:hover,
+html[data-site-theme] .vm-server-picker:focus,
 html[data-site-theme] .vm-sidebar-link:hover,
 html[data-site-theme] .vm-sidebar-link.active-soft,
 html[data-site-theme] .vm-dashboard-card:hover,
@@ -3859,9 +3883,9 @@ html[data-site-theme] #painel-loritta #nome-servidor-atual {
 }
 
 html[data-site-theme] #painel-loritta .vm-server-current-icon {
-    background: #101010 !important;
-    border-color: rgba(255, 255, 255, 0.16) !important;
-    color: #ffffff !important;
+    background: var(--app-input) !important;
+    border-color: var(--app-border-strong) !important;
+    color: var(--app-text) !important;
 }
 
 @media (max-width: 820px) {
