@@ -3743,6 +3743,7 @@ html[data-site-theme] .mod-field,
 html[data-site-theme] .mod-toggle-row,
 html[data-site-theme] .mod-feature-grid span,
 html[data-site-theme] .advanced-control-card,
+html[data-site-theme] .audit-event-card,
 html[data-site-theme] .security-option-card,
 html[data-site-theme] .automation-option-card,
 html[data-site-theme] .automation-option-notes,
@@ -3775,6 +3776,16 @@ html[data-site-theme] .summary-grid span {
 
 html[data-site-theme] .summary-grid strong {
     color: var(--app-text) !important;
+}
+
+html[data-site-theme] .advanced-section-heading i {
+    border-color: var(--app-border) !important;
+    background: var(--app-surface) !important;
+    color: var(--app-text) !important;
+}
+
+html[data-site-theme] .audit-group-note {
+    color: var(--app-muted) !important;
 }
 
 html[data-site-theme] .vm-server-option:hover,
