@@ -3693,6 +3693,13 @@ html[data-site-theme] .admin-area {
     color: var(--app-text) !important;
 }
 
+html[data-site-theme] #painel-loritta footer,
+html[data-site-theme] .admin-area footer {
+    background: var(--app-surface-2) !important;
+    border-color: var(--app-border) !important;
+    color: var(--app-muted) !important;
+}
+
 html[data-site-theme] .vm-dashboard,
 html[data-site-theme] .vm-content,
 html[data-site-theme] .admin-shell,
@@ -3736,6 +3743,7 @@ html[data-site-theme] .mod-field,
 html[data-site-theme] .mod-toggle-row,
 html[data-site-theme] .mod-feature-grid span,
 html[data-site-theme] .advanced-control-card,
+html[data-site-theme] .security-option-card,
 html[data-site-theme] .automation-option-card,
 html[data-site-theme] .automation-option-notes,
 html[data-site-theme] .automation-rule-editor,
