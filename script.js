@@ -2,6 +2,7 @@
 // CONFIGURAÇÕES E URLS
 // ==========================================
 const API_URL = 'https://amz-studios-api.onrender.com';
+const VIDEO_API_URL = 'https://dreadlord007-amz-video-api.hf.space';
 const DISCORD_CLIENT_ID = '1479103284064026787';
 const DISCORD_REDIRECT_PADRAO = 'https://muniz-amz.github.io/amz-studios/';
 const DISCORD_LOGIN_SCOPES = 'identify guilds';
@@ -957,7 +958,7 @@ async function baixarVideoSite(modo = '') {
             controller?.abort();
         }, 160000);
 
-        const response = await fetch(`${API_URL}/api/video/download`, {
+        const response = await fetch(`${VIDEO_API_URL}/api/video/download`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url, modo: modoEscolhido }),
