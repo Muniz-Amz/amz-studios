@@ -934,6 +934,9 @@ async function baixarVideoSite(modo = '') {
         video: 'amz-video.mp4',
         video_hd: 'amz-video-hd.mp4'
     };
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    let timeoutDownload = null;
+    let avisoDemora = null;
 
     if (!url) {
         mostrarStatusDownloadSite('Cole um link primeiro.', 'error');
@@ -947,10 +950,18 @@ async function baixarVideoSite(modo = '') {
     mostrarStatusDownloadSite('Preparando download...');
 
     try {
+        avisoDemora = window.setTimeout(() => {
+            mostrarStatusDownloadSite('Ainda processando... TikTok/Instagram podem demorar no primeiro download.');
+        }, 20000);
+        timeoutDownload = window.setTimeout(() => {
+            controller?.abort();
+        }, 160000);
+
         const response = await fetch(`${API_URL}/api/video/download`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, modo: modoEscolhido })
+            body: JSON.stringify({ url, modo: modoEscolhido }),
+            signal: controller?.signal
         });
 
         if (!response.ok) {
@@ -965,8 +976,13 @@ async function baixarVideoSite(modo = '') {
         mostrarStatusDownloadSite('Download pronto. Se nao abriu, confira se o navegador bloqueou o download.', 'success');
     } catch (erro) {
         console.error('Erro no download do site:', erro);
-        mostrarStatusDownloadSite(erro.message || 'Nao consegui baixar esse link agora.', 'error');
+        const mensagem = erro.name === 'AbortError'
+            ? 'Demorou demais para baixar esse link. Tente MP4 leve ou outro link.'
+            : erro.message || 'Nao consegui baixar esse link agora.';
+        mostrarStatusDownloadSite(mensagem, 'error');
     } finally {
+        window.clearTimeout(timeoutDownload);
+        window.clearTimeout(avisoDemora);
         botoes.forEach((botao) => {
             botao.disabled = false;
         });

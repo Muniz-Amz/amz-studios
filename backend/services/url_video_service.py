@@ -22,10 +22,10 @@ class UrlVideoError(Exception):
 @dataclass(frozen=True)
 class UrlVideoLimits:
     max_output_mb: int = int(os.getenv("AMZ_URLVIDEO_MAX_OUTPUT_MB", os.getenv("AMZ_MEDIA_MAX_OUTPUT_MB", "8")))
-    max_seconds: int = int(os.getenv("AMZ_URLVIDEO_MAX_SECONDS", "120"))
-    timeout_seconds: int = int(os.getenv("AMZ_URLVIDEO_TIMEOUT_SECONDS", "80"))
-    max_width: int = int(os.getenv("AMZ_URLVIDEO_MAX_WIDTH", "720"))
-    fps: int = int(os.getenv("AMZ_URLVIDEO_FPS", "30"))
+    max_seconds: int = int(os.getenv("AMZ_URLVIDEO_MAX_SECONDS", "90"))
+    timeout_seconds: int = int(os.getenv("AMZ_URLVIDEO_TIMEOUT_SECONDS", "150"))
+    max_width: int = int(os.getenv("AMZ_URLVIDEO_MAX_WIDTH", "540"))
+    fps: int = int(os.getenv("AMZ_URLVIDEO_FPS", "24"))
 
     @property
     def max_output_bytes(self):
@@ -167,9 +167,9 @@ class UrlVideoService:
             "-c:v",
             "libx264",
             "-preset",
-            "veryfast",
+            "ultrafast",
             "-crf",
-            "26",
+            "30",
             "-tune",
             "fastdecode",
             "-profile:v",
