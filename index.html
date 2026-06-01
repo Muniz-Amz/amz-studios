@@ -27,8 +27,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    <link rel="stylesheet" href="style.css?v=20">
-    <link rel="stylesheet" href="/amz-studios/style.css?v=20">
+    <link rel="stylesheet" href="style.css?v=21">
+    <link rel="stylesheet" href="/amz-studios/style.css?v=21">
 </head>
 <body class="flex flex-col min-h-screen overflow-x-hidden bg-black">
 
@@ -41,6 +41,7 @@
         <div class="site-nav-links">
             <a href="#inicio">Início</a>
             <a href="#aplicativos" onclick="navegarParaSecaoSite('aplicativos')">Aplicativos</a>
+            <a href="#downloads" onclick="navegarParaSecaoSite('downloads')">Downloads</a>
             <button type="button" onclick="abrirListaServidores()" class="site-nav-dashboard">
                 Dashboard
             </button>
@@ -76,6 +77,41 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                         <strong id="bot-status-label">Verificando bot</strong>
                         <span id="bot-status-servidores">Servidores: --</span>
                         <small id="bot-status-sync">Ultima sincronizacao: --</small>
+                    </div>
+                </div>
+            </section>
+
+            <section id="downloads" class="site-downloads-section py-24 px-8 border-t border-white/5">
+                <div class="max-w-5xl mx-auto">
+                    <div class="site-downloads-heading">
+                        <div>
+                            <span class="site-chip font-mono text-[10px] border border-neutral-700 text-neutral-500 px-3 py-1 uppercase tracking-widest">Video Tools</span>
+                            <h2>Downloads</h2>
+                        </div>
+                    </div>
+
+                    <div class="site-downloads-tool">
+                        <label class="site-downloads-input" for="site-download-url">
+                            <span>Link do video</span>
+                            <input id="site-download-url" type="url" placeholder="Cole link do Instagram, TikTok ou YouTube" autocomplete="off">
+                        </label>
+
+                        <div class="site-downloads-actions">
+                            <button type="button" onclick="baixarVideoSite('video_hd')">
+                                <span>Sem marca d'agua HD</span>
+                                <i class="ph ph-video" aria-hidden="true"></i>
+                            </button>
+                            <button type="button" onclick="baixarVideoSite('video')">
+                                <span>Sem marca d'agua</span>
+                                <i class="ph ph-download-simple" aria-hidden="true"></i>
+                            </button>
+                            <button type="button" onclick="baixarVideoSite('mp3')">
+                                <span>Baixar MP3</span>
+                                <i class="ph ph-music-notes" aria-hidden="true"></i>
+                            </button>
+                        </div>
+
+                        <div id="site-download-status" class="site-downloads-status hidden"></div>
                     </div>
                 </div>
             </section>

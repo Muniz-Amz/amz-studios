@@ -833,6 +833,94 @@ function configurarNavegacaoTopo() {
     });
 }
 
+function mostrarStatusDownloadSite(mensagem, tipo = 'info') {
+    const status = document.getElementById('site-download-status');
+    if (!status) return;
+
+    status.innerText = mensagem;
+    status.classList.remove('hidden', 'success', 'error');
+
+    if (tipo === 'success' || tipo === 'error') {
+        status.classList.add(tipo);
+    }
+}
+
+function obterNomeArquivoResposta(response, fallback) {
+    const disposition = response.headers.get('content-disposition') || '';
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const simpleMatch = disposition.match(/filename="?([^";]+)"?/i);
+    const nome = utf8Match?.[1] || simpleMatch?.[1];
+
+    if (!nome) return fallback;
+
+    try {
+        return decodeURIComponent(nome);
+    } catch {
+        return nome;
+    }
+}
+
+function baixarBlobSite(blob, nomeArquivo) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = nomeArquivo;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.setTimeout(() => URL.revokeObjectURL(url), 1200);
+}
+
+async function baixarVideoSite(modo = 'video_hd') {
+    const input = document.getElementById('site-download-url');
+    const url = input?.value?.trim() || '';
+    const botoes = document.querySelectorAll('.site-downloads-actions button');
+    const nomes = {
+        mp3: 'amz-audio.mp3',
+        video: 'amz-video.mp4',
+        video_hd: 'amz-video-hd.mp4'
+    };
+
+    if (!url) {
+        mostrarStatusDownloadSite('Cole um link primeiro.', 'error');
+        input?.focus();
+        return;
+    }
+
+    botoes.forEach((botao) => {
+        botao.disabled = true;
+    });
+    mostrarStatusDownloadSite('Preparando download...');
+
+    try {
+        const response = await fetch(`${API_URL}/api/video/download`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, modo })
+        });
+
+        if (!response.ok) {
+            const dados = await lerJsonResposta(response);
+            throw new Error(dados?.mensagem || dados?.erro || 'Nao consegui baixar esse link.');
+        }
+
+        const blob = await response.blob();
+        const nomeArquivo = obterNomeArquivoResposta(response, nomes[modo] || nomes.video_hd);
+
+        baixarBlobSite(blob, nomeArquivo);
+        mostrarStatusDownloadSite('Download pronto. Se nao abriu, confira se o navegador bloqueou o download.', 'success');
+    } catch (erro) {
+        console.error('Erro no download do site:', erro);
+        mostrarStatusDownloadSite(erro.message || 'Nao consegui baixar esse link agora.', 'error');
+    } finally {
+        botoes.forEach((botao) => {
+            botao.disabled = false;
+        });
+    }
+}
+
 function abrirListaServidores() {
     abrirPainelServidores();
     

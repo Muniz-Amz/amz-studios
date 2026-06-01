@@ -132,9 +132,10 @@ class UrlVideoService:
 
         return 0.0
 
-    def _converter_para_discord(self, input_path: Path, temp_dir: str) -> Path:
+    def _converter_para_discord(self, input_path: Path, temp_dir: str, max_width=None) -> Path:
         output_path = Path(temp_dir) / "amz-video.mp4"
-        max_width = max(2, (int(self.limits.max_width) // 2) * 2)
+        largura = int(max_width or self.limits.max_width)
+        max_width = max(2, (largura // 2) * 2)
         fps = min(max(int(self.limits.fps), 10), 60)
         scale = f"scale='min({max_width},trunc(iw/2)*2)':-2:flags=lanczos"
         inicio = self._inicio_com_frame_visivel(input_path, temp_dir)
@@ -176,7 +177,16 @@ class UrlVideoService:
 
         return output_path
 
-    def download_video(self, url: str, temp_dir: str, max_bytes=None) -> Path:
+    def _validar_tamanho_saida(self, path: Path, limite_bytes: int):
+        tamanho = path.stat().st_size
+        if tamanho <= limite_bytes:
+            return
+
+        limite_mb = round(limite_bytes / (1024 * 1024), 2)
+        tamanho_mb = round(tamanho / (1024 * 1024), 2)
+        raise UrlVideoError(f"Arquivo ficou grande demais ({tamanho_mb} MB). Limite: {limite_mb} MB.")
+
+    def download_video(self, url: str, temp_dir: str, max_bytes=None, max_width=None) -> Path:
         if YoutubeDL is None:
             raise UrlVideoError("Dependencia `yt-dlp` nao instalada no servidor.")
 
@@ -238,11 +248,75 @@ class UrlVideoService:
         if not candidato.exists():
             raise UrlVideoError("Nao consegui gerar o arquivo final do video.")
 
-        convertido = self._converter_para_discord(candidato, temp_dir)
-        tamanho = convertido.stat().st_size
-        if tamanho > limite_bytes:
-            limite_mb = round(limite_bytes / (1024 * 1024), 2)
-            tamanho_mb = round(tamanho / (1024 * 1024), 2)
-            raise UrlVideoError(f"Arquivo ficou grande demais ({tamanho_mb} MB). Limite: {limite_mb} MB.")
+        convertido = self._converter_para_discord(candidato, temp_dir, max_width=max_width)
+        self._validar_tamanho_saida(convertido, limite_bytes)
 
         return convertido
+
+    def download_audio(self, url: str, temp_dir: str, max_bytes=None) -> Path:
+        if YoutubeDL is None:
+            raise UrlVideoError("Dependencia `yt-dlp` nao instalada no servidor.")
+
+        url = self._validar_url(url)
+
+        limite_bytes = int(max_bytes or self.limits.max_output_bytes)
+        limite_bytes = min(max(limite_bytes, 1), self.limits.max_output_bytes)
+
+        outtmpl = str(Path(temp_dir) / "audio.%(ext)s")
+        cookies_file = self._cookies_file(temp_dir)
+
+        def filtro_por_duracao(info_dict, *, incomplete=False):
+            if incomplete:
+                return None
+            duracao = info_dict.get("duration")
+            if duracao and int(duracao) > int(self.limits.max_seconds):
+                return "Video longo demais para extrair MP3."
+            return None
+
+        ydl_opts = {
+            "outtmpl": outtmpl,
+            "format": os.getenv("AMZ_URLAUDIO_FORMAT", "ba/b"),
+            "ffmpeg_location": self.ffmpeg,
+            "noplaylist": True,
+            "quiet": True,
+            "no_warnings": True,
+            "retries": 2,
+            "fragment_retries": 2,
+            "socket_timeout": int(self.limits.timeout_seconds),
+            "match_filter": filtro_por_duracao,
+            "overwrites": True,
+        }
+
+        if cookies_file:
+            ydl_opts["cookiefile"] = str(cookies_file)
+
+        try:
+            with YoutubeDL(ydl_opts) as ydl:
+                ydl.extract_info(url, download=True)
+        except Exception as erro:
+            detalhe = str(erro).strip().splitlines()[-1][-400:]
+            raise UrlVideoError(f"Nao consegui baixar o audio desse link. {detalhe}")
+
+        arquivos = sorted(
+            (item for item in Path(temp_dir).glob("audio.*") if item.is_file() and not item.name.endswith(".part")),
+            key=lambda item: item.stat().st_mtime,
+            reverse=True,
+        )
+
+        if not arquivos:
+            raise UrlVideoError("Nao consegui gerar o arquivo de audio.")
+
+        output_path = Path(temp_dir) / "amz-audio.mp3"
+        self._run_ffmpeg([
+            "-i",
+            str(arquivos[0]),
+            "-vn",
+            "-b:a",
+            "128k",
+            "-map",
+            "0:a:0?",
+            str(output_path),
+        ])
+        self._validar_tamanho_saida(output_path, limite_bytes)
+
+        return output_path

@@ -86,7 +86,7 @@ html[data-site-theme] body {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: clamp(16px, 3vw, 42px);
+    gap: clamp(10px, 2vw, 32px);
     margin-left: auto;
 }
 
@@ -108,7 +108,7 @@ html[data-site-theme] body {
 
 .site-nav-dashboard {
     border: 1px solid var(--site-border);
-    padding: 14px 22px;
+    padding: 14px 18px;
 }
 
 .site-nav-dashboard:hover {
@@ -145,10 +145,117 @@ html[data-site-theme] body {
     background: var(--site-bg);
 }
 
+#downloads,
 #aplicativos,
 #site-principal footer {
     background: var(--site-section-bg) !important;
     border-color: var(--site-border) !important;
+}
+
+.site-downloads-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 26px;
+}
+
+.site-downloads-heading h2 {
+    margin-top: 14px;
+    color: var(--site-text);
+    font-size: clamp(34px, 6vw, 72px);
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+    text-transform: uppercase;
+}
+
+.site-downloads-tool {
+    display: grid;
+    gap: 14px;
+    padding: 22px;
+    background: var(--site-card-bg);
+    border: 1px solid var(--site-border);
+}
+
+.site-downloads-input {
+    display: grid;
+    gap: 10px;
+}
+
+.site-downloads-input span {
+    color: var(--site-muted);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+}
+
+.site-downloads-input input {
+    width: 100%;
+    min-height: 54px;
+    padding: 0 16px;
+    background: var(--site-bg);
+    border: 1px solid var(--site-border);
+    color: var(--site-text);
+    font-size: 14px;
+    outline: none;
+}
+
+.site-downloads-input input:focus {
+    border-color: var(--site-border-strong);
+}
+
+.site-downloads-actions {
+    display: grid;
+    gap: 10px;
+}
+
+.site-downloads-actions button {
+    display: flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: #51aee8;
+    border: 1px solid #51aee8;
+    color: #030303;
+    font-size: 15px;
+    font-weight: 800;
+    transition: filter 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+}
+
+.site-downloads-actions button:hover:not(:disabled) {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+}
+
+.site-downloads-actions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+    transform: none;
+}
+
+.site-downloads-actions i {
+    font-size: 19px;
+}
+
+.site-downloads-status {
+    padding: 12px 14px;
+    border: 1px solid var(--site-border);
+    color: var(--site-muted);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.site-downloads-status.success {
+    border-color: rgba(52, 201, 111, 0.42);
+    color: var(--app-success);
+}
+
+.site-downloads-status.error {
+    border-color: rgba(255, 103, 103, 0.42);
+    color: var(--app-danger);
 }
 
 #site-principal h1,
@@ -2514,7 +2621,7 @@ section {
     .site-nav-links {
         width: 100%;
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
         gap: 8px;
         margin-left: 0;
     }
@@ -2545,7 +2652,7 @@ section {
 
     #site-principal main,
     #painel-loritta {
-        padding-top: 118px;
+        padding-top: 132px;
     }
 
     #inicio {
@@ -2582,8 +2689,23 @@ section {
         white-space: normal;
     }
 
+    #downloads,
     #aplicativos {
         padding: 64px 18px;
+    }
+
+    .site-downloads-heading h2 {
+        font-size: 36px;
+        letter-spacing: -0.02em;
+    }
+
+    .site-downloads-tool {
+        padding: 16px;
+    }
+
+    .site-downloads-actions button {
+        min-height: 50px;
+        font-size: 14px;
     }
 
     #aplicativos .flex.items-center.gap-4 {
@@ -2922,7 +3044,7 @@ section {
 
     #site-principal main,
     #painel-loritta {
-        padding-top: 106px;
+        padding-top: 204px;
     }
 
     #inicio h1,

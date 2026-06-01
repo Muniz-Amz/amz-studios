@@ -2,10 +2,13 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import io
 import json
 import os
 import platform
+import shutil
 import sys
+import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -13,7 +16,7 @@ import discord
 import requests
 import werkzeug.serving
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 
 from bot import bot
@@ -28,11 +31,13 @@ from database import (
     salvar_moderacao,
     status_banco_dados,
 )
+from services.url_video_service import UrlVideoError, UrlVideoService
 
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+url_video_service = UrlVideoService()
 
 CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "").strip()
 CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "").strip()
@@ -1027,6 +1032,51 @@ def root():
         "status_url": "/api/status",
         "atualizado_em": agora_iso(),
     }), 200
+
+
+@app.route("/api/video/download", methods=["POST"])
+def baixar_video_publico():
+    dados = request.get_json(silent=True) or {}
+    url = str(dados.get("url") or "").strip()
+    modo = str(dados.get("modo") or "video_hd").strip()
+
+    if not url:
+        return jsonify({"status": "erro", "mensagem": "Envie um link para baixar."}), 400
+
+    temp_dir = tempfile.mkdtemp(prefix="amz-video-")
+
+    try:
+        limite_bytes = url_video_service.limits.max_output_bytes
+
+        if modo == "mp3":
+            output_path = url_video_service.download_audio(url, temp_dir, max_bytes=limite_bytes)
+            mimetype = "audio/mpeg"
+            filename = "amz-audio.mp3"
+        elif modo == "video":
+            output_path = url_video_service.download_video(url, temp_dir, max_bytes=limite_bytes, max_width=540)
+            mimetype = "video/mp4"
+            filename = "amz-video.mp4"
+        else:
+            output_path = url_video_service.download_video(url, temp_dir, max_bytes=limite_bytes)
+            mimetype = "video/mp4"
+            filename = "amz-video-hd.mp4"
+
+        conteudo = output_path.read_bytes()
+        resposta = send_file(
+            io.BytesIO(conteudo),
+            mimetype=mimetype,
+            as_attachment=True,
+            download_name=filename,
+        )
+        resposta.headers["Cache-Control"] = "no-store"
+        return resposta
+    except UrlVideoError as erro:
+        return jsonify({"status": "erro", "mensagem": str(erro)}), 400
+    except Exception as erro:
+        print(f"[VIDEO] Erro inesperado ao baixar link: {erro}")
+        return jsonify({"status": "erro", "mensagem": "Nao consegui baixar esse link agora."}), 500
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 @app.route("/api/admin/login", methods=["POST"])
