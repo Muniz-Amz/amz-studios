@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import imageio_ffmpeg
+from PIL import Image, ImageStat
 
 try:
     from yt_dlp import YoutubeDL
@@ -24,6 +25,7 @@ class UrlVideoLimits:
     max_seconds: int = int(os.getenv("AMZ_URLVIDEO_MAX_SECONDS", "120"))
     timeout_seconds: int = int(os.getenv("AMZ_URLVIDEO_TIMEOUT_SECONDS", "80"))
     max_width: int = int(os.getenv("AMZ_URLVIDEO_MAX_WIDTH", "720"))
+    fps: int = int(os.getenv("AMZ_URLVIDEO_FPS", "30"))
 
     @property
     def max_output_bytes(self):
@@ -77,25 +79,89 @@ class UrlVideoService:
             detalhes = (resultado.stderr or "ffmpeg falhou").strip()[-400:]
             raise UrlVideoError(f"Nao consegui deixar o video compativel com o Discord. {detalhes}")
 
-    def _converter_para_discord(self, input_path: Path, temp_dir: str) -> Path:
-        output_path = Path(temp_dir) / "amz-video.mp4"
-        scale = f"scale='min({self.limits.max_width},iw)':-2:flags=lanczos"
-
-        self._run_ffmpeg([
+    def _extrair_frame(self, input_path: Path, temp_dir: str, segundos: float):
+        output_path = Path(temp_dir) / f"frame-{str(segundos).replace('.', '_')}.jpg"
+        comando = [
+            self.ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-ss",
+            f"{segundos:.2f}",
             "-i",
             str(input_path),
-            "-map",
-            "0:v:0",
-            "-map",
-            "0:a?",
+            "-frames:v",
+            "1",
+            "-q:v",
+            "3",
+            str(output_path),
+        ]
+
+        resultado = subprocess.run(
+            comando,
+            capture_output=True,
+            text=True,
+            timeout=min(self.limits.timeout_seconds, 20),
+            check=False,
+        )
+
+        if resultado.returncode != 0 or not output_path.exists():
+            return None
+
+        return output_path
+
+    def _frame_tem_conteudo(self, frame_path: Path) -> bool:
+        with Image.open(frame_path) as imagem:
+            imagem = imagem.convert("RGB")
+            imagem.thumbnail((96, 96))
+            estatistica = ImageStat.Stat(imagem)
+
+        brilho = sum(estatistica.mean) / len(estatistica.mean)
+        contraste = max(estatistica.stddev)
+        return brilho >= 18 or contraste >= 14
+
+    def _inicio_com_frame_visivel(self, input_path: Path, temp_dir: str) -> float:
+        for segundos in (0.0, 0.25, 0.5, 0.8, 1.2, 1.8, 2.5):
+            try:
+                frame = self._extrair_frame(input_path, temp_dir, segundos)
+                if frame and self._frame_tem_conteudo(frame):
+                    return segundos
+            except Exception:
+                continue
+
+        return 0.0
+
+    def _converter_para_discord(self, input_path: Path, temp_dir: str) -> Path:
+        output_path = Path(temp_dir) / "amz-video.mp4"
+        max_width = max(2, (int(self.limits.max_width) // 2) * 2)
+        fps = min(max(int(self.limits.fps), 10), 60)
+        scale = f"scale='min({max_width},trunc(iw/2)*2)':-2:flags=lanczos"
+        inicio = self._inicio_com_frame_visivel(input_path, temp_dir)
+
+        args = []
+        if inicio > 0:
+            args.extend(["-ss", f"{inicio:.2f}"])
+
+        args.extend([
+            "-i",
+            str(input_path),
+            "-sn",
+            "-dn",
             "-vf",
             scale,
+            "-r",
+            str(fps),
             "-c:v",
             "libx264",
             "-preset",
             "veryfast",
             "-crf",
             "28",
+            "-profile:v",
+            "main",
+            "-tag:v",
+            "avc1",
             "-pix_fmt",
             "yuv420p",
             "-c:a",
@@ -106,6 +172,7 @@ class UrlVideoService:
             "+faststart",
             str(output_path),
         ])
+        self._run_ffmpeg(args)
 
         return output_path
 
