@@ -27,8 +27,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    <link rel="stylesheet" href="style.css?v=21">
-    <link rel="stylesheet" href="/amz-studios/style.css?v=21">
+    <link rel="stylesheet" href="style.css?v=22">
+    <link rel="stylesheet" href="/amz-studios/style.css?v=22">
 </head>
 <body class="flex flex-col min-h-screen overflow-x-hidden bg-black">
 
@@ -82,36 +82,75 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
             </section>
 
             <section id="downloads" class="site-downloads-section py-24 px-8 border-t border-white/5">
-                <div class="max-w-5xl mx-auto">
+                <div class="max-w-6xl mx-auto">
                     <div class="site-downloads-heading">
                         <div>
-                            <span class="site-chip font-mono text-[10px] border border-neutral-700 text-neutral-500 px-3 py-1 uppercase tracking-widest">Video Tools</span>
-                            <h2>Downloads</h2>
+                            <span class="site-chip font-mono text-[10px] border border-neutral-700 text-neutral-500 px-3 py-1 uppercase tracking-widest">GitHub Pages Tool</span>
+                            <h2>Baixar Videos</h2>
+                            <p>Cole links de Instagram, TikTok ou YouTube Shorts e escolha o formato de saida.</p>
                         </div>
                     </div>
 
-                    <div class="site-downloads-tool">
-                        <label class="site-downloads-input" for="site-download-url">
-                            <span>Link do video</span>
-                            <input id="site-download-url" type="url" placeholder="Cole link do Instagram, TikTok ou YouTube" autocomplete="off">
-                        </label>
+                    <div class="site-downloads-layout">
+                        <div class="site-downloads-tool">
+                            <div class="site-downloads-platforms" aria-label="Plataformas suportadas">
+                                <span><i class="ph ph-instagram-logo" aria-hidden="true"></i> Instagram</span>
+                                <span><i class="ph ph-tiktok-logo" aria-hidden="true"></i> TikTok</span>
+                                <span><i class="ph ph-youtube-logo" aria-hidden="true"></i> YouTube</span>
+                            </div>
 
-                        <div class="site-downloads-actions">
-                            <button type="button" onclick="baixarVideoSite('video_hd')">
-                                <span>Sem marca d'agua HD</span>
-                                <i class="ph ph-video" aria-hidden="true"></i>
+                            <label class="site-downloads-input" for="site-download-url">
+                                <span>Link do video</span>
+                                <input id="site-download-url" type="url" placeholder="Cole link do Instagram, TikTok ou YouTube" autocomplete="off">
+                            </label>
+
+                            <div class="site-downloads-quick-actions">
+                                <button type="button" onclick="colarLinkDownloadSite()">
+                                    <i class="ph ph-clipboard-text" aria-hidden="true"></i>
+                                    Colar link
+                                </button>
+                                <button type="button" onclick="limparDownloadSite()">
+                                    <i class="ph ph-x" aria-hidden="true"></i>
+                                    Limpar
+                                </button>
+                            </div>
+
+                            <div class="site-downloads-mode-grid" aria-label="Formato do download">
+                                <button type="button" class="site-download-mode active" data-download-mode="video_hd" onclick="selecionarModoDownloadSite('video_hd')" aria-pressed="true">
+                                    <i class="ph ph-video" aria-hidden="true"></i>
+                                    <strong>Sem marca d'agua HD</strong>
+                                    <span>Melhor qualidade em MP4</span>
+                                </button>
+                                <button type="button" class="site-download-mode" data-download-mode="video" onclick="selecionarModoDownloadSite('video')" aria-pressed="false">
+                                    <i class="ph ph-download-simple" aria-hidden="true"></i>
+                                    <strong>Sem marca d'agua</strong>
+                                    <span>MP4 mais leve e compativel</span>
+                                </button>
+                                <button type="button" class="site-download-mode" data-download-mode="mp3" onclick="selecionarModoDownloadSite('mp3')" aria-pressed="false">
+                                    <i class="ph ph-music-notes" aria-hidden="true"></i>
+                                    <strong>Baixar MP3</strong>
+                                    <span>Extrai apenas o audio</span>
+                                </button>
+                            </div>
+
+                            <button type="button" class="site-downloads-submit" onclick="baixarVideoSite()">
+                                <span>Baixar agora</span>
+                                <i class="ph ph-arrow-line-down" aria-hidden="true"></i>
                             </button>
-                            <button type="button" onclick="baixarVideoSite('video')">
-                                <span>Sem marca d'agua</span>
-                                <i class="ph ph-download-simple" aria-hidden="true"></i>
-                            </button>
-                            <button type="button" onclick="baixarVideoSite('mp3')">
-                                <span>Baixar MP3</span>
-                                <i class="ph ph-music-notes" aria-hidden="true"></i>
-                            </button>
+
+                            <div id="site-download-status" class="site-downloads-status hidden"></div>
                         </div>
 
-                        <div id="site-download-status" class="site-downloads-status hidden"></div>
+                        <aside class="site-downloads-info">
+                            <span class="site-downloads-info-kicker">Funcoes</span>
+                            <ul>
+                                <li><i class="ph ph-check-circle" aria-hidden="true"></i> Tenta baixar sem marca d'agua quando a plataforma libera o arquivo limpo.</li>
+                                <li><i class="ph ph-check-circle" aria-hidden="true"></i> Converte video para MP4 compativel com navegador e Discord.</li>
+                                <li><i class="ph ph-check-circle" aria-hidden="true"></i> Baixa MP3 direto do link sem precisar usar comando no bot.</li>
+                                <li><i class="ph ph-check-circle" aria-hidden="true"></i> Limita videos longos para proteger o servidor e evitar travamentos.</li>
+                            </ul>
+                            <small>O site fica no GitHub Pages; o processamento pesado usa a API do AMZ porque GitHub Pages nao executa ffmpeg/yt-dlp.</small>
+                        </aside>
                     </div>
                 </div>
             </section>

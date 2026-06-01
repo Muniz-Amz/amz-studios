@@ -833,6 +833,22 @@ function configurarNavegacaoTopo() {
     });
 }
 
+let modoDownloadSiteAtual = 'video_hd';
+
+function configurarDownloadsSite() {
+    selecionarModoDownloadSite(modoDownloadSiteAtual);
+
+    const input = document.getElementById('site-download-url');
+    if (!input || input.dataset.downloadConfigurado === 'true') return;
+
+    input.dataset.downloadConfigurado = 'true';
+    input.addEventListener('keydown', (evento) => {
+        if (evento.key !== 'Enter') return;
+        evento.preventDefault();
+        baixarVideoSite();
+    });
+}
+
 function mostrarStatusDownloadSite(mensagem, tipo = 'info') {
     const status = document.getElementById('site-download-status');
     if (!status) return;
@@ -843,6 +859,41 @@ function mostrarStatusDownloadSite(mensagem, tipo = 'info') {
     if (tipo === 'success' || tipo === 'error') {
         status.classList.add(tipo);
     }
+}
+
+function selecionarModoDownloadSite(modo = 'video_hd') {
+    modoDownloadSiteAtual = ['video_hd', 'video', 'mp3'].includes(modo) ? modo : 'video_hd';
+
+    document.querySelectorAll('[data-download-mode]').forEach((botao) => {
+        const ativo = botao.dataset.downloadMode === modoDownloadSiteAtual;
+        botao.classList.toggle('active', ativo);
+        botao.setAttribute('aria-pressed', String(ativo));
+    });
+}
+
+async function colarLinkDownloadSite() {
+    const input = document.getElementById('site-download-url');
+    if (!input) return;
+
+    try {
+        const texto = await navigator.clipboard.readText();
+        input.value = texto.trim();
+        input.focus();
+        mostrarStatusDownloadSite('Link colado. Escolha o formato e baixe.');
+    } catch {
+        mostrarStatusDownloadSite('Nao consegui ler a area de transferencia. Cole o link manualmente.', 'error');
+        input.focus();
+    }
+}
+
+function limparDownloadSite() {
+    const input = document.getElementById('site-download-url');
+    if (input) {
+        input.value = '';
+        input.focus();
+    }
+
+    mostrarStatusDownloadSite('Campo limpo. Cole um novo link.');
 }
 
 function obterNomeArquivoResposta(response, fallback) {
@@ -873,10 +924,11 @@ function baixarBlobSite(blob, nomeArquivo) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1200);
 }
 
-async function baixarVideoSite(modo = 'video_hd') {
+async function baixarVideoSite(modo = '') {
+    const modoEscolhido = modo || modoDownloadSiteAtual || 'video_hd';
     const input = document.getElementById('site-download-url');
     const url = input?.value?.trim() || '';
-    const botoes = document.querySelectorAll('.site-downloads-actions button');
+    const botoes = document.querySelectorAll('.site-downloads-tool button');
     const nomes = {
         mp3: 'amz-audio.mp3',
         video: 'amz-video.mp4',
@@ -898,7 +950,7 @@ async function baixarVideoSite(modo = 'video_hd') {
         const response = await fetch(`${API_URL}/api/video/download`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, modo })
+            body: JSON.stringify({ url, modo: modoEscolhido })
         });
 
         if (!response.ok) {
@@ -907,7 +959,7 @@ async function baixarVideoSite(modo = 'video_hd') {
         }
 
         const blob = await response.blob();
-        const nomeArquivo = obterNomeArquivoResposta(response, nomes[modo] || nomes.video_hd);
+        const nomeArquivo = obterNomeArquivoResposta(response, nomes[modoEscolhido] || nomes.video_hd);
 
         baixarBlobSite(blob, nomeArquivo);
         mostrarStatusDownloadSite('Download pronto. Se nao abriu, confira se o navegador bloqueou o download.', 'success');
@@ -3933,6 +3985,7 @@ async function enviarConfiguracao() {
 function inicializarAplicacao() {
     aplicarTemaSite(obterTemaSiteSalvo(), false);
     configurarNavegacaoTopo();
+    configurarDownloadsSite();
     configurarBarraSalvamento();
     carregarStatusPublico();
 
