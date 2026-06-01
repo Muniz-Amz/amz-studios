@@ -1,3 +1,14 @@
+---
+title: AMZ Video API
+emoji: 🎬
+colorFrom: blue
+colorTo: gray
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+---
+
 # AMZ Video API
 
 API isolada para a pagina `Baixar Videos` do site AMZ Studios.
