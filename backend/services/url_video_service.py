@@ -137,38 +137,69 @@ class UrlVideoService:
         largura = int(max_width or self.limits.max_width)
         max_width = max(2, (largura // 2) * 2)
         fps = min(max(int(self.limits.fps), 10), 60)
-        scale = f"scale='min({max_width},trunc(iw/2)*2)':-2:flags=lanczos"
+        video_filter = (
+            f"fps={fps},"
+            f"scale='min({max_width},trunc(iw/2)*2)':-2:flags=lanczos,"
+            "setpts=PTS-STARTPTS"
+        )
         inicio = self._inicio_com_frame_visivel(input_path, temp_dir)
 
-        args = []
+        args = [
+            "-fflags",
+            "+genpts",
+            "-i",
+            str(input_path),
+        ]
         if inicio > 0:
             args.extend(["-ss", f"{inicio:.2f}"])
 
         args.extend([
-            "-i",
-            str(input_path),
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a:0?",
             "-sn",
             "-dn",
             "-vf",
-            scale,
-            "-r",
-            str(fps),
+            video_filter,
+            "-af",
+            "aresample=async=1:first_pts=0",
             "-c:v",
             "libx264",
             "-preset",
             "veryfast",
             "-crf",
-            "28",
+            "26",
+            "-tune",
+            "fastdecode",
             "-profile:v",
-            "main",
+            "baseline",
+            "-level",
+            "3.1",
+            "-x264-params",
+            "keyint=60:min-keyint=30:scenecut=0",
             "-tag:v",
             "avc1",
             "-pix_fmt",
             "yuv420p",
+            "-fps_mode",
+            "cfr",
             "-c:a",
             "aac",
             "-b:a",
             "128k",
+            "-ar",
+            "44100",
+            "-ac",
+            "2",
+            "-video_track_timescale",
+            "90000",
+            "-avoid_negative_ts",
+            "make_zero",
+            "-map_metadata",
+            "-1",
+            "-map_chapters",
+            "-1",
             "-movflags",
             "+faststart",
             str(output_path),
