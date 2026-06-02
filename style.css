@@ -446,7 +446,7 @@ html[data-site-theme] body {
     background: var(--site-text) !important;
     border: 1px solid var(--site-text);
     color: var(--site-bg) !important;
-    box-shadow: 0 0 0 1px var(--site-border), inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+    box-shadow: 0 0 0 1px var(--site-border), inset 0 0 0 1px var(--site-bg);
 }
 
 .site-primary-action:hover {
