@@ -449,21 +449,21 @@ html[data-site-theme] body {
     box-shadow: 0 0 0 1px var(--site-border), inset 0 0 0 1px var(--site-bg);
 }
 
-html[data-site-theme="light"] .site-primary-action {
-    background: #ffffff !important;
-    border-color: rgba(16, 16, 16, 0.18);
-    color: #101010 !important;
-    box-shadow: 0 0 0 1px rgba(16, 16, 16, 0.1), inset 0 0 0 1px #ffffff;
-}
-
 .site-primary-action:hover {
     background: var(--site-muted) !important;
     border-color: var(--site-border-strong);
 }
 
-html[data-site-theme="light"] .site-primary-action:hover {
+html[data-site-theme="light"] #site-principal #inicio .site-primary-action {
+    background: #ffffff !important;
+    border-color: rgba(16, 16, 16, 0.18) !important;
+    color: #101010 !important;
+    box-shadow: 0 0 0 1px rgba(16, 16, 16, 0.1), inset 0 0 0 1px #ffffff;
+}
+
+html[data-site-theme="light"] #site-principal #inicio .site-primary-action:hover {
     background: #f1f1ed !important;
-    border-color: rgba(16, 16, 16, 0.36);
+    border-color: rgba(16, 16, 16, 0.36) !important;
 }
 
 .site-secondary-action {
