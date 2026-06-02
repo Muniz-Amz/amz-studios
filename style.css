@@ -454,14 +454,14 @@ html[data-site-theme] body {
     border-color: var(--site-border-strong);
 }
 
-html[data-site-theme="light"] #site-principal #inicio .site-primary-action {
+html[data-site-theme="light"] #site-principal .site-primary-action {
     background: #ffffff !important;
     border-color: rgba(16, 16, 16, 0.18) !important;
     color: #101010 !important;
     box-shadow: 0 0 0 1px rgba(16, 16, 16, 0.1), inset 0 0 0 1px #ffffff;
 }
 
-html[data-site-theme="light"] #site-principal #inicio .site-primary-action:hover {
+html[data-site-theme="light"] #site-principal .site-primary-action:hover {
     background: #f1f1ed !important;
     border-color: rgba(16, 16, 16, 0.36) !important;
 }
