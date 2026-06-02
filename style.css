@@ -466,6 +466,18 @@ html[data-site-theme="light"] #site-principal .site-primary-action:hover {
     border-color: rgba(16, 16, 16, 0.36) !important;
 }
 
+html[data-site-theme="light"] #painel-loritta .site-primary-action {
+    background: #ffffff !important;
+    border-color: rgba(16, 16, 16, 0.18) !important;
+    color: #101010 !important;
+    box-shadow: 0 0 0 1px rgba(16, 16, 16, 0.1), inset 0 0 0 1px #ffffff;
+}
+
+html[data-site-theme="light"] #painel-loritta .site-primary-action:hover {
+    background: #f1f1ed !important;
+    border-color: rgba(16, 16, 16, 0.36) !important;
+}
+
 .site-secondary-action {
     border-color: var(--site-border) !important;
     color: var(--site-text) !important;
@@ -474,6 +486,17 @@ html[data-site-theme="light"] #site-principal .site-primary-action:hover {
 .site-secondary-action:hover {
     background: var(--site-hover) !important;
     border-color: var(--site-border-strong) !important;
+}
+
+html[data-site-theme="light"] #painel-loritta .site-secondary-action {
+    background: transparent !important;
+    border-color: rgba(16, 16, 16, 0.16) !important;
+    color: #101010 !important;
+}
+
+html[data-site-theme="light"] #painel-loritta .site-secondary-action:hover {
+    background: #f1f1ed !important;
+    border-color: rgba(16, 16, 16, 0.36) !important;
 }
 
 .site-app-card,
