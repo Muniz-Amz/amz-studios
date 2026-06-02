@@ -12,6 +12,12 @@
     --site-border-strong: rgba(255, 255, 255, 0.44);
     --site-hover: rgba(255, 255, 255, 0.06);
     --site-shadow: rgba(255, 255, 255, 0.05);
+    --site-button-bg: #050505;
+    --site-button-text: #ffffff;
+    --site-button-border: rgba(255, 255, 255, 0.18);
+    --site-button-border-strong: rgba(255, 255, 255, 0.72);
+    --site-button-hover: #101010;
+    --site-button-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
     --app-bg: #030303;
     --app-surface: #101010;
     --app-surface-2: #080808;
@@ -28,6 +34,12 @@
     --app-warning: #fff200;
     --app-danger: #ff6767;
     --app-shadow: rgba(0, 0, 0, 0.28);
+    --app-button-bg: #050505;
+    --app-button-text: #ffffff;
+    --app-button-border: rgba(255, 255, 255, 0.16);
+    --app-button-border-strong: rgba(255, 255, 255, 0.72);
+    --app-button-hover: #101010;
+    --app-button-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 html[data-site-theme="light"] {
@@ -42,6 +54,12 @@ html[data-site-theme="light"] {
     --site-border-strong: rgba(16, 16, 16, 0.42);
     --site-hover: rgba(16, 16, 16, 0.055);
     --site-shadow: rgba(16, 16, 16, 0.08);
+    --site-button-bg: #ffffff;
+    --site-button-text: #101010;
+    --site-button-border: rgba(16, 16, 16, 0.18);
+    --site-button-border-strong: rgba(16, 16, 16, 0.46);
+    --site-button-hover: #f1f1ed;
+    --site-button-shadow: 0 0 0 1px rgba(16, 16, 16, 0.1), inset 0 0 0 1px #ffffff;
     --app-bg: #f5f5f1;
     --app-surface: #ffffff;
     --app-surface-2: #ebebe5;
@@ -58,6 +76,12 @@ html[data-site-theme="light"] {
     --app-warning: #8a7800;
     --app-danger: #c83333;
     --app-shadow: rgba(18, 18, 18, 0.08);
+    --app-button-bg: #ffffff;
+    --app-button-text: #101010;
+    --app-button-border: rgba(16, 16, 16, 0.18);
+    --app-button-border-strong: rgba(16, 16, 16, 0.46);
+    --app-button-hover: #f1f1ed;
+    --app-button-shadow: 0 0 0 1px rgba(16, 16, 16, 0.1), inset 0 0 0 1px #ffffff;
 }
 
 body { 
@@ -107,18 +131,22 @@ html[data-site-theme] body {
 }
 
 .site-nav-dashboard {
-    border: 1px solid var(--site-border);
+    background: transparent;
+    border: 1px solid var(--site-button-border);
+    color: var(--site-button-text) !important;
     padding: 14px 18px;
 }
 
 .site-nav-dashboard:hover {
-    background: var(--site-hover);
-    border-color: var(--site-border-strong);
+    background: var(--site-button-hover);
+    border-color: var(--site-button-border-strong);
 }
 
 .site-theme-toggle {
     min-width: 104px;
-    border: 1px solid var(--site-border);
+    background: transparent;
+    border: 1px solid var(--site-button-border);
+    color: var(--site-button-text) !important;
     padding: 14px 18px;
     display: inline-flex;
     align-items: center;
@@ -127,8 +155,8 @@ html[data-site-theme] body {
 }
 
 .site-theme-toggle:hover {
-    background: var(--site-hover);
-    border-color: var(--site-border-strong);
+    background: var(--site-button-hover);
+    border-color: var(--site-button-border-strong);
 }
 
 .site-theme-toggle i {
@@ -215,9 +243,9 @@ html[data-site-theme] body {
     justify-content: center;
     gap: 8px;
     padding: 0 13px;
-    background: var(--site-bg);
-    border: 1px solid var(--site-border);
-    color: var(--site-muted);
+    background: transparent;
+    border: 1px solid var(--site-button-border);
+    color: var(--site-button-text);
     font-size: 11px;
     font-weight: 900;
     letter-spacing: 0.08em;
@@ -230,9 +258,9 @@ html[data-site-theme] body {
 }
 
 .site-downloads-quick-actions button:hover:not(:disabled) {
-    background: var(--site-hover);
-    border-color: var(--site-border-strong);
-    color: var(--site-text);
+    background: var(--site-button-hover);
+    border-color: var(--site-button-border-strong);
+    color: var(--site-button-text);
 }
 
 .site-downloads-input {
@@ -277,8 +305,8 @@ html[data-site-theme] body {
     justify-content: flex-start;
     gap: 10px;
     padding: 16px;
-    background: var(--site-bg);
-    border: 1px solid var(--site-border);
+    background: transparent;
+    border: 1px solid var(--site-button-border);
     color: var(--site-text);
     text-align: left;
     transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
@@ -286,8 +314,10 @@ html[data-site-theme] body {
 
 .site-download-mode:hover:not(:disabled),
 .site-download-mode.active {
-    background: var(--site-hover);
-    border-color: var(--site-border-strong);
+    background: var(--site-button-bg);
+    border-color: var(--site-button-border-strong);
+    box-shadow: var(--site-button-shadow);
+    color: var(--site-button-text);
     transform: translateY(-1px);
 }
 
@@ -315,17 +345,20 @@ html[data-site-theme] body {
     align-items: center;
     justify-content: center;
     gap: 10px;
-    background: #51aee8;
-    border: 1px solid #51aee8;
-    color: #030303;
+    background: var(--site-button-bg);
+    border: 1px solid var(--site-button-border);
+    color: var(--site-button-text);
     font-size: 15px;
     font-weight: 900;
     text-transform: uppercase;
+    box-shadow: var(--site-button-shadow);
     transition: filter 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
 }
 
 .site-downloads-submit:hover:not(:disabled) {
-    filter: brightness(1.08);
+    background: var(--site-button-hover);
+    border-color: var(--site-button-border-strong);
+    filter: none;
     transform: translateY(-1px);
 }
 
@@ -443,60 +476,26 @@ html[data-site-theme] body {
 }
 
 .site-primary-action {
-    background: var(--site-text) !important;
-    border: 1px solid var(--site-text);
-    color: var(--site-bg) !important;
-    box-shadow: 0 0 0 1px var(--site-border), inset 0 0 0 1px var(--site-bg);
+    background: var(--site-button-bg) !important;
+    border: 1px solid var(--site-button-border) !important;
+    color: var(--site-button-text) !important;
+    box-shadow: var(--site-button-shadow);
 }
 
 .site-primary-action:hover {
-    background: var(--site-muted) !important;
-    border-color: var(--site-border-strong);
-}
-
-html[data-site-theme="light"] #site-principal .site-primary-action {
-    background: #ffffff !important;
-    border-color: rgba(16, 16, 16, 0.18) !important;
-    color: #101010 !important;
-    box-shadow: 0 0 0 1px rgba(16, 16, 16, 0.1), inset 0 0 0 1px #ffffff;
-}
-
-html[data-site-theme="light"] #site-principal .site-primary-action:hover {
-    background: #f1f1ed !important;
-    border-color: rgba(16, 16, 16, 0.36) !important;
-}
-
-html[data-site-theme="light"] #painel-loritta .site-primary-action {
-    background: #ffffff !important;
-    border-color: rgba(16, 16, 16, 0.18) !important;
-    color: #101010 !important;
-    box-shadow: 0 0 0 1px rgba(16, 16, 16, 0.1), inset 0 0 0 1px #ffffff;
-}
-
-html[data-site-theme="light"] #painel-loritta .site-primary-action:hover {
-    background: #f1f1ed !important;
-    border-color: rgba(16, 16, 16, 0.36) !important;
+    background: var(--site-button-hover) !important;
+    border-color: var(--site-button-border-strong) !important;
 }
 
 .site-secondary-action {
-    border-color: var(--site-border) !important;
-    color: var(--site-text) !important;
+    background: transparent !important;
+    border-color: var(--site-button-border) !important;
+    color: var(--site-button-text) !important;
 }
 
 .site-secondary-action:hover {
-    background: var(--site-hover) !important;
-    border-color: var(--site-border-strong) !important;
-}
-
-html[data-site-theme="light"] #painel-loritta .site-secondary-action {
-    background: transparent !important;
-    border-color: rgba(16, 16, 16, 0.16) !important;
-    color: #101010 !important;
-}
-
-html[data-site-theme="light"] #painel-loritta .site-secondary-action:hover {
-    background: #f1f1ed !important;
-    border-color: rgba(16, 16, 16, 0.36) !important;
+    background: var(--site-button-hover) !important;
+    border-color: var(--site-button-border-strong) !important;
 }
 
 .site-app-card,
@@ -4131,9 +4130,10 @@ html[data-site-theme] .vm-sidebar-link.active,
 html[data-site-theme] .vm-dashboard-card.active,
 html[data-site-theme] .vm-server-option.active,
 html[data-site-theme] .automation-option-card.active {
-    background: var(--app-accent) !important;
-    border-color: var(--app-accent) !important;
-    color: var(--app-bg) !important;
+    background: var(--app-button-bg) !important;
+    border-color: var(--app-button-border-strong) !important;
+    color: var(--app-button-text) !important;
+    box-shadow: var(--app-button-shadow) !important;
 }
 
 html[data-site-theme] #painel-loritta input,
@@ -4185,15 +4185,34 @@ html[data-site-theme] .admin-area [class*="text-neutral"] {
 
 html[data-site-theme] #painel-loritta button,
 html[data-site-theme] .admin-area button {
-    border-color: var(--app-border) !important;
-    color: var(--app-text);
+    border-color: var(--app-button-border) !important;
+    color: var(--app-button-text) !important;
+}
+
+html[data-site-theme] #painel-loritta button:not(.vm-sidebar-link):not(.vm-dashboard-card):not(.vm-server-picker):not(.vm-server-option),
+html[data-site-theme] .admin-area button,
+html[data-site-theme] .server-config-button,
+html[data-site-theme] .vm-save-button,
+html[data-site-theme] .cleanup-item button,
+html[data-site-theme] .welcome-model-button,
+html[data-site-theme] .automation-rule-actions button,
+html[data-site-theme] .automation-rule-item button,
+html[data-site-theme] .amz-save-tray-actions button,
+html[data-site-theme] .admin-login-card button,
+html[data-site-theme] .admin-toolbar-actions button,
+html[data-site-theme] .admin-members-toolbar button,
+html[data-site-theme] .admin-action-button {
+    background: var(--app-button-bg) !important;
+    border: 1px solid var(--app-button-border) !important;
+    color: var(--app-button-text) !important;
+    box-shadow: var(--app-button-shadow) !important;
 }
 
 html[data-site-theme] #painel-loritta button:hover:not(:disabled),
 html[data-site-theme] .admin-area button:hover:not(:disabled) {
-    background: var(--app-accent) !important;
-    border-color: var(--app-accent) !important;
-    color: var(--app-bg) !important;
+    background: var(--app-button-hover) !important;
+    border-color: var(--app-button-border-strong) !important;
+    color: var(--app-button-text) !important;
 }
 
 html[data-site-theme] .vm-sidebar-link.active *,
@@ -4202,24 +4221,13 @@ html[data-site-theme] .vm-server-option.active *,
 html[data-site-theme] .automation-option-card.active *,
 html[data-site-theme] #painel-loritta button:hover:not(:disabled) *,
 html[data-site-theme] .admin-area button:hover:not(:disabled) * {
-    color: var(--app-bg) !important;
+    color: var(--app-button-text) !important;
 }
 
-html[data-site-theme="light"] .vm-dashboard-card.active,
-html[data-site-theme="light"] .vm-dashboard-card.active:hover {
-    background: #ffffff !important;
-    border-color: rgba(16, 16, 16, 0.46) !important;
-    color: #101010 !important;
-    box-shadow: inset 0 0 0 1px rgba(16, 16, 16, 0.14) !important;
-}
-
-html[data-site-theme="light"] .vm-dashboard-card.active i,
-html[data-site-theme="light"] .vm-dashboard-card.active strong {
-    color: #101010 !important;
-}
-
-html[data-site-theme="light"] .vm-dashboard-card.active small {
-    color: rgba(16, 16, 16, 0.62) !important;
+html[data-site-theme] .vm-dashboard-card.active small,
+html[data-site-theme] .automation-option-card.active small,
+html[data-site-theme] .vm-server-option.active small {
+    color: var(--app-muted) !important;
 }
 
 html[data-site-theme] .admin-danger-button,
