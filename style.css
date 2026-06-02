@@ -145,6 +145,13 @@ html[data-site-theme] body {
     background: var(--site-bg);
 }
 
+#inicio h1 {
+    max-width: 100%;
+    font-size: clamp(56px, 9.4vw, 128px) !important;
+    line-height: 0.9 !important;
+    overflow-wrap: normal;
+}
+
 #downloads,
 #aplicativos,
 #site-principal footer {
@@ -439,10 +446,12 @@ html[data-site-theme] body {
     background: var(--site-text) !important;
     border: 1px solid var(--site-text);
     color: var(--site-bg) !important;
+    box-shadow: 0 0 0 1px var(--site-border), inset 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
 
 .site-primary-action:hover {
     background: var(--site-muted) !important;
+    border-color: var(--site-border-strong);
 }
 
 .site-secondary-action {
@@ -458,6 +467,7 @@ html[data-site-theme] body {
 .site-app-card,
 .site-soon-card {
     background: var(--site-card-bg) !important;
+    border-color: var(--site-border-strong) !important;
     color: var(--site-text);
 }
 
@@ -2799,8 +2809,8 @@ section {
     }
 
     #inicio h1 {
-        font-size: 58px;
-        line-height: 0.92;
+        font-size: 58px !important;
+        line-height: 0.92 !important;
         letter-spacing: 0;
         overflow-wrap: anywhere;
     }
@@ -3206,7 +3216,7 @@ section {
 
     #inicio h1,
     #bot-landing h1 {
-        font-size: 46px;
+        font-size: 46px !important;
     }
 
     #inicio p,
