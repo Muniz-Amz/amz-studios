@@ -4205,6 +4205,23 @@ html[data-site-theme] .admin-area button:hover:not(:disabled) * {
     color: var(--app-bg) !important;
 }
 
+html[data-site-theme="light"] .vm-dashboard-card.active,
+html[data-site-theme="light"] .vm-dashboard-card.active:hover {
+    background: #ffffff !important;
+    border-color: rgba(16, 16, 16, 0.46) !important;
+    color: #101010 !important;
+    box-shadow: inset 0 0 0 1px rgba(16, 16, 16, 0.14) !important;
+}
+
+html[data-site-theme="light"] .vm-dashboard-card.active i,
+html[data-site-theme="light"] .vm-dashboard-card.active strong {
+    color: #101010 !important;
+}
+
+html[data-site-theme="light"] .vm-dashboard-card.active small {
+    color: rgba(16, 16, 16, 0.62) !important;
+}
+
 html[data-site-theme] .admin-danger-button,
 html[data-site-theme] .admin-action-button.ban,
 html[data-site-theme] .admin-action-button.kick {
