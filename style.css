@@ -482,9 +482,24 @@ html[data-site-theme] body {
     box-shadow: var(--site-button-shadow);
 }
 
+#site-principal .site-primary-action,
+#site-principal .site-primary-action.bg-white {
+    background: var(--site-button-bg) !important;
+    border-color: var(--site-button-border) !important;
+    color: var(--site-button-text) !important;
+    box-shadow: var(--site-button-shadow) !important;
+}
+
 .site-primary-action:hover {
     background: var(--site-button-hover) !important;
     border-color: var(--site-button-border-strong) !important;
+}
+
+#site-principal .site-primary-action:hover,
+#site-principal .site-primary-action.bg-white:hover {
+    background: var(--site-button-hover) !important;
+    border-color: var(--site-button-border-strong) !important;
+    color: var(--site-button-text) !important;
 }
 
 .site-secondary-action {
@@ -496,6 +511,32 @@ html[data-site-theme] body {
 .site-secondary-action:hover {
     background: var(--site-button-hover) !important;
     border-color: var(--site-button-border-strong) !important;
+}
+
+#painel-loritta .site-primary-action,
+#painel-loritta .site-primary-action.bg-white {
+    background: var(--app-button-bg) !important;
+    border-color: var(--app-button-border) !important;
+    color: var(--app-button-text) !important;
+    box-shadow: var(--app-button-shadow) !important;
+}
+
+#painel-loritta .site-primary-action:hover,
+#painel-loritta .site-primary-action.bg-white:hover {
+    background: var(--app-button-hover) !important;
+    border-color: var(--app-button-border-strong) !important;
+    color: var(--app-button-text) !important;
+}
+
+#painel-loritta .site-secondary-action {
+    background: transparent !important;
+    border-color: var(--app-button-border) !important;
+    color: var(--app-button-text) !important;
+}
+
+#painel-loritta .site-secondary-action:hover {
+    background: var(--app-button-hover) !important;
+    border-color: var(--app-button-border-strong) !important;
 }
 
 .site-app-card,
