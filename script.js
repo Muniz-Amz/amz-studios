@@ -316,6 +316,7 @@ let moderacaoServidorCarregadoId = '';
 let moderacaoRecursosAtual = { canais: [], cargos: [] };
 let saveTrayListenerAtivo = false;
 let saveTrayToastTimer = null;
+let adminLogsTimer = null;
 let saveTrayEstado = {
     dirty: false,
     saving: false,
@@ -4133,6 +4134,7 @@ function abrirAreaAdmin() {
 
     if (obterAdminToken()) {
         carregarStatusAdmin();
+        iniciarLogsAdminTempoReal();
     } else {
         document.getElementById('admin-login-panel')?.classList.remove('hidden');
         document.getElementById('admin-dashboard')?.classList.add('hidden');
@@ -4140,12 +4142,14 @@ function abrirAreaAdmin() {
 }
 
 function fecharAreaAdmin() {
+    pararLogsAdminTempoReal();
     document.getElementById('admin-area')?.classList.add('hidden');
     document.getElementById('site-principal')?.classList.remove('hidden');
     window.history.replaceState({}, document.title, window.location.pathname);
 }
 
 function sairAreaAdmin() {
+    pararLogsAdminTempoReal();
     limparAdminToken();
     document.getElementById('admin-dashboard')?.classList.add('hidden');
     document.getElementById('admin-login-panel')?.classList.remove('hidden');
@@ -4178,6 +4182,7 @@ async function entrarAreaAdmin(evento) {
             if (input) input.value = '';
             mostrarStatusLoginAdmin('Acesso liberado.', 'success');
             await carregarStatusAdmin();
+            iniciarLogsAdminTempoReal();
             return;
         }
 
@@ -4218,6 +4223,7 @@ async function carregarStatusAdmin() {
         }
 
         if (response.status === 401) {
+            pararLogsAdminTempoReal();
             limparAdminToken();
             document.getElementById('admin-dashboard')?.classList.add('hidden');
             document.getElementById('admin-login-panel')?.classList.remove('hidden');
@@ -4234,6 +4240,7 @@ function renderizarAdminDashboard(dados) {
     const titulo = document.getElementById('admin-bot-title');
     const resumo = document.getElementById('admin-summary-grid');
     const sistema = document.getElementById('admin-system-panel');
+    const logs = document.getElementById('admin-log-panel');
     const lista = document.getElementById('admin-server-list');
     const servidores = Array.isArray(dados.servidores) ? dados.servidores : [];
 
@@ -4256,6 +4263,10 @@ function renderizarAdminDashboard(dados) {
         sistema.innerHTML = renderizarSistemaAdmin(dados.sistema || {});
     }
 
+    if (logs) {
+        logs.innerHTML = renderizarLogsAdmin(dados.logs || []);
+    }
+
     if (!lista) return;
 
     if (!servidores.length) {
@@ -4264,6 +4275,7 @@ function renderizarAdminDashboard(dados) {
     }
 
     lista.innerHTML = servidores.map(renderizarServidorAdmin).join('');
+    filtrarServidoresAdmin();
 }
 
 function criarCardResumoAdmin(titulo, valor, detalhe) {
@@ -4274,6 +4286,85 @@ function criarCardResumoAdmin(titulo, valor, detalhe) {
             <small>${escaparHTML(detalhe)}</small>
         </article>
     `;
+}
+
+function renderizarLogsAdmin(logs = []) {
+    const itens = Array.isArray(logs) ? logs.slice(0, 12) : [];
+
+    return `
+        <article class="admin-log-card">
+            <div class="admin-log-heading">
+                <div>
+                    <span>Tempo real</span>
+                    <strong>Logs e erros recentes</strong>
+                </div>
+                <small>Atualiza a cada 10s</small>
+            </div>
+            <div class="admin-log-list">
+                ${itens.map(renderizarLogAdmin).join('') || '<div class="admin-log-empty">Nenhum evento recente registrado.</div>'}
+            </div>
+        </article>
+    `;
+}
+
+function renderizarLogAdmin(log = {}) {
+    const contexto = log.contexto && typeof log.contexto === 'object'
+        ? Object.entries(log.contexto)
+            .slice(0, 4)
+            .map(([chave, valor]) => `${chave}: ${valor}`)
+            .join(' | ')
+        : '';
+    const nivel = log.nivel === 'error' ? 'error' : 'info';
+
+    return `
+        <div class="admin-log-row ${nivel}">
+            <time>${escaparHTML(formatarDataHora(log.criado_em))}</time>
+            <strong>${escaparHTML(log.tipo || 'evento')}</strong>
+            <span>${escaparHTML(log.mensagem || '--')}</span>
+            ${contexto ? `<small>${escaparHTML(contexto)}</small>` : ''}
+        </div>
+    `;
+}
+
+function iniciarLogsAdminTempoReal() {
+    if (adminLogsTimer) return;
+    adminLogsTimer = window.setInterval(carregarLogsAdmin, 10000);
+}
+
+function pararLogsAdminTempoReal() {
+    if (!adminLogsTimer) return;
+    window.clearInterval(adminLogsTimer);
+    adminLogsTimer = null;
+}
+
+async function carregarLogsAdmin() {
+    const token = obterAdminToken();
+    const painel = document.getElementById('admin-log-panel');
+
+    if (!token || !painel || document.getElementById('admin-dashboard')?.classList.contains('hidden')) {
+        pararLogsAdminTempoReal();
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/api/admin/logs?limit=50`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const dados = await lerJsonResposta(response);
+
+        if (response.ok && dados.status === 'sucesso') {
+            painel.innerHTML = renderizarLogsAdmin(dados.logs || []);
+            return;
+        }
+
+        if (response.status === 401) {
+            pararLogsAdminTempoReal();
+            limparAdminToken();
+            sairAreaAdmin();
+        }
+    } catch (erro) {
+        console.warn('Nao foi possivel atualizar logs ADM:', erro);
+    }
 }
 
 function simNao(valor) {
@@ -4419,18 +4510,19 @@ function renderizarServidorAdmin(servidor) {
     return `
         <article class="admin-server-card" data-admin-server-id="${escaparHTML(servidor.id)}" data-admin-server-name="${escaparHTML(servidor.nome)}">
             <div class="admin-server-head">
-                <div class="admin-server-avatar">${avatar}</div>
-                <div>
-                    <strong>${escaparHTML(servidor.nome)}</strong>
-                    <span>ID ${escaparHTML(servidor.id)}</span>
+                <div class="admin-server-mainline">
+                    <div class="admin-server-avatar">${avatar}</div>
+                    <div>
+                        <strong>${escaparHTML(servidor.nome)}</strong>
+                        <span>ID ${escaparHTML(servidor.id)} / Dono: ${escaparHTML(servidor.dono_nome || servidor.dono_id || '--')}</span>
+                    </div>
                 </div>
-            </div>
-
-            <div class="admin-server-actions">
-                <button type="button" class="admin-danger-button" onclick="sairServidorBotAdmin('${escaparHTML(servidor.id)}')">
-                    <i class="ph ph-sign-out"></i>
-                    Sair do servidor
-                </button>
+                <div class="admin-server-actions">
+                    <button type="button" class="admin-danger-button" onclick="sairServidorBotAdmin('${escaparHTML(servidor.id)}')">
+                        <i class="ph ph-sign-out"></i>
+                        Sair
+                    </button>
+                </div>
             </div>
 
             <div class="admin-server-metrics">
@@ -4442,7 +4534,6 @@ function renderizarServidorAdmin(servidor) {
             </div>
 
             <div class="admin-server-meta">
-                <span>Dono: ${escaparHTML(servidor.dono_nome || servidor.dono_id || '--')}</span>
                 <span>Criado: ${escaparHTML(formatarDataHora(servidor.criado_em))}</span>
                 <span>Bot entrou: ${escaparHTML(formatarDataHora(servidor.bot_entrou_em))}</span>
                 <span>Boost tier: ${escaparHTML(servidor.premium_tier ?? 0)} / boosts: ${escaparHTML(servidor.boosts ?? 0)}</span>
@@ -4496,6 +4587,18 @@ function renderizarServidorAdmin(servidor) {
             </details>
         </article>
     `;
+}
+
+function filtrarServidoresAdmin() {
+    const termo = (document.getElementById('admin-server-search')?.value || '').trim().toLowerCase();
+    const cards = document.querySelectorAll('.admin-server-card');
+
+    cards.forEach((card) => {
+        const nome = String(card.dataset.adminServerName || '').toLowerCase();
+        const id = String(card.dataset.adminServerId || '').toLowerCase();
+        const visivel = !termo || nome.includes(termo) || id.includes(termo);
+        card.classList.toggle('hidden-by-filter', !visivel);
+    });
 }
 
 async function sairServidorBotAdmin(serverId) {

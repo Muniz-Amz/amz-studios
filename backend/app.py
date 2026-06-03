@@ -934,13 +934,15 @@ def montar_status_configuracoes():
 
 def montar_status_bot_admin():
     comandos_prefixo = sorted(bot.commands, key=lambda comando: comando.qualified_name)
+    comandos_slash = sorted(bot.tree.get_commands(), key=lambda comando: comando.qualified_name)
 
     return {
         "prefixo": os.getenv("AMZ_COMMAND_PREFIX", "!"),
         "cogs": sorted(bot.cogs.keys()),
         "comandos_prefixo": [comando.qualified_name for comando in comandos_prefixo],
         "total_comandos_prefixo": len(comandos_prefixo),
-        "total_comandos_slash": len(bot.tree.get_commands()),
+        "comandos_slash": [serializar_comando_slash(comando) for comando in comandos_slash],
+        "total_comandos_slash": len(comandos_slash),
         "slash_guilds_sincronizadas": len(getattr(bot, "slash_synced_guilds", set())),
         "intents": {
             "message_content": bot.intents.message_content,
@@ -953,6 +955,23 @@ def montar_status_bot_admin():
             "canais": sum(len(guild.channels) for guild in bot.guilds),
             "cargos": sum(len(guild.roles) for guild in bot.guilds),
         },
+    }
+
+
+def serializar_comando_slash(comando):
+    filhos = sorted(getattr(comando, "commands", []) or [], key=lambda item: item.name)
+
+    return {
+        "nome": comando.qualified_name,
+        "descricao": getattr(comando, "description", "") or "",
+        "categoria": comando.name,
+        "filhos": [
+            {
+                "nome": f"{comando.name} {filho.name}",
+                "descricao": getattr(filho, "description", "") or "",
+            }
+            for filho in filhos
+        ],
     }
 
 
@@ -1114,7 +1133,27 @@ def admin_status():
         "admin": True,
         "comandos_slash_sincronizados": len(getattr(bot, "slash_synced_guilds", set())),
         "sistema": montar_status_sistema(),
+        "logs": bot.eventos_recentes(50) if hasattr(bot, "eventos_recentes") else [],
         "servidores": servidores,
+    }), 200
+
+
+@app.route("/api/admin/logs", methods=["GET"])
+def admin_logs():
+    erro = validar_admin_painel()
+
+    if erro:
+        return erro
+
+    try:
+        limite = int(request.args.get("limit", 50))
+    except (TypeError, ValueError):
+        limite = 50
+
+    return jsonify({
+        "status": "sucesso",
+        "logs": bot.eventos_recentes(limite) if hasattr(bot, "eventos_recentes") else [],
+        "atualizado_em": agora_iso(),
     }), 200
 
 
@@ -1176,6 +1215,7 @@ def admin_sair_servidor(server_id):
         if not sucesso:
             return jsonify({"status": "erro", "mensagem": mensagem}), 502
 
+        bot.registrar_evento("admin_leave_guild", mensagem, guild_id=server_id, motivo=motivo)
         return jsonify({"status": "sucesso", "mensagem": mensagem}), 200
     except Exception as erro_saida:
         return jsonify({"status": "erro", "mensagem": str(erro_saida)}), 500
@@ -1197,6 +1237,7 @@ def admin_banir_membro(server_id, user_id):
         if not sucesso:
             return jsonify({"status": "erro", "mensagem": mensagem}), 403
 
+        bot.registrar_evento("admin_member_ban", mensagem, guild_id=server_id, user_id=user_id)
         return jsonify({"status": "sucesso", "mensagem": mensagem}), 200
     except Exception as erro_ban:
         return jsonify({"status": "erro", "mensagem": str(erro_ban)}), 500
@@ -1218,6 +1259,7 @@ def admin_expulsar_membro(server_id, user_id):
         if not sucesso:
             return jsonify({"status": "erro", "mensagem": mensagem}), 403
 
+        bot.registrar_evento("admin_member_kick", mensagem, guild_id=server_id, user_id=user_id)
         return jsonify({"status": "sucesso", "mensagem": mensagem}), 200
     except Exception as erro_kick:
         return jsonify({"status": "erro", "mensagem": str(erro_kick)}), 500
@@ -1240,6 +1282,7 @@ def admin_castigar_membro(server_id, user_id):
         if not sucesso:
             return jsonify({"status": "erro", "mensagem": mensagem}), 403
 
+        bot.registrar_evento("admin_member_timeout", mensagem, guild_id=server_id, user_id=user_id)
         return jsonify({"status": "sucesso", "mensagem": mensagem}), 200
     except Exception as erro_timeout:
         return jsonify({"status": "erro", "mensagem": str(erro_timeout)}), 500

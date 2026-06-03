@@ -10,6 +10,8 @@ from services.welcome_service import enviar_aviso_membro
 
 
 class WelcomeCog(commands.Cog):
+    avisos = app_commands.Group(name="avisos", description="Testes e ferramentas de entrada/saida.")
+
     def __init__(self, bot):
         self.bot = bot
 
@@ -107,9 +109,25 @@ class WelcomeCog(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     @app_commands.guild_only()
     async def slash_testaravisos(self, interaction: discord.Interaction, tipo: app_commands.Choice[str]):
+        await self.processar_teste_aviso(interaction, tipo.value, "/testaravisos")
+
+    @avisos.command(name="testar", description="Testa o aviso de entrada ou saida configurado no painel.")
+    @app_commands.describe(tipo="Escolha qual aviso voce quer testar.")
+    @app_commands.choices(
+        tipo=[
+            app_commands.Choice(name="Entrada", value="entrada"),
+            app_commands.Choice(name="Saida", value="saida"),
+        ]
+    )
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.guild_only()
+    async def avisos_testar(self, interaction: discord.Interaction, tipo: app_commands.Choice[str]):
+        await self.processar_teste_aviso(interaction, tipo.value, "/avisos testar")
+
+    async def processar_teste_aviso(self, interaction: discord.Interaction, tipo, origem):
         if not usuario_e_admin_ou_dono(interaction.guild, interaction.user):
             await interaction.response.send_message(
-                "Apenas o dono do servidor ou usuarios com `Administrador` podem usar `/testaravisos`.",
+                f"Apenas o dono do servidor ou usuarios com `Administrador` podem usar `{origem}`.",
                 ephemeral=True,
             )
             return
@@ -117,18 +135,18 @@ class WelcomeCog(commands.Cog):
         await interaction.response.defer(ephemeral=True, thinking=True)
         contexto = None
 
-        if tipo.value == "saida":
+        if tipo == "saida":
             contexto = {
                 "audit_action": "Teste manual",
                 "leave_action": "foi testado no aviso de saida",
-                "leave_reason": "Comando /testaravisos",
+                "leave_reason": f"Comando {origem}",
                 "moderator": interaction.user.display_name,
                 "moderator_tag": str(interaction.user),
             }
 
         ok, mensagem = await enviar_aviso_membro(
             interaction.user,
-            tipo.value,
+            tipo,
             detalhado=True,
             contexto=contexto,
         )

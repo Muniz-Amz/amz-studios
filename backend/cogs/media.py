@@ -12,6 +12,8 @@ from services.url_video_service import UrlVideoError, UrlVideoService
 
 
 class MediaCog(commands.Cog):
+    midia = app_commands.Group(name="midia", description="Conversao e download de midia do AMZ Bot.")
+
     def __init__(self, bot):
         self.bot = bot
         self.limits = MediaLimits()
@@ -106,11 +108,15 @@ class MediaCog(commands.Cog):
             async with self.semaphore:
                 with tempfile.TemporaryDirectory() as temp_dir:
                     legenda, output_path = await self.converter_anexo(attachment, modo, temp_dir)
-                    await interaction.followup.send(legenda, file=discord.File(output_path, filename=output_path.name))
+                    await interaction.followup.send(
+                        f"Pronto: {legenda}",
+                        file=discord.File(output_path, filename=output_path.name),
+                    )
         except MediaError as erro:
-            await interaction.followup.send(str(erro), ephemeral=True)
+            await interaction.followup.send(f"Nao deu para processar: {erro}", ephemeral=True)
         except Exception as erro:
             print(f"[MIDIA] Erro inesperado em slash command: {erro}")
+            self.bot.registrar_evento("media_slash_error", f"Erro ao processar midia: {erro}", nivel="error", guild_id=interaction.guild_id)
             await interaction.followup.send(
                 "Nao consegui processar esse arquivo. Tente um arquivo menor ou outro formato.",
                 ephemeral=True,
@@ -216,9 +222,44 @@ class MediaCog(commands.Cog):
             ephemeral=True,
         )
 
+    @midia.command(name="gifimagem", description="Transforma uma imagem enviada em GIF.")
+    @app_commands.describe(arquivo="Imagem que sera transformada em GIF.")
+    async def midia_gifimagem(self, interaction: discord.Interaction, arquivo: discord.Attachment):
+        await self.processar_slash(interaction, arquivo, "image_gif")
+
+    @midia.command(name="gifvideo", description="Transforma um video enviado em GIF.")
+    @app_commands.describe(arquivo="Video que sera transformado em GIF.")
+    async def midia_gifvideo(self, interaction: discord.Interaction, arquivo: discord.Attachment):
+        await self.processar_slash(interaction, arquivo, "video_gif")
+
+    @midia.command(name="audio", description="Extrai o audio de um video enviado.")
+    @app_commands.describe(arquivo="Video de onde o audio sera extraido.")
+    async def midia_audio(self, interaction: discord.Interaction, arquivo: discord.Attachment):
+        await self.processar_slash(interaction, arquivo, "audio")
+
+    @midia.command(name="limites", description="Mostra os limites dos comandos de midia.")
+    async def midia_limites_grupo(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            "Limites de midia:\n"
+            f"- Entrada: {self.limits.max_input_mb} MB\n"
+            f"- Saida: {self.limits.max_output_mb} MB\n"
+            f"- Video para GIF: {self.limits.max_video_seconds}s, {self.limits.gif_fps} FPS, largura {self.limits.max_width}px\n"
+            f"- Video para audio: {self.limits.max_audio_seconds}s\n"
+            f"- Conversoes simultaneas: 1 por padrao",
+            ephemeral=True,
+        )
+
     @app_commands.command(name="baixarvideo", description="Baixa um video por link (Reels/Shorts) e envia no chat.")
     @app_commands.describe(url="Link do video (Instagram Reels, YouTube Shorts, etc.)")
     async def slash_baixarvideo(self, interaction: discord.Interaction, url: str):
+        await self.processar_download_url(interaction, url)
+
+    @midia.command(name="baixar", description="Baixa um video por link e envia no chat.")
+    @app_commands.describe(url="Link do video (Instagram Reels, TikTok, YouTube Shorts, etc.)")
+    async def midia_baixar(self, interaction: discord.Interaction, url: str):
+        await self.processar_download_url(interaction, url)
+
+    async def processar_download_url(self, interaction: discord.Interaction, url: str):
         await interaction.response.defer(thinking=True)
 
         limite_bytes = self.url_video_service.limits.max_output_bytes
@@ -230,13 +271,14 @@ class MediaCog(commands.Cog):
                 with tempfile.TemporaryDirectory() as temp_dir:
                     output_path = await asyncio.to_thread(self.url_video_service.download_video, url, temp_dir, limite_bytes)
                     await interaction.followup.send(
-                        "Video pronto.",
+                        "Video pronto. Se ele abrir parado no Discord, baixe o arquivo e teste no player do celular.",
                         file=discord.File(output_path, filename=output_path.name),
                     )
         except UrlVideoError as erro:
-            await interaction.followup.send(str(erro), ephemeral=True)
+            await interaction.followup.send(f"Nao deu para baixar esse link: {erro}", ephemeral=True)
         except Exception as erro:
             print(f"[MIDIA] Erro inesperado em /baixarvideo: {erro}")
+            self.bot.registrar_evento("video_download_error", f"Erro ao baixar video por link: {erro}", nivel="error", guild_id=interaction.guild_id)
             await interaction.followup.send(
                 "Nao consegui baixar esse video agora. Tente novamente em alguns segundos.",
                 ephemeral=True,

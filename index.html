@@ -486,6 +486,10 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                         <span>Painel protegido</span>
                         <strong id="admin-bot-title">AMZ Bot</strong>
                     </div>
+                    <label class="admin-server-search">
+                        <i class="ph ph-magnifying-glass"></i>
+                        <input type="search" id="admin-server-search" placeholder="Buscar servidor por nome ou ID" oninput="filtrarServidoresAdmin()">
+                    </label>
                     <div class="admin-toolbar-actions">
                         <button type="button" onclick="carregarStatusAdmin()">
                             <i class="ph ph-arrows-clockwise"></i>
@@ -500,6 +504,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
 
                 <div class="admin-summary-grid" id="admin-summary-grid"></div>
                 <div class="admin-system-panel" id="admin-system-panel"></div>
+                <div class="admin-log-panel" id="admin-log-panel"></div>
                 <div class="admin-server-list" id="admin-server-list"></div>
             </section>
         </main>

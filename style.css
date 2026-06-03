@@ -3511,6 +3511,36 @@ section {
     gap: 18px;
 }
 
+.admin-server-search {
+    flex: 1 1 320px;
+    max-width: 420px;
+    min-height: 44px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #000000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px;
+}
+
+.admin-server-search i {
+    color: rgba(255, 255, 255, 0.48);
+}
+
+.admin-server-search input {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: #ffffff;
+    outline: none;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.admin-server-search input::placeholder {
+    color: rgba(255, 255, 255, 0.32);
+}
+
 .admin-toolbar strong {
     display: block;
     margin-top: 4px;
@@ -3557,6 +3587,90 @@ section {
     padding: 18px;
     display: grid;
     gap: 18px;
+}
+
+.admin-log-card {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #050505;
+    padding: 16px;
+    display: grid;
+    gap: 12px;
+}
+
+.admin-log-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.admin-log-heading span {
+    color: rgba(255, 255, 255, 0.38);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+}
+
+.admin-log-heading strong {
+    display: block;
+    margin-top: 4px;
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: 900;
+}
+
+.admin-log-heading small,
+.admin-log-empty {
+    color: rgba(255, 255, 255, 0.42);
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.admin-log-list {
+    display: grid;
+    gap: 7px;
+    max-height: 360px;
+    overflow: auto;
+}
+
+.admin-log-row {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #020202;
+    padding: 10px;
+    display: grid;
+    grid-template-columns: 112px 150px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+}
+
+.admin-log-row.error {
+    border-color: rgba(255, 103, 103, 0.36);
+}
+
+.admin-log-row time,
+.admin-log-row small {
+    color: rgba(255, 255, 255, 0.38);
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.admin-log-row strong {
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.admin-log-row span {
+    color: rgba(255, 255, 255, 0.68);
+    font-size: 11px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.admin-log-row small {
+    grid-column: 3;
 }
 
 .admin-system-heading {
@@ -3705,10 +3819,18 @@ section {
 .admin-server-card {
     padding: 18px;
     display: grid;
-    gap: 16px;
+    gap: 12px;
 }
 
 .admin-server-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+}
+
+.admin-server-mainline {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -3741,8 +3863,8 @@ section {
 }
 
 .admin-server-avatar {
-    width: 44px;
-    height: 44px;
+    width: 38px;
+    height: 38px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 50%;
     display: grid;
@@ -3765,7 +3887,7 @@ section {
 
 .admin-server-head strong {
     display: block;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 900;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -3783,13 +3905,13 @@ section {
 
 .admin-server-metrics {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
 }
 
 .admin-server-metrics span {
     border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 12px;
+    padding: 9px;
     color: rgba(255, 255, 255, 0.42);
     font-size: 10px;
     font-weight: 900;
@@ -3801,13 +3923,23 @@ section {
     display: block;
     margin-top: 6px;
     color: #ffffff;
-    font-size: 18px;
+    font-size: 15px;
     letter-spacing: 0;
 }
 
 .admin-server-meta {
-    display: grid;
-    gap: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.admin-server-meta span {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 7px 9px;
+}
+
+.admin-server-card.hidden-by-filter {
+    display: none;
 }
 
 .admin-permission-grid {
@@ -4115,8 +4247,11 @@ html[data-site-theme] .automation-rule-editor,
 html[data-site-theme] .automation-rule-item,
 html[data-site-theme] .admin-login-card,
 html[data-site-theme] .admin-toolbar,
+html[data-site-theme] .admin-server-search,
 html[data-site-theme] .admin-summary-card,
 html[data-site-theme] .admin-system-card,
+html[data-site-theme] .admin-log-card,
+html[data-site-theme] .admin-log-row,
 html[data-site-theme] .admin-system-grid section,
 html[data-site-theme] .admin-server-card,
 html[data-site-theme] .admin-loading,
@@ -4165,6 +4300,10 @@ html[data-site-theme] .automation-option-card:hover,
 html[data-site-theme] .admin-server-card:hover {
     background: var(--app-hover) !important;
     border-color: var(--app-border-strong) !important;
+}
+
+html[data-site-theme] .admin-log-row.error {
+    border-color: var(--app-danger) !important;
 }
 
 html[data-site-theme] .vm-sidebar-link.active,
@@ -4362,6 +4501,11 @@ html[data-site-theme] #painel-loritta .vm-server-current-icon {
         flex-direction: column;
     }
 
+    .admin-server-search {
+        max-width: none;
+        width: 100%;
+    }
+
     .admin-toolbar-actions {
         flex-direction: column;
     }
@@ -4382,6 +4526,15 @@ html[data-site-theme] #painel-loritta .vm-server-current-icon {
 
     .admin-server-head {
         align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .admin-log-row {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-log-row small {
+        grid-column: auto;
     }
 
     .admin-members-toolbar,

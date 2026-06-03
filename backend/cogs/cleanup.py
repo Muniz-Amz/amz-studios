@@ -10,6 +10,8 @@ MAX_LIMPAR_MENSAGENS = 1000
 
 
 class CleanupCog(commands.Cog):
+    mod = app_commands.Group(name="mod", description="Comandos de moderacao rapida.")
+
     def __init__(self, bot):
         self.bot = bot
 
@@ -43,7 +45,7 @@ class CleanupCog(commands.Cog):
         bot_permissions = channel.permissions_for(guild.me)
 
         if not usuario_e_admin_ou_dono(guild, interaction.user):
-            return None, "Apenas o dono do servidor ou usuarios com `Administrador` podem usar `/limpar`."
+            return None, "Apenas o dono do servidor ou usuarios com `Administrador` podem limpar mensagens."
 
         if not bot_permissions.manage_messages or not bot_permissions.read_message_history:
             return None, "O bot precisa de `Gerenciar mensagens` e `Ler historico de mensagens` neste canal."
@@ -85,6 +87,30 @@ class CleanupCog(commands.Cog):
         embed.add_field(name="Solicitadas", value=str(quantidade), inline=True)
         embed.add_field(name="Apagadas", value=str(apagadas), inline=True)
         embed.set_footer(text=f"Limite do comando: {MAX_LIMPAR_MENSAGENS} mensagens")
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @mod.command(name="limpar", description="Apaga mensagens recentes do canal atual.")
+    @app_commands.describe(quantidade="Quantidade de mensagens para apagar. Maximo: 1000.")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.guild_only()
+    async def mod_limpar(self, interaction: discord.Interaction, quantidade: app_commands.Range[int, 1, 1000]):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        apagadas, erro = await self.limpar_canal(interaction, quantidade)
+
+        if erro:
+            await interaction.followup.send(f"Nao consegui limpar: {erro}", ephemeral=True)
+            return
+
+        embed = discord.Embed(
+            title="Limpeza concluida",
+            description="Mensagens fixadas foram preservadas.",
+            color=discord.Color.from_rgb(255, 255, 255),
+        )
+        embed.add_field(name="Canal", value=getattr(interaction.channel, "mention", "Canal atual"), inline=True)
+        embed.add_field(name="Solicitadas", value=str(quantidade), inline=True)
+        embed.add_field(name="Apagadas", value=str(apagadas), inline=True)
+        embed.set_footer(text=f"Comando organizado: /mod limpar | Limite: {MAX_LIMPAR_MENSAGENS}")
 
         await interaction.followup.send(embed=embed, ephemeral=True)
 

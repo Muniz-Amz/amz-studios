@@ -10,25 +10,27 @@ from security.discord_permissions import usuario_e_admin_ou_dono
 
 COMANDOS_HELP = {
     "Administracao": [
-        ("/info", "Mostra status resumido do bot, Discord e banco de dados."),
-        ("/help", "Mostra esta central de comandos para administradores."),
-        ("/deploy", "Solicita redeploy no Render quando o deploy hook estiver configurado."),
+        ("/amz info", "Mostra status resumido do bot, Discord e banco de dados."),
+        ("/amz ajuda", "Mostra esta central de comandos para administradores."),
+        ("/admin deploy", "Solicita redeploy no Render quando o deploy hook estiver configurado."),
         ("@AMZ Bot", "Envia o link do site/dashboard no canal."),
     ],
     "Moderacao": [
-        ("/limpar quantidade", "Apaga de 1 a 1000 mensagens recentes do canal atual."),
-        ("/testaravisos tipo", "Envia um teste do aviso de entrada ou saida no canal configurado."),
+        ("/mod limpar quantidade", "Apaga de 1 a 1000 mensagens recentes do canal atual."),
+        ("/avisos testar tipo", "Envia um teste do aviso de entrada ou saida no canal configurado."),
         ("Painel ADM", "Banir, expulsar, castigar e consultar membros pelo site."),
         ("Logs", "Registra mensagens apagadas/editadas, bans, castigos, canais e cargos."),
     ],
     "Midia": [
-        ("/gifimg arquivo", "Transforma uma imagem enviada em GIF."),
-        ("/gifs arquivo", "Mesmo conversor de imagem para GIF, com nome antigo."),
-        ("/videogif arquivo", "Transforma um video enviado em GIF."),
-        ("/audio arquivo", "Extrai o audio de um video enviado."),
-        ("/videoaudio arquivo", "Mesmo extrator de audio, com nome antigo."),
-        ("/baixarvideo url", "Baixa um video por link (Reels/Shorts) e envia como arquivo (se couber no limite)."),
-        ("/midialimites", "Mostra os limites de conversao do bot."),
+        ("/midia gifimagem arquivo", "Transforma uma imagem enviada em GIF."),
+        ("/midia gifvideo arquivo", "Transforma um video enviado em GIF."),
+        ("/midia audio arquivo", "Extrai o audio de um video enviado."),
+        ("/midia baixar url", "Baixa um video por link (Reels/Shorts) e envia como arquivo."),
+        ("/midia limites", "Mostra os limites de conversao do bot."),
+    ],
+    "Atalhos antigos": [
+        ("/info, /help, /deploy, /limpar", "Continuam funcionando para compatibilidade."),
+        ("/gifimg, /videogif, /audio, /baixarvideo", "Continuam funcionando enquanto os usuarios migram."),
     ],
 }
 
@@ -85,6 +87,8 @@ def formatar_data_discord(data):
 
 
 class StatusCog(commands.Cog):
+    amz = app_commands.Group(name="amz", description="Status, ajuda e atalhos principais do AMZ Bot.")
+
     def __init__(self, bot):
         self.bot = bot
 
@@ -194,6 +198,21 @@ class StatusCog(commands.Cog):
         embed = await self.montar_embed_info(interaction.guild, interaction.user)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
+    @amz.command(name="info", description="Status rapido do bot, Discord e banco de dados.")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.guild_only()
+    async def amz_info(self, interaction: discord.Interaction):
+        if not self.usuario_autorizado(interaction.guild, interaction.user):
+            await interaction.response.send_message(
+                "Apenas administradores podem ver o status interno do AMZ Bot.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        embed = await self.montar_embed_info(interaction.guild, interaction.user)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
     @app_commands.command(name="help", description="Mostra todos os comandos do AMZ Bot.")
     @app_commands.default_permissions(administrator=True)
     @app_commands.guild_only()
@@ -201,6 +220,20 @@ class StatusCog(commands.Cog):
         if not self.usuario_autorizado(interaction.guild, interaction.user):
             await interaction.response.send_message(
                 "Apenas o dono do servidor ou usuarios com `Administrador` podem usar `/help`.",
+                ephemeral=True,
+            )
+            return
+
+        embed = self.montar_embed_help(interaction.user)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @amz.command(name="ajuda", description="Mostra comandos por categoria e explica os atalhos principais.")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.guild_only()
+    async def amz_ajuda(self, interaction: discord.Interaction):
+        if not self.usuario_autorizado(interaction.guild, interaction.user):
+            await interaction.response.send_message(
+                "Apenas administradores podem ver a central de comandos.",
                 ephemeral=True,
             )
             return
