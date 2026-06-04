@@ -182,9 +182,131 @@ html[data-site-theme] body {
 
 #downloads,
 #aplicativos,
+#solucoes,
+#faq,
 #site-principal footer {
     background: var(--site-section-bg) !important;
     border-color: var(--site-border) !important;
+}
+
+.site-seo-section,
+.site-faq-section {
+    color: var(--site-text);
+}
+
+.site-seo-heading,
+.site-faq-heading {
+    max-width: 820px;
+    margin-bottom: 34px;
+}
+
+.site-seo-heading h2,
+.site-faq-heading h2 {
+    margin-top: 16px;
+    color: var(--site-text);
+    font-size: clamp(36px, 5.6vw, 76px);
+    font-weight: 900;
+    letter-spacing: -0.05em;
+    line-height: 0.95;
+    text-transform: uppercase;
+}
+
+.site-seo-heading p,
+.site-faq-heading p {
+    margin-top: 18px;
+    color: var(--site-muted);
+    font-size: 16px;
+    line-height: 1.75;
+}
+
+.site-seo-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.site-seo-card,
+.site-faq-list article {
+    background: var(--site-card-bg);
+    border: 1px solid var(--site-border);
+    box-shadow: 0 18px 60px var(--site-shadow);
+}
+
+.site-seo-card {
+    min-height: 330px;
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.site-seo-card > i {
+    width: 46px;
+    height: 46px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--site-button-border);
+    color: var(--site-text);
+    font-size: 24px;
+}
+
+.site-seo-card h3,
+.site-faq-list h3 {
+    color: var(--site-text);
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    text-transform: uppercase;
+}
+
+.site-seo-card h3 {
+    font-size: 24px;
+}
+
+.site-seo-card p,
+.site-faq-list p {
+    color: var(--site-muted);
+    font-size: 14px;
+    line-height: 1.75;
+}
+
+.site-seo-card ul {
+    display: grid;
+    gap: 10px;
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--site-border);
+}
+
+.site-seo-card li {
+    color: var(--site-muted);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.55;
+}
+
+.site-seo-card li::before {
+    content: "—";
+    margin-right: 8px;
+    color: var(--site-text);
+}
+
+.site-faq-list {
+    display: grid;
+    gap: 12px;
+}
+
+.site-faq-list article {
+    padding: 24px 28px;
+}
+
+.site-faq-list h3 {
+    font-size: 18px;
+}
+
+.site-faq-list p {
+    margin-top: 10px;
 }
 
 .site-downloads-heading {
@@ -2914,8 +3036,45 @@ section {
     }
 
     #downloads,
-    #aplicativos {
+    #aplicativos,
+    #solucoes,
+    #faq {
         padding: 64px 18px;
+    }
+
+    .site-seo-heading,
+    .site-faq-heading {
+        margin-bottom: 26px;
+    }
+
+    .site-seo-heading h2,
+    .site-faq-heading h2 {
+        font-size: 34px;
+        letter-spacing: -0.02em;
+        line-height: 1;
+    }
+
+    .site-seo-heading p,
+    .site-faq-heading p {
+        font-size: 14px;
+        line-height: 1.7;
+    }
+
+    .site-seo-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .site-seo-card {
+        min-height: auto;
+        padding: 22px;
+    }
+
+    .site-seo-card h3 {
+        font-size: 22px;
+    }
+
+    .site-faq-list article {
+        padding: 20px;
     }
 
     .site-downloads-heading h2 {

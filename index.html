@@ -51,6 +51,18 @@
                     "description": "Hub oficial da AMZ Studios com bot Discord, painel administrativo, ferramentas de mídia, AMZ Clicker e MusicAmz."
                 },
                 {
+                    "@type": "Service",
+                    "@id": "https://muniz-amz.github.io/amz-studios/#bot-discord",
+                    "name": "AMZ Bot para Discord",
+                    "serviceType": "Bot Discord para moderação, automação e painel administrativo",
+                    "url": "https://muniz-amz.github.io/amz-studios/#solucoes",
+                    "description": "Bot para Discord com painel de administração, limpeza automática, mensagens de entrada e saída, auditoria, anti raid, logs e automações.",
+                    "provider": {
+                        "@id": "https://muniz-amz.github.io/amz-studios/#organization"
+                    },
+                    "areaServed": "BR"
+                },
+                {
                     "@type": "SoftwareApplication",
                     "@id": "https://muniz-amz.github.io/amz-studios/#amz-clicker",
                     "name": "AMZ Clicker",
@@ -75,6 +87,44 @@
                     "publisher": {
                         "@id": "https://muniz-amz.github.io/amz-studios/#organization"
                     }
+                },
+                {
+                    "@type": "FAQPage",
+                    "@id": "https://muniz-amz.github.io/amz-studios/#faq",
+                    "mainEntity": [
+                        {
+                            "@type": "Question",
+                            "name": "O que é a AMZ Studios?",
+                            "acceptedAnswer": {
+                                "@type": "Answer",
+                                "text": "A AMZ Studios é um hub de desenvolvimento com bot para Discord, painel administrativo, ferramentas de automação, downloads de vídeos e aplicativos como AMZ Clicker e MusicAmz."
+                            }
+                        },
+                        {
+                            "@type": "Question",
+                            "name": "O AMZ Bot ajuda em servidores Discord?",
+                            "acceptedAnswer": {
+                                "@type": "Answer",
+                                "text": "Sim. O AMZ Bot oferece moderação, auditoria, limpeza automática, mensagens de entrada e saída, anti raid, logs e automações para servidores Discord."
+                            }
+                        },
+                        {
+                            "@type": "Question",
+                            "name": "O que é o AMZ Clicker?",
+                            "acceptedAnswer": {
+                                "@type": "Answer",
+                                "text": "AMZ Clicker é um AutoClicker e macro para PC com funcionalidades voltadas ao Roblox."
+                            }
+                        },
+                        {
+                            "@type": "Question",
+                            "name": "O que é o MusicAmz?",
+                            "acceptedAnswer": {
+                                "@type": "Answer",
+                                "text": "MusicAmz é um player de música para Android com importação de faixas, filtros e reprodução local."
+                            }
+                        }
+                    ]
                 }
             ]
         }
@@ -100,8 +150,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    <link rel="stylesheet" href="style.css?v=31">
-    <link rel="stylesheet" href="/amz-studios/style.css?v=31">
+    <link rel="stylesheet" href="style.css?v=32">
+    <link rel="stylesheet" href="/amz-studios/style.css?v=32">
 </head>
 <body class="flex flex-col min-h-screen overflow-x-hidden bg-black">
 
@@ -113,6 +163,7 @@
         
         <div class="site-nav-links">
             <a href="#inicio">Início</a>
+            <a href="#solucoes" onclick="navegarParaSecaoSite('solucoes')">Soluções</a>
             <a href="#aplicativos" onclick="navegarParaSecaoSite('aplicativos')">Aplicativos</a>
             <a href="#downloads" onclick="navegarParaSecaoSite('downloads')">Downloads</a>
             <button type="button" onclick="abrirListaServidores()" class="site-nav-dashboard">
@@ -150,6 +201,77 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                         <strong id="bot-status-label">Verificando bot</strong>
                         <span id="bot-status-servidores">Servidores: --</span>
                         <small id="bot-status-sync">Ultima sincronizacao: --</small>
+                    </div>
+                </div>
+            </section>
+
+            <section id="solucoes" class="site-seo-section py-24 px-8 border-t border-white/5">
+                <div class="max-w-6xl mx-auto">
+                    <div class="site-seo-heading">
+                        <span class="site-chip font-mono text-[10px] border border-neutral-700 text-neutral-500 px-3 py-1 uppercase tracking-widest">AMZ Solutions</span>
+                        <h2>Bot Discord, automação e apps para sua comunidade</h2>
+                        <p>
+                            A AMZ Studios reúne ferramentas para Discord, Roblox, Android e downloads de mídia em um único hub.
+                            O objetivo é facilitar moderação, segurança, produtividade e acesso rápido aos aplicativos do projeto.
+                        </p>
+                    </div>
+
+                    <div class="site-seo-grid">
+                        <article class="site-seo-card">
+                            <i class="ph ph-robot" aria-hidden="true"></i>
+                            <h3>Bot Discord para moderação</h3>
+                            <p>
+                                O AMZ Bot ajuda servidores Discord com limpeza automática, logs, auditoria, punições, anti raid,
+                                mensagens de boas-vindas, saída e automações para administração do servidor.
+                            </p>
+                            <ul>
+                                <li>Moderação com ban, kick e timeout pelo painel.</li>
+                                <li>Logs de mensagens, membros, canais, cargos e punições.</li>
+                                <li>Configuração por servidor com painel online.</li>
+                            </ul>
+                        </article>
+
+                        <article class="site-seo-card">
+                            <i class="ph ph-shield-check" aria-hidden="true"></i>
+                            <h3>Painel de administração</h3>
+                            <p>
+                                O painel do bot centraliza servidores, status, permissões, erros em tempo real e ações administrativas.
+                                Ele foi pensado para deixar a configuração do Discord mais rápida e visual.
+                            </p>
+                            <ul>
+                                <li>Visualização de servidores conectados ao bot.</li>
+                                <li>Status do bot, latência, banco de dados e logs.</li>
+                                <li>Ferramentas para sair de servidores e moderar membros.</li>
+                            </ul>
+                        </article>
+
+                        <article class="site-seo-card">
+                            <i class="ph ph-download-simple" aria-hidden="true"></i>
+                            <h3>Baixar vídeos e MP3</h3>
+                            <p>
+                                A área de downloads permite converter links de Instagram, TikTok e YouTube Shorts para vídeo MP4
+                                compatível com navegador, celular e Discord, além de extrair MP3 quando possível.
+                            </p>
+                            <ul>
+                                <li>MP4 otimizado para abrir no Discord.</li>
+                                <li>Opções de vídeo leve, vídeo HD e MP3.</li>
+                                <li>Processamento externo para proteger o site no GitHub Pages.</li>
+                            </ul>
+                        </article>
+
+                        <article class="site-seo-card">
+                            <i class="ph ph-device-mobile" aria-hidden="true"></i>
+                            <h3>Aplicativos AMZ</h3>
+                            <p>
+                                O repositório de software inclui AMZ Clicker para PC e MusicAmz para Android, com foco em utilidade,
+                                estabilidade e uso simples para quem acompanha os projetos da AMZ Studios.
+                            </p>
+                            <ul>
+                                <li>AMZ Clicker: AutoClicker e macro para PC no Roblox.</li>
+                                <li>MusicAmz: player de música local para Android.</li>
+                                <li>Downloads diretos pelo hub oficial da AMZ Studios.</li>
+                            </ul>
+                        </article>
                     </div>
                 </div>
             </section>
@@ -261,6 +383,39 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                                 <i class="ph ph-download-simple text-lg"></i> Baixar v1.1.0
                             </a>
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="faq" class="site-faq-section py-24 px-8 border-t border-white/5">
+                <div class="max-w-6xl mx-auto">
+                    <div class="site-faq-heading">
+                        <span class="site-chip font-mono text-[10px] border border-neutral-700 text-neutral-500 px-3 py-1 uppercase tracking-widest">FAQ</span>
+                        <h2>Perguntas frequentes</h2>
+                        <p>Respostas rápidas sobre o bot Discord, painel de administração, downloads e aplicativos AMZ.</p>
+                    </div>
+
+                    <div class="site-faq-list">
+                        <article>
+                            <h3>O que é a AMZ Studios?</h3>
+                            <p>A AMZ Studios é um hub de desenvolvimento com bot Discord, automações, painel administrativo, downloads de vídeos e aplicativos próprios.</p>
+                        </article>
+                        <article>
+                            <h3>O AMZ Bot funciona para servidores Discord?</h3>
+                            <p>Sim. O AMZ Bot oferece moderação, limpeza automática, logs, auditoria, anti raid, avisos de entrada e saída e automações por servidor.</p>
+                        </article>
+                        <article>
+                            <h3>O que o AMZ Clicker faz?</h3>
+                            <p>O AMZ Clicker é um AutoClicker e macro para PC com funcionalidades voltadas ao Roblox.</p>
+                        </article>
+                        <article>
+                            <h3>O que é o MusicAmz?</h3>
+                            <p>MusicAmz é um player de música para Android com importação de faixas, filtros e reprodução local.</p>
+                        </article>
+                        <article>
+                            <h3>O site baixa vídeos de quais plataformas?</h3>
+                            <p>A ferramenta aceita links de Instagram, TikTok e YouTube Shorts, com saída em MP4 ou MP3 quando o servidor consegue processar o link.</p>
+                        </article>
                     </div>
                 </div>
             </section>
