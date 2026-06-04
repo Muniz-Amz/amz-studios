@@ -152,7 +152,7 @@ const automationSettings = [
         description: 'Quando uma mensagem bater com uma auto resposta ligada, o bot responde no mesmo canal.',
         enabled: false,
         type: 'auto-response',
-        notes: ['Cada regra pode ter canal, tipo de deteccao e cooldown proprios.', 'Canal vazio significa que a regra funciona em todos os canais.'],
+        notes: ['Cada regra pode ter canal, tipo de deteccao e cooldown proprios.', 'As respostas entram em fila por servidor para evitar travamento em spam.', 'Canal vazio significa que a regra funciona em todos os canais.'],
         fields: []
     },
     {
@@ -186,7 +186,7 @@ const automationSettings = [
         description: 'Bloqueia comandos nos canais escolhidos. Administradores e moderadores continuam liberados.',
         enabled: false,
         type: 'command-block',
-        notes: ['Crie varias regras para canais diferentes.', 'Lista de comandos vazia bloqueia todos os comandos nos canais da regra.'],
+        notes: ['Crie varias regras para canais diferentes.', 'Avisos de comando bloqueado usam cooldown para nao spammar o canal.', 'Lista de comandos vazia bloqueia todos os comandos nos canais da regra.'],
         fields: []
     },
     {

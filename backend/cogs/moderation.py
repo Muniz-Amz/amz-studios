@@ -19,6 +19,10 @@ SPAM_LIMIT = 5
 CONFIG_CACHE_TTL_SECONDS = 8
 ANTI_RAID_JOIN_CACHE_MAX = 140
 ANTI_RAID_LOG_COOLDOWN_SECONDS = 12
+AUTOMATION_QUEUE_MAX_SIZE = 80
+AUTOMATION_JOB_TIMEOUT_SECONDS = 8
+AUTOMATION_WORKER_IDLE_SECONDS = 45
+COMMAND_BLOCK_NOTICE_COOLDOWN_SECONDS = 8
 AUDIT_RATE_LIMIT_WINDOW_SECONDS = 10
 AUDIT_RATE_LIMIT_DEFAULT = 12
 AUDIT_RATE_LIMITS = {
@@ -153,6 +157,10 @@ class ModerationCog(commands.Cog):
         self.anti_raid_log_cooldowns = {}
         self.config_cache = {}
         self.auto_response_cooldowns = {}
+        self.command_block_cooldowns = {}
+        self.automation_queues = {}
+        self.automation_workers = {}
+        self.automation_sequence = 0
         self._interaction_check_original = None
 
     async def cog_load(self):
@@ -173,6 +181,80 @@ class ModerationCog(commands.Cog):
         self.bot.remove_check(self.comando_prefixo_permitido)
         if self._interaction_check_original:
             self.bot.tree.interaction_check = self._interaction_check_original
+
+        for worker in self.automation_workers.values():
+            worker.cancel()
+
+        self.automation_workers.clear()
+
+    def obter_fila_automacao(self, guild_id):
+        fila = self.automation_queues.get(guild_id)
+        if fila is None:
+            fila = asyncio.PriorityQueue(maxsize=AUTOMATION_QUEUE_MAX_SIZE)
+            self.automation_queues[guild_id] = fila
+        return fila
+
+    def agendar_automacao(self, guild, prioridade, nome, tarefa):
+        if not guild:
+            return False
+
+        guild_id = guild.id
+        fila = self.obter_fila_automacao(guild_id)
+
+        if fila.full():
+            if hasattr(self.bot, "registrar_evento"):
+                self.bot.registrar_evento(
+                    "automation_queue_full",
+                    f"Fila de automacoes cheia; descartando {nome}.",
+                    nivel="error",
+                    guild_id=guild_id,
+                )
+            return False
+
+        self.automation_sequence += 1
+        fila.put_nowait((int(prioridade), self.automation_sequence, nome, tarefa))
+
+        worker = self.automation_workers.get(guild_id)
+        if not worker or worker.done():
+            self.automation_workers[guild_id] = self.bot.loop.create_task(self.processar_fila_automacoes(guild_id))
+
+        return True
+
+    async def processar_fila_automacoes(self, guild_id):
+        fila = self.obter_fila_automacao(guild_id)
+
+        while True:
+            try:
+                prioridade, _, nome, tarefa = await asyncio.wait_for(
+                    fila.get(),
+                    timeout=AUTOMATION_WORKER_IDLE_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                if fila.empty():
+                    break
+                continue
+
+            try:
+                await asyncio.wait_for(tarefa(), timeout=AUTOMATION_JOB_TIMEOUT_SECONDS)
+            except asyncio.CancelledError:
+                raise
+            except Exception as erro:
+                print(f"[AUTOMACAO] Falha em {nome} ({guild_id}): {erro}")
+                if hasattr(self.bot, "registrar_evento"):
+                    self.bot.registrar_evento(
+                        "automation_job_error",
+                        f"Falha em {nome}: {erro}",
+                        nivel="error",
+                        guild_id=guild_id,
+                        prioridade=prioridade,
+                    )
+            finally:
+                fila.task_done()
+
+        if fila.empty():
+            self.automation_queues.pop(guild_id, None)
+            if self.automation_workers.get(guild_id) is asyncio.current_task():
+                self.automation_workers.pop(guild_id, None)
 
     async def obter_config(self, guild):
         if not guild:
@@ -390,6 +472,31 @@ class ModerationCog(commands.Cog):
 
         return False
 
+    def aviso_comando_bloqueado_liberado(self, guild_id, channel_id, user_id, command_name):
+        chave = (
+            str(guild_id),
+            str(channel_id),
+            str(user_id),
+            str(command_name or "").lower(),
+        )
+        agora = datetime.now(timezone.utc).timestamp()
+        ultimo = self.command_block_cooldowns.get(chave, 0)
+
+        if agora - ultimo < COMMAND_BLOCK_NOTICE_COOLDOWN_SECONDS:
+            return False
+
+        self.command_block_cooldowns[chave] = agora
+
+        if len(self.command_block_cooldowns) > 1200:
+            limite = agora - 300
+            self.command_block_cooldowns = {
+                item: timestamp
+                for item, timestamp in self.command_block_cooldowns.items()
+                if timestamp >= limite
+            }
+
+        return True
+
     async def comando_prefixo_permitido(self, ctx):
         if not ctx.guild or not ctx.command:
             return True
@@ -401,10 +508,11 @@ class ModerationCog(commands.Cog):
         if not self.comando_bloqueado(config, ctx.channel.id, ctx.command.qualified_name):
             return True
 
-        try:
-            await ctx.reply("Este comando esta bloqueado neste canal.", mention_author=False, delete_after=8)
-        except discord.HTTPException:
-            pass
+        if self.aviso_comando_bloqueado_liberado(ctx.guild.id, ctx.channel.id, ctx.author.id, ctx.command.qualified_name):
+            try:
+                await ctx.reply("Este comando esta bloqueado neste canal.", mention_author=False, delete_after=8)
+            except discord.HTTPException:
+                pass
 
         return False
 
@@ -422,7 +530,10 @@ class ModerationCog(commands.Cog):
 
         try:
             if not interaction.response.is_done():
-                await interaction.response.send_message("Este comando esta bloqueado neste canal.", ephemeral=True)
+                if self.aviso_comando_bloqueado_liberado(interaction.guild.id, interaction.channel_id, interaction.user.id, command_name):
+                    await interaction.response.send_message("Este comando esta bloqueado neste canal.", ephemeral=True)
+                else:
+                    await interaction.response.send_message("Comando bloqueado.", ephemeral=True)
         except discord.HTTPException:
             pass
 
@@ -505,16 +616,33 @@ class ModerationCog(commands.Cog):
                 continue
 
             self.auto_response_cooldowns[chave] = agora
-            delete_after = int(regra.get("deleteAfterSeconds") or 0) or None
+            if len(self.auto_response_cooldowns) > 2000:
+                limite_cooldown = agora - 3600
+                self.auto_response_cooldowns = {
+                    item: timestamp
+                    for item, timestamp in self.auto_response_cooldowns.items()
+                    if timestamp >= limite_cooldown
+                }
 
-            try:
-                await message.channel.send(
-                    regra.get("response", ""),
+            delete_after = int(regra.get("deleteAfterSeconds") or 0) or None
+            resposta = str(regra.get("response", "") or "")
+            if not resposta:
+                continue
+
+            channel = message.channel
+            guild = message.guild
+            regra_id = regra.get("id") or "auto-response"
+
+            async def enviar_auto_resposta(channel=channel, resposta=resposta, delete_after=delete_after):
+                await channel.send(
+                    resposta,
                     delete_after=delete_after,
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
-            except discord.HTTPException as erro:
-                print(f"[AUTO-RESPOSTA] Falha ao responder em {message.guild.id}: {erro}")
+
+            agendou = self.agendar_automacao(guild, 30, f"auto_response:{regra_id}", enviar_auto_resposta)
+            if not agendou:
+                print(f"[AUTO-RESPOSTA] Fila cheia em {guild.id}. Resposta descartada.")
 
     async def resolver_canal_texto(self, guild, canal_id):
         try:
