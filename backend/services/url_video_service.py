@@ -41,20 +41,57 @@ class UrlVideoService:
         cookies_path = os.getenv("AMZ_YTDLP_COOKIES_PATH", "").strip()
         if cookies_path:
             path = Path(cookies_path)
-            return path if path.exists() else None
+            if not path.exists():
+                raise UrlVideoError("Arquivo de cookies configurado em AMZ_YTDLP_COOKIES_PATH nao foi encontrado.")
+            return path
 
         cookies_b64 = os.getenv("AMZ_YTDLP_COOKIES_B64", "").strip()
-        if not cookies_b64:
-            return None
+        cookies_text = os.getenv("AMZ_YTDLP_COOKIES_TEXT", "").strip()
 
-        try:
-            conteudo = base64.b64decode(cookies_b64.encode("utf-8"), validate=True)
-        except (ValueError, binascii.Error):
-            raise UrlVideoError("Cookies invalidos em AMZ_YTDLP_COOKIES_B64.")
+        if cookies_b64:
+            try:
+                conteudo = base64.b64decode(cookies_b64.encode("utf-8"), validate=True)
+            except (ValueError, binascii.Error):
+                raise UrlVideoError("Cookies invalidos em AMZ_YTDLP_COOKIES_B64.")
+        elif cookies_text:
+            conteudo = cookies_text.replace("\\n", "\n").encode("utf-8")
+        else:
+            return None
 
         destino = Path(temp_dir) / "cookies.txt"
         destino.write_bytes(conteudo)
         return destino
+
+    def _formatar_erro_download(self, erro, tipo="video", cookies_file=None):
+        detalhe = str(erro).strip()
+        detalhe_curto = detalhe.splitlines()[-1][-400:] if detalhe else "Erro desconhecido."
+        detalhe_lower = detalhe.lower()
+        usando_cookies = bool(cookies_file)
+
+        if "sign in to confirm" in detalhe_lower or "not a bot" in detalhe_lower or "cookies" in detalhe_lower:
+            if usando_cookies:
+                return "O YouTube bloqueou esse link mesmo com cookies configurados. Atualize os cookies do servidor ou tente outro link."
+
+            return (
+                "O YouTube bloqueou o servidor e pediu confirmacao de conta. "
+                "Configure cookies do yt-dlp no servidor (`AMZ_YTDLP_COOKIES_B64` ou `AMZ_YTDLP_COOKIES_TEXT`) "
+                "ou tente um link de TikTok/Instagram."
+            )
+
+        if "private video" in detalhe_lower or "this video is private" in detalhe_lower:
+            return "Esse video esta privado ou sem permissao de acesso."
+
+        if "video unavailable" in detalhe_lower or "this video is unavailable" in detalhe_lower:
+            return "Esse video esta indisponivel para download."
+
+        if "unsupported url" in detalhe_lower:
+            return "Esse link ainda nao e suportado pelo downloader."
+
+        if "video longo demais" in detalhe_lower:
+            return detalhe_curto
+
+        prefixo = "Nao consegui baixar o audio desse link." if tipo == "audio" else "Nao consegui baixar esse video."
+        return f"{prefixo} {detalhe_curto}"
 
     def _validar_url(self, url: str):
         parsed = urlparse(str(url or "").strip())
@@ -263,8 +300,7 @@ class UrlVideoService:
             with YoutubeDL(ydl_opts) as ydl:
                 ydl.extract_info(url, download=True)
         except Exception as erro:
-            detalhe = str(erro).strip().splitlines()[-1][-400:]
-            raise UrlVideoError(f"Nao consegui baixar esse video. {detalhe}")
+            raise UrlVideoError(self._formatar_erro_download(erro, "video", cookies_file))
 
         candidato = Path(temp_dir) / "video.mp4"
         if not candidato.exists():
@@ -325,8 +361,7 @@ class UrlVideoService:
             with YoutubeDL(ydl_opts) as ydl:
                 ydl.extract_info(url, download=True)
         except Exception as erro:
-            detalhe = str(erro).strip().splitlines()[-1][-400:]
-            raise UrlVideoError(f"Nao consegui baixar o audio desse link. {detalhe}")
+            raise UrlVideoError(self._formatar_erro_download(erro, "audio", cookies_file))
 
         arquivos = sorted(
             (item for item in Path(temp_dir).glob("audio.*") if item.is_file() and not item.name.endswith(".part")),
