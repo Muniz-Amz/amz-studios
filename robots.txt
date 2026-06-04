@@ -2,3 +2,4 @@ User-agent: *
 Allow: /
 
 Sitemap: https://muniz-amz.github.io/amz-studios/sitemap.xml
+Sitemap: https://muniz-amz.github.io/amz-studios/sitemap.txt
