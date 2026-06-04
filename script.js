@@ -10,6 +10,7 @@ const DISCORD_BOT_INVITE_SCOPES = 'bot applications.commands';
 const DISCORD_BOT_PERMISSIONS = '8';
 const DISCORD_PERMISSION_ADMINISTRATOR = BigInt(0x8);
 const DISCORD_PERMISSION_MANAGE_GUILD = BigInt(0x20);
+const DISCORD_USER_KEY = 'discord_usuario_amz';
 const MAX_MINUTOS_LIMPEZA = 1440;
 const ADMIN_TOKEN_KEY = 'amz_admin_token';
 const SITE_THEME_KEY = 'amz_site_theme';
@@ -449,9 +450,29 @@ function salvarServidoresCache(servidores = []) {
     localStorage.setItem('servidores_amz', JSON.stringify(servidores));
 }
 
+function obterUsuarioDiscordCache() {
+    try {
+        return JSON.parse(localStorage.getItem(DISCORD_USER_KEY) || 'null');
+    } catch (erro) {
+        console.warn('Cache de usuario Discord invalido:', erro);
+        return null;
+    }
+}
+
+function salvarUsuarioDiscordCache(usuario) {
+    if (!usuario || typeof usuario !== 'object') {
+        localStorage.removeItem(DISCORD_USER_KEY);
+        return;
+    }
+
+    localStorage.setItem(DISCORD_USER_KEY, JSON.stringify(usuario));
+}
+
 function limparSessaoDiscord() {
     localStorage.removeItem('discord_token');
     localStorage.removeItem('servidores_amz');
+    localStorage.removeItem(DISCORD_USER_KEY);
+    renderizarPerfilDiscordPainel();
 }
 
 function estaEmArquivoLocal() {
@@ -547,6 +568,61 @@ function renderizarAvatarServidor(nome, iconUrl, classe = 'server-avatar') {
     }
 
     return `<span class="${classe} fallback">${escaparHTML(obterIniciaisServidor(nome))}</span>`;
+}
+
+function obterAvatarUsuarioDiscord(usuario = {}) {
+    if (usuario.avatar_url) return usuario.avatar_url;
+    if (usuario.id && usuario.avatar) {
+        const extensao = String(usuario.avatar).startsWith('a_') ? 'gif' : 'png';
+        return `https://cdn.discordapp.com/avatars/${usuario.id}/${usuario.avatar}.${extensao}?size=128`;
+    }
+
+    return '';
+}
+
+function obterNomeUsuarioDiscord(usuario = {}) {
+    return usuario.global_name || usuario.display_name || usuario.nome || usuario.username || 'Usuario Discord';
+}
+
+function obterTagUsuarioDiscord(usuario = {}) {
+    const username = usuario.username || usuario.nome || '';
+    const discriminator = String(usuario.discriminator || '');
+
+    if (username && discriminator && discriminator !== '0') {
+        return `${username}#${discriminator}`;
+    }
+
+    return username ? `@${username}` : 'Discord conectado';
+}
+
+function renderizarPerfilDiscordPainel() {
+    const perfil = document.getElementById('vm-discord-profile');
+
+    if (!perfil) return;
+
+    const usuario = obterUsuarioDiscordCache();
+
+    if (!usuario || (!usuario.id && !usuario.nome && !usuario.username)) {
+        perfil.hidden = true;
+        perfil.innerHTML = '';
+        return;
+    }
+
+    const nome = obterNomeUsuarioDiscord(usuario);
+    const tag = obterTagUsuarioDiscord(usuario);
+    const avatar = obterAvatarUsuarioDiscord(usuario);
+    const avatarHtml = avatar
+        ? `<img src="${escaparHTML(avatar)}" alt="${escaparHTML(nome)}">`
+        : `<span>${escaparHTML(obterIniciaisServidor(nome))}</span>`;
+
+    perfil.innerHTML = `
+        <div class="vm-discord-avatar">${avatarHtml}</div>
+        <div class="vm-discord-copy">
+            <strong>${escaparHTML(nome)}</strong>
+            <span>${escaparHTML(tag)}</span>
+        </div>
+    `;
+    perfil.hidden = false;
 }
 
 function obterPermissoesServidor(servidor = {}) {
@@ -1038,6 +1114,7 @@ async function verificarAutenticacao() {
             if (response.ok && dados.status === "sucesso") {
                 // SALVANDO O TOKEN E A SESSÃO
                 localStorage.setItem('discord_token', dados.access_token);
+                salvarUsuarioDiscordCache(dados.usuario || null);
                 salvarServidoresCache(dados.servidores || []);
                 renderizarServidores(dados.servidores || []);
             } else {
@@ -1100,6 +1177,7 @@ async function atualizarServidoresAutorizados() {
 
         if (response.ok && resultado.status === 'sucesso') {
             const servidores = resultado.servidores || [];
+            salvarUsuarioDiscordCache(resultado.usuario || obterUsuarioDiscordCache());
             salvarServidoresCache(servidores);
             renderizarServidores(servidores);
             return;
@@ -1156,6 +1234,12 @@ function acessarDemoLocal() {
     const servidoresDemo = obterServidoresDemo();
 
     localStorage.setItem('discord_token', 'demo-token');
+    salvarUsuarioDiscordCache({
+        id: 'demo-amz',
+        nome: 'Muniz AMZ',
+        username: 'muniz_amz',
+        avatar: ''
+    });
     salvarServidoresCache(servidoresDemo);
     renderizarServidores(servidoresDemo);
 }
@@ -1251,6 +1335,7 @@ function renderizarMenuServidor(filtro = '') {
 
 function renderizarServidores(servidores) {
     const container = document.getElementById('container-servidores');
+    renderizarPerfilDiscordPainel();
     
     if (servidores.length === 0) {
         container.innerHTML = '<p class="text-white/40 text-xs py-4">Você não é Administrador de nenhum servidor em comum.</p>';
@@ -1306,6 +1391,7 @@ function configurarServidor(id, nome, iconUrl = '') {
     document.getElementById('config-limpeza').classList.remove('hidden');
     document.getElementById('nome-servidor-atual').innerText = nome;
     atualizarServidorAtualNaSidebar(nome, iconUrl, id);
+    renderizarPerfilDiscordPainel();
     fecharServidorDropdown();
 
     const nomeDashboard = document.getElementById('dashboard-server-name');

@@ -338,6 +338,9 @@ def montar_servidores_autorizados(token):
         "usuario": {
             "id": str(user_id),
             "nome": usuario.get("username"),
+            "username": usuario.get("username"),
+            "global_name": usuario.get("global_name"),
+            "discriminator": usuario.get("discriminator"),
             "avatar": usuario.get("avatar"),
         },
         "servidores": servidores_autorizados,

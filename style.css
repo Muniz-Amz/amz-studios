@@ -835,6 +835,8 @@ html[data-site-theme] body {
     background: #292a31;
     border-right: 1px solid rgba(255, 255, 255, 0.06);
     padding: 22px 16px;
+    display: flex;
+    flex-direction: column;
 }
 
 .vm-sidebar-group {
@@ -973,6 +975,73 @@ html[data-site-theme] body {
 
 .vm-guide-link {
     color: #b7bdd1;
+}
+
+.vm-discord-profile {
+    width: 100%;
+    margin-top: auto;
+    padding: 10px;
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.035);
+    color: #ffffff;
+}
+
+.vm-discord-profile[hidden] {
+    display: none !important;
+}
+
+.vm-discord-avatar {
+    width: 38px;
+    height: 38px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 50%;
+    background: #070707;
+    overflow: hidden;
+}
+
+.vm-discord-avatar img,
+.vm-discord-avatar span {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    object-fit: cover;
+}
+
+.vm-discord-avatar span {
+    font-size: 10px;
+    font-weight: 950;
+    letter-spacing: 0.08em;
+}
+
+.vm-discord-copy {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.vm-discord-copy strong,
+.vm-discord-copy span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vm-discord-copy strong {
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 950;
+    letter-spacing: 0.02em;
+}
+
+.vm-discord-copy span {
+    color: rgba(255, 255, 255, 0.42);
+    font-size: 11px;
+    font-weight: 700;
 }
 
 .vm-content {
@@ -3283,6 +3352,10 @@ section {
         padding: 0 12px;
     }
 
+    .vm-discord-profile {
+        margin-top: 12px;
+    }
+
     .vm-content {
         padding: 14px;
         background: #030303;
@@ -4370,6 +4443,12 @@ html[data-site-theme] .admin-login-panel {
     color: var(--app-text) !important;
 }
 
+html[data-site-theme] .vm-discord-profile {
+    background: var(--app-surface) !important;
+    border-color: var(--app-border) !important;
+    color: var(--app-text) !important;
+}
+
 html[data-site-theme] .vm-sidebar-label {
     color: var(--app-muted) !important;
 }
@@ -4596,6 +4675,20 @@ html[data-site-theme] .admin-server-meta {
 
 html[data-site-theme] #painel-loritta #nome-servidor-atual {
     color: #2db7ff !important;
+}
+
+html[data-site-theme] #painel-loritta .vm-discord-copy strong {
+    color: var(--app-text) !important;
+}
+
+html[data-site-theme] #painel-loritta .vm-discord-copy span {
+    color: var(--app-muted) !important;
+}
+
+html[data-site-theme] #painel-loritta .vm-discord-avatar {
+    background: var(--app-input) !important;
+    border-color: var(--app-border-strong) !important;
+    color: var(--app-text) !important;
 }
 
 html[data-site-theme] #painel-loritta .vm-server-current-icon {
