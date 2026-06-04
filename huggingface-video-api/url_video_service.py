@@ -21,9 +21,9 @@ class UrlVideoError(Exception):
 
 @dataclass(frozen=True)
 class UrlVideoLimits:
-    max_output_mb: int = int(os.getenv("AMZ_URLVIDEO_MAX_OUTPUT_MB", "25"))
-    max_seconds: int = int(os.getenv("AMZ_URLVIDEO_MAX_SECONDS", "120"))
-    timeout_seconds: int = int(os.getenv("AMZ_URLVIDEO_TIMEOUT_SECONDS", "220"))
+    max_output_mb: int = int(os.getenv("AMZ_URLVIDEO_MAX_OUTPUT_MB", "50"))
+    max_seconds: int = int(os.getenv("AMZ_URLVIDEO_MAX_SECONDS", "300"))
+    timeout_seconds: int = int(os.getenv("AMZ_URLVIDEO_TIMEOUT_SECONDS", "420"))
     max_width: int = int(os.getenv("AMZ_URLVIDEO_MAX_WIDTH", "720"))
     fps: int = int(os.getenv("AMZ_URLVIDEO_FPS", "24"))
 
@@ -61,6 +61,13 @@ class UrlVideoService:
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise UrlVideoError("Envie um link valido (http/https).")
         return parsed.geturl()
+
+    def _rotulo_limite_tempo(self):
+        segundos = int(self.limits.max_seconds)
+        if segundos >= 60 and segundos % 60 == 0:
+            minutos = segundos // 60
+            return f"{minutos} minuto" if minutos == 1 else f"{minutos} minutos"
+        return f"{segundos}s"
 
     def _run_ffmpeg(self, args):
         comando = [self.ffmpeg, "-hide_banner", "-loglevel", "error", "-y", *args]
@@ -234,7 +241,7 @@ class UrlVideoService:
                 return None
             duracao = info_dict.get("duration")
             if duracao and int(duracao) > int(self.limits.max_seconds):
-                return "Video longo demais para este servidor."
+                return f"Video longo demais para este servidor. Limite atual: {self._rotulo_limite_tempo()}."
             return None
 
         ydl_opts = {
@@ -301,7 +308,7 @@ class UrlVideoService:
                 return None
             duracao = info_dict.get("duration")
             if duracao and int(duracao) > int(self.limits.max_seconds):
-                return "Video longo demais para extrair MP3."
+                return f"Video longo demais para extrair MP3. Limite atual: {self._rotulo_limite_tempo()}."
             return None
 
         ydl_opts = {

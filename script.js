@@ -1031,11 +1031,11 @@ async function baixarVideoSite(modo = '') {
 
     try {
         avisoDemora = window.setTimeout(() => {
-            mostrarStatusDownloadSite('Ainda processando... TikTok/Instagram podem demorar no primeiro download.');
+            mostrarStatusDownloadSite('Ainda processando... videos de 3 a 5 minutos podem demorar mais, principalmente em MP4.');
         }, 20000);
         timeoutDownload = window.setTimeout(() => {
             controller?.abort();
-        }, 160000);
+        }, 430000);
 
         const response = await fetch(`${VIDEO_API_URL}/api/video/download`, {
             method: 'POST',
@@ -1057,7 +1057,7 @@ async function baixarVideoSite(modo = '') {
     } catch (erro) {
         console.error('Erro no download do site:', erro);
         const mensagem = erro.name === 'AbortError'
-            ? 'Demorou demais para baixar esse link. Tente MP4 leve ou outro link.'
+            ? 'Demorou demais para baixar esse link. Tente MP3, MP4 leve ou um video menor.'
             : erro.message || 'Nao consegui baixar esse link agora.';
         mostrarStatusDownloadSite(mensagem, 'error');
     } finally {

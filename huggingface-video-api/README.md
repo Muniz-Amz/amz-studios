@@ -13,6 +13,12 @@ license: mit
 
 API isolada para a pagina `Baixar Videos` do site AMZ Studios.
 
+Limites padrao do Space:
+
+- Duracao maxima: 5 minutos.
+- Saida maxima: 50 MB.
+- Timeout de processamento: 420 segundos.
+
 ## Rotas
 
 - `GET /` verifica se a API esta online.
