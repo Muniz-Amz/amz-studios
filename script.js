@@ -97,8 +97,6 @@ const auditEvents = [
     { id: 'emoji_sticker_alterado', title: 'Emoji/sticker criado/editado/deletado', description: 'Registra alterações em emojis e stickers.', enabled: true, channelId: null, group: 'servidor' },
     { id: 'config_servidor_alterada', title: 'Alterações nas configurações do servidor', description: 'Registra mudanças nas configurações gerais do servidor.', enabled: true, channelId: null, group: 'servidor' },
     { id: 'raid_detectada', title: 'Raid detectada', description: 'Registra quando uma possível raid é detectada.', enabled: true, channelId: null, group: 'seguranca' },
-    { id: 'lockdown_alterado', title: 'Lockdown ativado/desativado', description: 'Registra quando o modo lockdown é ativado ou desativado.', enabled: true, channelId: null, group: 'seguranca' },
-    { id: 'bot_desconhecido_bloqueado', title: 'Bot desconhecido bloqueado', description: 'Registra quando um bot não autorizado é bloqueado.', enabled: true, channelId: null, group: 'seguranca' },
     { id: 'conta_suspeita_bloqueada', title: 'Conta suspeita bloqueada', description: 'Registra quando uma conta suspeita é bloqueada.', enabled: true, channelId: null, group: 'seguranca' },
     { id: 'comando_usado', title: 'Comando usado', description: 'Registra quando um comando do bot é usado.', enabled: true, channelId: null, group: 'bot_dashboard' },
     { id: 'erro_bot', title: 'Erro do bot', description: 'Registra erros internos do bot.', enabled: true, channelId: null, group: 'bot_dashboard' },
@@ -112,12 +110,16 @@ const antiRaidSettings = [
     { id: 'enableAntiRaid', title: 'Ativar Anti Raid', description: 'Ativa ou desativa o sistema geral de Anti Raid.', enabled: false, type: 'toggle', value: false },
     { id: 'massJoinBlock', title: 'Bloquear entrada em massa', description: 'Bloqueia entrada de muitos usuários em um curto período.', enabled: true, type: 'threshold', value: 5, fields: [{ id: 'maxUsers', label: 'Número máximo de usuários', type: 'number', value: 5, min: 1, max: 100 }, { id: 'timeWindowSeconds', label: 'Tempo em segundos', type: 'number', value: 10, min: 1, max: 3600 }] },
     { id: 'accountMinAge', title: 'Idade mínima da conta', description: 'Bloqueia contas criadas recentemente.', enabled: true, type: 'number', value: 7, fields: [{ id: 'minimumDays', label: 'Número de dias mínimos', type: 'number', value: 7, min: 0, max: 3650 }] },
-    { id: 'sensitivity', title: 'Sensibilidade', description: 'Define o nível de rigidez da proteção Anti Raid.', enabled: true, type: 'select', value: 'Média', fields: [{ id: 'level', label: 'Sensibilidade', type: 'select', value: 'Média', options: ['Baixa', 'Média', 'Alta', 'Extrema'] }] },
-    { id: 'automaticAction', title: 'Ação automática', description: 'Define qual ação será executada automaticamente quando uma ameaça for detectada.', enabled: true, type: 'select', value: 'Apenas alertar', fields: [{ id: 'action', label: 'Ação automática', type: 'select', value: 'Apenas alertar', options: ['Apenas alertar', 'Silenciar', 'Expulsar', 'Banir', 'Colocar em verificação'] }] },
-    { id: 'lockdownMode', title: 'Modo Lockdown', description: 'Trava o servidor automaticamente durante uma raid.', enabled: false, type: 'toggle', value: false },
-    { id: 'lockdownTime', title: 'Tempo de Lockdown', description: 'Define por quanto tempo o servidor ficará em lockdown.', enabled: true, type: 'number', value: 10, fields: [{ id: 'minutes', label: 'Tempo em minutos', type: 'number', value: 10, min: 1, max: 1440 }] },
-    { id: 'blockUnknownBots', title: 'Bloquear bots desconhecidos', description: 'Impede a entrada de bots não autorizados no servidor.', enabled: true, type: 'toggle', value: true },
-    { id: 'notifyAdmins', title: 'Notificar administradores', description: 'Envia alerta para administradores quando uma raid for detectada.', enabled: true, type: 'toggle', value: true },
+    {
+        id: 'automaticAction',
+        title: 'Ação segura',
+        description: 'Define a ação aplicada quando uma entrada suspeita for detectada.',
+        enabled: true,
+        type: 'select',
+        value: 'Apenas alertar',
+        notes: ['Por segurança, o padrão apenas registra alerta.', 'Use expulsar ou banir somente se tiver certeza dos limites configurados.'],
+        fields: [{ id: 'action', label: 'Ação automática', type: 'select', value: 'Apenas alertar', options: ['Apenas alertar', 'Expulsar', 'Banir'] }]
+    },
     { id: 'securityLogChannel', title: 'Canal de logs', description: 'Define o canal onde os alertas e logs de segurança serão enviados.', enabled: true, type: 'channel', value: '', fields: [{ id: 'channelId', label: 'Canal de logs', type: 'channel', value: '', hint: 'Canal que recebe alertas de raid, links suspeitos e ações automáticas.' }] },
     {
         id: 'suspiciousLinks',
@@ -1924,16 +1926,24 @@ function SecuritySummary() {
     const seguranca = normalizarSegurancaLocal(moderacaoAtual.seguranca);
     const antiRaid = seguranca.antiRaid;
     const ativar = obterSetting(antiRaid.settings, 'enableAntiRaid');
-    const sensibilidade = obterSetting(antiRaid.settings, 'sensitivity')?.values?.level || 'Média';
+    const acao = obterSetting(antiRaid.settings, 'automaticAction')?.values?.action || 'Apenas alertar';
+    const entradaMassa = obterSetting(antiRaid.settings, 'massJoinBlock');
+    const idadeConta = obterSetting(antiRaid.settings, 'accountMinAge');
+    const linksSuspeitos = obterSetting(antiRaid.settings, 'suspiciousLinks');
+    const canalLogs = obterSetting(antiRaid.settings, 'securityLogChannel');
+    const maxUsers = entradaMassa?.values?.maxUsers || 5;
+    const timeWindow = entradaMassa?.values?.timeWindowSeconds || 10;
+    const minimumDays = idadeConta?.values?.minimumDays || 7;
+    const canalLogsNome = canalLogs?.values?.channelIdName || canalLogs?.values?.channelName || canalLogs?.values?.channelId || 'Nao definido';
 
     return `
         <div class="summary-grid">
             <article><span>Status do Anti Raid</span><strong>${ativar.enabled ? 'Ativado' : 'Desativado'}</strong></article>
-            <article><span>Nível de proteção</span><strong>${escaparHTML(sensibilidade)}</strong></article>
-            <article><span>Última ameaça</span><strong>${escaparHTML(antiRaid.lastThreat || 'Nenhuma ameaça detectada')}</strong></article>
-            <article><span>Ações automáticas</span><strong>${antiRaid.totalAutomaticActions}</strong></article>
-            <article><span>Links bloqueados</span><strong>${antiRaid.suspiciousLinksBlocked}</strong></article>
-            <article><span>Usuários bloqueados</span><strong>${antiRaid.usersBlockedByRaid}</strong></article>
+            <article><span>Ação configurada</span><strong>${escaparHTML(acao)}</strong></article>
+            <article><span>Entrada em massa</span><strong>${entradaMassa?.enabled ? `${escaparHTML(maxUsers)} em ${escaparHTML(timeWindow)}s` : 'Desativada'}</strong></article>
+            <article><span>Idade mínima</span><strong>${idadeConta?.enabled ? `${escaparHTML(minimumDays)} dias` : 'Desativada'}</strong></article>
+            <article><span>Links suspeitos</span><strong>${linksSuspeitos?.enabled ? 'Ativado' : 'Desativado'}</strong></article>
+            <article><span>Canal de logs</span><strong>${escaparHTML(canalLogsNome)}</strong></article>
         </div>
     `;
 }

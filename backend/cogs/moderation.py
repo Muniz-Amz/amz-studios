@@ -17,6 +17,8 @@ INVITE_RE = re.compile(r"(discord\.gg/|discord(?:app)?\.com/invite/)", re.IGNORE
 SPAM_WINDOW_SECONDS = 8
 SPAM_LIMIT = 5
 CONFIG_CACHE_TTL_SECONDS = 8
+ANTI_RAID_JOIN_CACHE_MAX = 140
+ANTI_RAID_LOG_COOLDOWN_SECONDS = 12
 AUDIT_RATE_LIMIT_WINDOW_SECONDS = 10
 AUDIT_RATE_LIMIT_DEFAULT = 12
 AUDIT_RATE_LIMITS = {
@@ -35,7 +37,6 @@ AUDIT_HIGH_PRIORITY_EVENTS = {
     "silenciamentos",
     "remocao_punicoes",
     "raid_detectada",
-    "bot_desconhecido_bloqueado",
     "conta_suspeita_bloqueada",
     "erro_bot",
 }
@@ -147,7 +148,9 @@ class ModerationCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.spam_cache = defaultdict(lambda: deque(maxlen=12))
+        self.join_cache = defaultdict(lambda: deque(maxlen=ANTI_RAID_JOIN_CACHE_MAX))
         self.audit_rate_limits = defaultdict(deque)
+        self.anti_raid_log_cooldowns = {}
         self.config_cache = {}
         self.auto_response_cooldowns = {}
         self._interaction_check_original = None
@@ -244,6 +247,121 @@ class ModerationCog(commands.Cog):
     def seguranca_ativa(self, config, setting_id):
         setting = self.setting_seguranca(config, setting_id)
         return bool(setting and setting.get("enabled"))
+
+    def anti_raid_ativo(self, config):
+        return self.seguranca_ativa(config, "enableAntiRaid")
+
+    def numero_seguranca(self, config, setting_id, field_id, padrao, minimo, maximo):
+        valores = self.valores_seguranca(config, setting_id)
+        try:
+            valor = int(valores.get(field_id, padrao))
+        except (TypeError, ValueError):
+            valor = padrao
+
+        return min(max(valor, minimo), maximo)
+
+    def acao_anti_raid(self, config):
+        if not self.seguranca_ativa(config, "automaticAction"):
+            return "alertar"
+
+        acao = str(self.valores_seguranca(config, "automaticAction").get("action") or "Apenas alertar").strip().lower()
+        if "ban" in acao:
+            return "banir"
+        if "expuls" in acao or "kick" in acao:
+            return "expulsar"
+        return "alertar"
+
+    def pode_moderar_membro(self, member, acao):
+        guild = member.guild
+        membro_bot = guild.me
+
+        if not membro_bot:
+            return False, "Bot nao identificado no servidor."
+
+        if member.id == guild.owner_id:
+            return False, "Nao e possivel moderar o dono do servidor."
+
+        if self.bot.user and member.id == self.bot.user.id:
+            return False, "O bot nao pode moderar a si mesmo."
+
+        if member.top_role >= membro_bot.top_role:
+            return False, "Cargo do membro esta igual ou acima do cargo do bot."
+
+        permissoes = membro_bot.guild_permissions
+        if acao == "banir" and not permissoes.ban_members:
+            return False, "Bot sem permissao de banir membros."
+
+        if acao == "expulsar" and not permissoes.kick_members:
+            return False, "Bot sem permissao de expulsar membros."
+
+        return True, "Pode moderar."
+
+    def anti_raid_log_liberado(self, guild_id, event_id):
+        chave = (guild_id, event_id)
+        agora = datetime.now(timezone.utc).timestamp()
+        ultimo = self.anti_raid_log_cooldowns.get(chave, 0)
+
+        if agora - ultimo < ANTI_RAID_LOG_COOLDOWN_SECONDS:
+            return False
+
+        self.anti_raid_log_cooldowns[chave] = agora
+        return True
+
+    async def aplicar_acao_anti_raid(self, member, config, titulo, motivo, event_id, fields=None):
+        acao = self.acao_anti_raid(config)
+        acoes = ["alerta registrado"]
+        bloqueou_usuario = False
+
+        if acao in {"expulsar", "banir"}:
+            pode_moderar, motivo_bloqueio = self.pode_moderar_membro(member, acao)
+            if not pode_moderar:
+                acoes.append(f"acao bloqueada: {motivo_bloqueio}")
+            elif acao == "expulsar":
+                try:
+                    await member.kick(reason=f"AMZ Anti Raid: {motivo}")
+                    acoes.append("usuario expulso")
+                    bloqueou_usuario = True
+                except (discord.Forbidden, discord.HTTPException):
+                    acoes.append("falha ao expulsar")
+            elif acao == "banir":
+                try:
+                    try:
+                        await member.ban(reason=f"AMZ Anti Raid: {motivo}", delete_message_seconds=0)
+                    except TypeError:
+                        await member.ban(reason=f"AMZ Anti Raid: {motivo}", delete_message_days=0)
+                    acoes.append("usuario banido")
+                    bloqueou_usuario = True
+                except (discord.Forbidden, discord.HTTPException):
+                    acoes.append("falha ao banir")
+
+        if hasattr(self.bot, "registrar_evento"):
+            self.bot.registrar_evento(
+                event_id,
+                f"{titulo}: {motivo}",
+                guild_id=member.guild.id,
+                user_id=member.id,
+                action=acao,
+            )
+
+        if self.anti_raid_log_liberado(member.guild.id, event_id):
+            await self.enviar_log(
+                member.guild,
+                config,
+                "seguranca",
+                titulo,
+                f"{member} (`{member.id}`)",
+                discord.Color.red(),
+                [
+                    ("Motivo", motivo, False),
+                    ("Acao configurada", acao, True),
+                    ("Acoes executadas", ", ".join(acoes), False),
+                    *(fields or []),
+                ],
+                event_id=event_id,
+                responsavel=member,
+            )
+
+        return bloqueou_usuario
 
     def comando_bloqueado(self, config, channel_id, command_name):
         if not self.automacao_ativa(config, "commandChannelBlock"):
@@ -985,9 +1103,71 @@ class ModerationCog(commands.Cog):
             return
         await self.enviar_log(guild, config, "moderacao", "Membro desbanido", f"{user} (`{user.id}`)", discord.Color.green(), event_id="remocao_punicoes", responsavel=user, log_key="desbanimentos")
 
+    async def processar_anti_raid_entrada(self, member, config):
+        if not self.anti_raid_ativo(config) or self.usuario_imune(member, config):
+            return False
+
+        agora_dt = datetime.now(timezone.utc)
+        agora = agora_dt.timestamp()
+        guild_id = member.guild.id
+        janela = self.numero_seguranca(config, "massJoinBlock", "timeWindowSeconds", 10, 1, 3600)
+        limite_usuarios = self.numero_seguranca(config, "massJoinBlock", "maxUsers", 5, 1, 100)
+        entradas = self.join_cache[guild_id]
+        entradas.append((agora, member.id))
+
+        while entradas and agora - entradas[0][0] > janela:
+            entradas.popleft()
+
+        if self.seguranca_ativa(config, "massJoinBlock") and len(entradas) >= limite_usuarios:
+            bloqueou = await self.aplicar_acao_anti_raid(
+                member,
+                config,
+                "Raid detectada",
+                f"{len(entradas)} entradas em {janela}s",
+                "raid_detectada",
+                [
+                    ("Janela", f"{janela}s", True),
+                    ("Limite", str(limite_usuarios), True),
+                    ("Usuario atual", f"{member} (`{member.id}`)", False),
+                ],
+            )
+            if bloqueou:
+                return True
+
+        if self.seguranca_ativa(config, "accountMinAge") and not member.bot:
+            dias_minimos = self.numero_seguranca(config, "accountMinAge", "minimumDays", 7, 0, 3650)
+
+            if dias_minimos > 0:
+                criado_em = member.created_at
+                if criado_em.tzinfo is None:
+                    criado_em = criado_em.replace(tzinfo=timezone.utc)
+
+                idade_segundos = max(0, int((agora_dt - criado_em).total_seconds()))
+                idade_dias = idade_segundos // 86400
+
+                if idade_dias < dias_minimos:
+                    return await self.aplicar_acao_anti_raid(
+                        member,
+                        config,
+                        "Conta suspeita detectada",
+                        f"Conta criada ha {idade_dias}d; minimo configurado: {dias_minimos}d",
+                        "conta_suspeita_bloqueada",
+                        [
+                            ("Idade da conta", f"{idade_dias}d", True),
+                            ("Minimo exigido", f"{dias_minimos}d", True),
+                            ("Criada em", criado_em.strftime("%d/%m/%Y %H:%M UTC"), False),
+                        ],
+                    )
+
+        return False
+
     @commands.Cog.listener()
     async def on_member_join(self, member):
         config = await self.obter_config(member.guild)
+        anti_raid_bloqueou = await self.processar_anti_raid_entrada(member, config)
+        if anti_raid_bloqueou:
+            return
+
         if not self.automacao_ativa(config, "autoRole"):
             return
 
