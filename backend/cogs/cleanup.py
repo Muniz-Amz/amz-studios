@@ -66,30 +66,6 @@ class CleanupCog(commands.Cog):
 
         return len(apagadas), None
 
-    @app_commands.command(name="limpar", description="Apaga mensagens recentes do canal atual.")
-    @app_commands.describe(quantidade="Quantidade de mensagens para apagar. Maximo: 1000.")
-    @app_commands.default_permissions(administrator=True)
-    @app_commands.guild_only()
-    async def slash_limpar(self, interaction: discord.Interaction, quantidade: app_commands.Range[int, 1, 1000]):
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        apagadas, erro = await self.limpar_canal(interaction, quantidade)
-
-        if erro:
-            await interaction.followup.send(erro, ephemeral=True)
-            return
-
-        embed = discord.Embed(
-            title="Limpeza concluida",
-            description="Mensagens fixadas foram preservadas.",
-            color=discord.Color.from_rgb(255, 255, 255),
-        )
-        embed.add_field(name="Canal", value=getattr(interaction.channel, "mention", "Canal atual"), inline=True)
-        embed.add_field(name="Solicitadas", value=str(quantidade), inline=True)
-        embed.add_field(name="Apagadas", value=str(apagadas), inline=True)
-        embed.set_footer(text=f"Limite do comando: {MAX_LIMPAR_MENSAGENS} mensagens")
-
-        await interaction.followup.send(embed=embed, ephemeral=True)
-
     @mod.command(name="limpar", description="Apaga mensagens recentes do canal atual.")
     @app_commands.describe(quantidade="Quantidade de mensagens para apagar. Maximo: 1000.")
     @app_commands.default_permissions(administrator=True)

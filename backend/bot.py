@@ -4,7 +4,6 @@ from collections import deque
 from datetime import datetime, timezone
 
 import discord
-from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 
@@ -153,7 +152,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 
-bot = AMZBot(command_prefix=os.getenv("AMZ_COMMAND_PREFIX", "!"), intents=intents)
+bot = AMZBot(command_prefix=os.getenv("AMZ_COMMAND_PREFIX", "!"), intents=intents, help_command=None)
 
 
 @bot.event

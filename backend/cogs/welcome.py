@@ -98,19 +98,6 @@ class WelcomeCog(commands.Cog):
         if not ok:
             print(f"[WELCOME] Saida nao enviada em {member.guild.id}: {mensagem}")
 
-    @app_commands.command(name="testaravisos", description="Envia um teste dos avisos de entrada ou saida.")
-    @app_commands.describe(tipo="Escolha qual aviso voce quer testar.")
-    @app_commands.choices(
-        tipo=[
-            app_commands.Choice(name="Entrada", value="entrada"),
-            app_commands.Choice(name="Saida", value="saida"),
-        ]
-    )
-    @app_commands.default_permissions(administrator=True)
-    @app_commands.guild_only()
-    async def slash_testaravisos(self, interaction: discord.Interaction, tipo: app_commands.Choice[str]):
-        await self.processar_teste_aviso(interaction, tipo.value, "/testaravisos")
-
     @avisos.command(name="testar", description="Testa o aviso de entrada ou saida configurado no painel.")
     @app_commands.describe(tipo="Escolha qual aviso voce quer testar.")
     @app_commands.choices(

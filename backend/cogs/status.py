@@ -28,10 +28,6 @@ COMANDOS_HELP = {
         ("/midia baixar url", "Baixa um video por link (Reels/Shorts) e envia como arquivo."),
         ("/midia limites", "Mostra os limites de conversao do bot."),
     ],
-    "Atalhos antigos": [
-        ("/info, /help, /deploy, /limpar", "Continuam funcionando para compatibilidade."),
-        ("/gifimg, /videogif, /audio, /baixarvideo", "Continuam funcionando enquanto os usuarios migram."),
-    ],
 }
 
 
@@ -174,30 +170,6 @@ class StatusCog(commands.Cog):
         embed.set_footer(text=f"Solicitado por {nome_solicitante} | AMZ Studios")
         return embed
 
-    @commands.command(name="info")
-    async def info_prefix(self, ctx):
-        if not self.usuario_autorizado(ctx.guild, ctx.author):
-            await ctx.reply("Apenas o dono do servidor ou usuarios com `Administrador` podem usar `!info`.")
-            return
-
-        embed = await self.montar_embed_info(ctx.guild, ctx.author)
-        await ctx.reply(embed=embed, mention_author=False)
-
-    @app_commands.command(name="info", description="Mostra status do bot, Discord e banco de dados.")
-    @app_commands.default_permissions(administrator=True)
-    @app_commands.guild_only()
-    async def slash_info(self, interaction: discord.Interaction):
-        if not self.usuario_autorizado(interaction.guild, interaction.user):
-            await interaction.response.send_message(
-                "Apenas o dono do servidor ou usuarios com `Administrador` podem usar `/info`.",
-                ephemeral=True,
-            )
-            return
-
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        embed = await self.montar_embed_info(interaction.guild, interaction.user)
-        await interaction.followup.send(embed=embed, ephemeral=True)
-
     @amz.command(name="info", description="Status rapido do bot, Discord e banco de dados.")
     @app_commands.default_permissions(administrator=True)
     @app_commands.guild_only()
@@ -212,20 +184,6 @@ class StatusCog(commands.Cog):
         await interaction.response.defer(ephemeral=True, thinking=True)
         embed = await self.montar_embed_info(interaction.guild, interaction.user)
         await interaction.followup.send(embed=embed, ephemeral=True)
-
-    @app_commands.command(name="help", description="Mostra todos os comandos do AMZ Bot.")
-    @app_commands.default_permissions(administrator=True)
-    @app_commands.guild_only()
-    async def slash_help(self, interaction: discord.Interaction):
-        if not self.usuario_autorizado(interaction.guild, interaction.user):
-            await interaction.response.send_message(
-                "Apenas o dono do servidor ou usuarios com `Administrador` podem usar `/help`.",
-                ephemeral=True,
-            )
-            return
-
-        embed = self.montar_embed_help(interaction.user)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @amz.command(name="ajuda", description="Mostra comandos por categoria e explica os atalhos principais.")
     @app_commands.default_permissions(administrator=True)

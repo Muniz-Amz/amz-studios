@@ -21,17 +21,6 @@ class MediaCog(commands.Cog):
         self.url_video_service = UrlVideoService()
         self.semaphore = asyncio.Semaphore(int(os.getenv("AMZ_MEDIA_CONCURRENCY", "1")))
 
-    def obter_anexo(self, ctx):
-        if ctx.message.attachments:
-            return ctx.message.attachments[0]
-
-        referencia = getattr(ctx.message.reference, "resolved", None)
-
-        if referencia and getattr(referencia, "attachments", None):
-            return referencia.attachments[0]
-
-        return None
-
     async def salvar_anexo(self, attachment, temp_dir):
         validar_tamanho_entrada(attachment, self.limits)
         input_path = Path(temp_dir) / nome_seguro(attachment.filename)
@@ -68,39 +57,6 @@ class MediaCog(commands.Cog):
 
         return legenda, output_path
 
-    async def processar(self, ctx, attachment, modo):
-        media_type = tipo_anexo(attachment)
-
-        if modo == "image_gif" and media_type != "image":
-            raise MediaError("Envie ou responda uma imagem para usar esse comando.")
-
-        if modo in {"video_gif", "audio"} and media_type != "video":
-            raise MediaError("Envie ou responda um video para usar esse comando.")
-
-        if modo == "auto" and media_type not in {"image", "video"}:
-            raise MediaError("Envie ou responda uma imagem ou video.")
-
-        status = await ctx.reply("Processando arquivo...")
-
-        try:
-            async with self.semaphore:
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    legenda, output_path = await self.converter_anexo(attachment, modo, temp_dir)
-                    await ctx.reply(legenda, file=discord.File(output_path, filename=output_path.name))
-        except Exception:
-            await status.edit(content="Falha ao processar o arquivo.")
-            raise
-
-        await status.edit(content="Pronto.")
-
-    async def responder_erro(self, ctx, erro):
-        if isinstance(erro, MediaError):
-            await ctx.reply(str(erro))
-            return
-
-        print(f"[MIDIA] Erro inesperado: {erro}")
-        await ctx.reply("Nao consegui processar esse arquivo. Tente um arquivo menor ou outro formato.")
-
     async def processar_slash(self, interaction, attachment, modo):
         await interaction.response.defer(thinking=True)
 
@@ -121,106 +77,6 @@ class MediaCog(commands.Cog):
                 "Nao consegui processar esse arquivo. Tente um arquivo menor ou outro formato.",
                 ephemeral=True,
             )
-
-    @commands.command(name="gif")
-    async def gif(self, ctx):
-        attachment = self.obter_anexo(ctx)
-
-        if not attachment:
-            await ctx.reply("Envie uma imagem/video junto com `!gif` ou responda uma mensagem com arquivo.")
-            return
-
-        try:
-            await self.processar(ctx, attachment, "auto")
-        except Exception as erro:
-            await self.responder_erro(ctx, erro)
-
-    @commands.command(name="foto_gif", aliases=["fotogif", "imagemgif", "imagegif", "gifs"])
-    async def foto_gif(self, ctx):
-        attachment = self.obter_anexo(ctx)
-
-        if not attachment:
-            await ctx.reply("Envie uma imagem junto com `!foto_gif` ou responda uma imagem com o comando.")
-            return
-
-        try:
-            await self.processar(ctx, attachment, "image_gif")
-        except Exception as erro:
-            await self.responder_erro(ctx, erro)
-
-    @commands.command(name="video_gif", aliases=["videogif"])
-    async def video_gif(self, ctx):
-        attachment = self.obter_anexo(ctx)
-
-        if not attachment:
-            await ctx.reply("Envie um video junto com `!video_gif` ou responda um video com o comando.")
-            return
-
-        try:
-            await self.processar(ctx, attachment, "video_gif")
-        except Exception as erro:
-            await self.responder_erro(ctx, erro)
-
-    @commands.command(name="video_audio", aliases=["videoaudio", "audio", "mp3"])
-    async def video_audio(self, ctx):
-        attachment = self.obter_anexo(ctx)
-
-        if not attachment:
-            await ctx.reply("Envie um video junto com `!audio` ou responda um video com o comando.")
-            return
-
-        try:
-            await self.processar(ctx, attachment, "audio")
-        except Exception as erro:
-            await self.responder_erro(ctx, erro)
-
-    @commands.command(name="midia_limites", aliases=["limites_midia"])
-    async def midia_limites(self, ctx):
-        await ctx.reply(
-            "Limites de midia:\n"
-            f"- Entrada: {self.limits.max_input_mb} MB\n"
-            f"- Saida: {self.limits.max_output_mb} MB\n"
-            f"- Video para GIF: {self.limits.max_video_seconds}s, {self.limits.gif_fps} FPS, largura {self.limits.max_width}px\n"
-            f"- Video para audio: {self.limits.max_audio_seconds}s\n"
-            f"- Conversoes simultaneas: 1 por padrao"
-        )
-
-    @app_commands.command(name="gifimg", description="Transforma uma imagem enviada em GIF.")
-    @app_commands.describe(arquivo="Imagem que sera transformada em GIF.")
-    async def slash_gifimg(self, interaction: discord.Interaction, arquivo: discord.Attachment):
-        await self.processar_slash(interaction, arquivo, "image_gif")
-
-    @app_commands.command(name="gifs", description="Transforma uma imagem enviada em GIF.")
-    @app_commands.describe(arquivo="Imagem que sera transformada em GIF.")
-    async def slash_gifs(self, interaction: discord.Interaction, arquivo: discord.Attachment):
-        await self.processar_slash(interaction, arquivo, "image_gif")
-
-    @app_commands.command(name="videogif", description="Transforma um video enviado em GIF.")
-    @app_commands.describe(arquivo="Video que sera transformado em GIF.")
-    async def slash_videogif(self, interaction: discord.Interaction, arquivo: discord.Attachment):
-        await self.processar_slash(interaction, arquivo, "video_gif")
-
-    @app_commands.command(name="audio", description="Extrai o audio de um video enviado.")
-    @app_commands.describe(arquivo="Video de onde o audio sera extraido.")
-    async def slash_audio(self, interaction: discord.Interaction, arquivo: discord.Attachment):
-        await self.processar_slash(interaction, arquivo, "audio")
-
-    @app_commands.command(name="videoaudio", description="Extrai o audio de um video enviado.")
-    @app_commands.describe(arquivo="Video de onde o audio sera extraido.")
-    async def slash_videoaudio(self, interaction: discord.Interaction, arquivo: discord.Attachment):
-        await self.processar_slash(interaction, arquivo, "audio")
-
-    @app_commands.command(name="midialimites", description="Mostra os limites dos comandos de midia.")
-    async def slash_midialimites(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            "Limites de midia:\n"
-            f"- Entrada: {self.limits.max_input_mb} MB\n"
-            f"- Saida: {self.limits.max_output_mb} MB\n"
-            f"- Video para GIF: {self.limits.max_video_seconds}s, {self.limits.gif_fps} FPS, largura {self.limits.max_width}px\n"
-            f"- Video para audio: {self.limits.max_audio_seconds}s\n"
-            f"- Conversoes simultaneas: 1 por padrao",
-            ephemeral=True,
-        )
 
     @midia.command(name="gifimagem", description="Transforma uma imagem enviada em GIF.")
     @app_commands.describe(arquivo="Imagem que sera transformada em GIF.")
@@ -248,11 +104,6 @@ class MediaCog(commands.Cog):
             f"- Conversoes simultaneas: 1 por padrao",
             ephemeral=True,
         )
-
-    @app_commands.command(name="baixarvideo", description="Baixa um video por link (Reels/Shorts) e envia no chat.")
-    @app_commands.describe(url="Link do video (Instagram Reels, YouTube Shorts, etc.)")
-    async def slash_baixarvideo(self, interaction: discord.Interaction, url: str):
-        await self.processar_download_url(interaction, url)
 
     @midia.command(name="baixar", description="Baixa um video por link e envia no chat.")
     @app_commands.describe(url="Link do video (Instagram Reels, TikTok, YouTube Shorts, etc.)")
