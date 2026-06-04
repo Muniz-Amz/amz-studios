@@ -11,6 +11,16 @@ from services.media_service import MediaError, MediaLimits, MediaService, nome_s
 from services.url_video_service import UrlVideoError, UrlVideoService
 
 
+def formatar_limite_segundos(segundos):
+    segundos = int(segundos or 0)
+
+    if segundos >= 60 and segundos % 60 == 0:
+        minutos = segundos // 60
+        return f"{minutos} minuto" if minutos == 1 else f"{minutos} minutos"
+
+    return f"{segundos}s"
+
+
 class MediaCog(commands.Cog):
     midia = app_commands.Group(name="midia", description="Conversao e download de midia do AMZ Bot.")
 
@@ -53,7 +63,7 @@ class MediaCog(commands.Cog):
         else:
             output_path = Path(temp_dir) / f"{base}.mp3"
             await asyncio.to_thread(self.service.video_para_audio, input_path, output_path)
-            legenda = f"Audio extraido com limite de {self.limits.max_audio_seconds}s."
+            legenda = f"Audio extraido com limite de {formatar_limite_segundos(self.limits.max_audio_seconds)}."
 
         return legenda, output_path
 
@@ -100,7 +110,7 @@ class MediaCog(commands.Cog):
             f"- Entrada: {self.limits.max_input_mb} MB\n"
             f"- Saida: {self.limits.max_output_mb} MB\n"
             f"- Video para GIF: {self.limits.max_video_seconds}s, {self.limits.gif_fps} FPS, largura {self.limits.max_width}px\n"
-            f"- Video para audio: {self.limits.max_audio_seconds}s\n"
+            f"- Video para audio: {formatar_limite_segundos(self.limits.max_audio_seconds)}\n"
             f"- Conversoes simultaneas: 1 por padrao",
             ephemeral=True,
         )

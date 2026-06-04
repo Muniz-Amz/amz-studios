@@ -16,10 +16,10 @@ class MediaLimits:
     max_input_mb: int = int(os.getenv("AMZ_MEDIA_MAX_INPUT_MB", "8"))
     max_output_mb: int = int(os.getenv("AMZ_MEDIA_MAX_OUTPUT_MB", "8"))
     max_video_seconds: int = int(os.getenv("AMZ_MEDIA_MAX_VIDEO_SECONDS", "10"))
-    max_audio_seconds: int = int(os.getenv("AMZ_MEDIA_MAX_AUDIO_SECONDS", "60"))
+    max_audio_seconds: int = int(os.getenv("AMZ_MEDIA_MAX_AUDIO_SECONDS", "300"))
     max_width: int = int(os.getenv("AMZ_MEDIA_MAX_WIDTH", "480"))
     gif_fps: int = int(os.getenv("AMZ_MEDIA_GIF_FPS", "10"))
-    ffmpeg_timeout: int = int(os.getenv("AMZ_MEDIA_FFMPEG_TIMEOUT_SECONDS", "80"))
+    ffmpeg_timeout: int = int(os.getenv("AMZ_MEDIA_FFMPEG_TIMEOUT_SECONDS", "180"))
 
     @property
     def max_input_bytes(self):
