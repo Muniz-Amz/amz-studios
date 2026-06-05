@@ -23,6 +23,10 @@ Limites padrao do Space:
 
 - `GET /` verifica se a API esta online.
 - `GET /api/status` mostra limites do servidor.
+- `POST /api/video/check` verifica titulo/duracao antes do download pesado.
+- `POST /api/video/jobs` cria um download com progresso.
+- `GET /api/video/jobs/<job_id>` mostra etapa/progresso do download.
+- `GET /api/video/jobs/<job_id>/download` baixa o arquivo pronto.
 - `POST /api/video/download` baixa/converte links em MP4 ou MP3.
 
 ## Payload

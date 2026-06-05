@@ -320,6 +320,8 @@ let moderacaoRecursosAtual = { canais: [], cargos: [] };
 let saveTrayListenerAtivo = false;
 let saveTrayToastTimer = null;
 let adminLogsTimer = null;
+let adminLogsCache = [];
+let adminLogFiltroAtual = 'todos';
 let saveTrayEstado = {
     dirty: false,
     saving: false,
@@ -914,6 +916,7 @@ function configurarNavegacaoTopo() {
 }
 
 let modoDownloadSiteAtual = 'video_hd';
+const DOWNLOAD_SITE_MAX_SEGUNDOS = 300;
 
 function configurarDownloadsSite() {
     selecionarModoDownloadSite(modoDownloadSiteAtual);
@@ -939,6 +942,30 @@ function mostrarStatusDownloadSite(mensagem, tipo = 'info') {
     if (tipo === 'success' || tipo === 'error') {
         status.classList.add(tipo);
     }
+}
+
+function mostrarProgressoDownloadSite({ etapa = 'preparando', progresso = 0, mensagem = '' } = {}, tipo = 'info') {
+    const status = document.getElementById('site-download-status');
+    if (!status) return;
+
+    const valor = Math.max(0, Math.min(Number.parseInt(progresso, 10) || 0, 100));
+    const rotuloEtapa = String(etapa || 'preparando').replace(/_/g, ' ');
+
+    status.classList.remove('hidden', 'success', 'error');
+    if (tipo === 'success' || tipo === 'error') {
+        status.classList.add(tipo);
+    }
+
+    status.innerHTML = `
+        <div class="site-download-progress-head">
+            <strong>${escaparHTML(rotuloEtapa)}</strong>
+            <span>${valor}%</span>
+        </div>
+        <div class="site-download-progress-bar" aria-hidden="true">
+            <span style="width: ${valor}%"></span>
+        </div>
+        <small>${escaparHTML(mensagem || 'Processando download...')}</small>
+    `;
 }
 
 function selecionarModoDownloadSite(modo = 'video_hd') {
@@ -991,6 +1018,47 @@ function obterNomeArquivoResposta(response, fallback) {
     }
 }
 
+function formatarDuracaoDownloadSite(segundos) {
+    const total = Number.parseInt(segundos, 10) || 0;
+    const minutos = Math.floor(total / 60);
+    const resto = total % 60;
+
+    if (minutos <= 0) return `${resto}s`;
+    return `${minutos}m ${String(resto).padStart(2, '0')}s`;
+}
+
+function validarLinkDownloadSite(url) {
+    let parsed;
+
+    try {
+        parsed = new URL(url);
+    } catch {
+        return 'Cole um link valido começando com http ou https.';
+    }
+
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+        return 'Cole um link valido começando com http ou https.';
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    const plataformas = ['youtube.com', 'youtu.be', 'tiktok.com', 'instagram.com'];
+    const suportado = plataformas.some((dominio) => host === dominio || host.endsWith(`.${dominio}`));
+
+    if (!suportado) {
+        return 'Por enquanto use links de Instagram, TikTok ou YouTube curto.';
+    }
+
+    if ((host.includes('youtube.com') || host === 'youtu.be' || host.endsWith('.youtu.be')) && parsed.searchParams.has('list')) {
+        return 'Playlists do YouTube nao sao aceitas. Envie o link de um video unico.';
+    }
+
+    return '';
+}
+
+function montarUrlVideoApi(caminho) {
+    return `${VIDEO_API_URL}${caminho}`;
+}
+
 function baixarBlobSite(blob, nomeArquivo) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1002,6 +1070,128 @@ function baixarBlobSite(blob, nomeArquivo) {
     link.remove();
 
     window.setTimeout(() => URL.revokeObjectURL(url), 1200);
+}
+
+async function verificarLinkDownloadSite(url) {
+    mostrarProgressoDownloadSite({
+        etapa: 'validando',
+        progresso: 6,
+        mensagem: 'Verificando duracao antes de iniciar...'
+    });
+
+    const response = await fetch(montarUrlVideoApi('/api/video/check'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+    });
+
+    if (response.status === 404) return null;
+
+    const dados = await lerJsonResposta(response);
+
+    if (!response.ok || dados.status !== 'sucesso') {
+        throw new Error(dados?.mensagem || dados?.erro || 'Nao consegui verificar esse link.');
+    }
+
+    const duracao = Number.parseInt(dados.duracao_segundos, 10);
+    const limite = Number.parseInt(dados.limite_segundos, 10) || DOWNLOAD_SITE_MAX_SEGUNDOS;
+
+    if (Number.isFinite(duracao) && duracao > limite) {
+        throw new Error(`Esse video tem ${formatarDuracaoDownloadSite(duracao)}. Limite atual: ${formatarDuracaoDownloadSite(limite)}.`);
+    }
+
+    return dados;
+}
+
+async function criarJobDownloadSite(url, modo) {
+    mostrarProgressoDownloadSite({
+        etapa: 'fila',
+        progresso: 10,
+        mensagem: 'Criando download no servidor...'
+    });
+
+    const response = await fetch(montarUrlVideoApi('/api/video/jobs'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, modo })
+    });
+
+    if (response.status === 404) return null;
+
+    const dados = await lerJsonResposta(response);
+
+    if (!response.ok || dados.status !== 'sucesso' || !dados.job?.id) {
+        throw new Error(dados?.mensagem || dados?.erro || 'Nao consegui iniciar esse download.');
+    }
+
+    return dados.job;
+}
+
+async function aguardarJobDownloadSite(jobId) {
+    const iniciadoEm = Date.now();
+
+    while (Date.now() - iniciadoEm < 430000) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+
+        const response = await fetch(montarUrlVideoApi(`/api/video/jobs/${encodeURIComponent(jobId)}`));
+        const dados = await lerJsonResposta(response);
+
+        if (!response.ok || dados.status !== 'sucesso') {
+            throw new Error(dados?.mensagem || dados?.erro || 'Nao consegui acompanhar esse download.');
+        }
+
+        const job = dados.job || {};
+        mostrarProgressoDownloadSite({
+            etapa: job.etapa || job.status || 'processando',
+            progresso: job.progresso || 20,
+            mensagem: job.mensagem || 'Processando no servidor...'
+        });
+
+        if (job.status === 'done') return job;
+        if (job.status === 'error') throw new Error(job.erro || job.mensagem || 'Falha no download.');
+    }
+
+    throw new Error('Download demorou demais. Tente MP3, MP4 leve ou um video menor.');
+}
+
+async function baixarResultadoJobDownloadSite(job, nomeFallback) {
+    mostrarProgressoDownloadSite({
+        etapa: 'enviando',
+        progresso: 96,
+        mensagem: 'Enviando arquivo para o navegador...'
+    });
+
+    const downloadUrl = job.download_url?.startsWith('http')
+        ? job.download_url
+        : montarUrlVideoApi(job.download_url || `/api/video/jobs/${encodeURIComponent(job.id)}/download`);
+    const response = await fetch(downloadUrl);
+
+    if (!response.ok) {
+        const dados = await lerJsonResposta(response);
+        throw new Error(dados?.mensagem || dados?.erro || 'Nao consegui baixar o arquivo pronto.');
+    }
+
+    const blob = await response.blob();
+    const nomeArquivo = obterNomeArquivoResposta(response, job.filename || nomeFallback);
+    baixarBlobSite(blob, nomeArquivo);
+}
+
+async function baixarVideoSiteLegado(url, modoEscolhido, nomeFallback, signal) {
+    const response = await fetch(`${VIDEO_API_URL}/api/video/download`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, modo: modoEscolhido }),
+        signal
+    });
+
+    if (!response.ok) {
+        const dados = await lerJsonResposta(response);
+        throw new Error(dados?.mensagem || dados?.erro || 'Nao consegui baixar esse link.');
+    }
+
+    const blob = await response.blob();
+    const nomeArquivo = obterNomeArquivoResposta(response, nomeFallback);
+    baixarBlobSite(blob, nomeArquivo);
 }
 
 async function baixarVideoSite(modo = '') {
@@ -1016,7 +1206,6 @@ async function baixarVideoSite(modo = '') {
     };
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     let timeoutDownload = null;
-    let avisoDemora = null;
 
     if (!url) {
         mostrarStatusDownloadSite('Cole um link primeiro.', 'error');
@@ -1024,36 +1213,54 @@ async function baixarVideoSite(modo = '') {
         return;
     }
 
+    const erroLocal = validarLinkDownloadSite(url);
+    if (erroLocal) {
+        mostrarStatusDownloadSite(erroLocal, 'error');
+        input?.focus();
+        return;
+    }
+
     botoes.forEach((botao) => {
         botao.disabled = true;
     });
-    mostrarStatusDownloadSite('Preparando download...');
+    mostrarProgressoDownloadSite({
+        etapa: 'preparando',
+        progresso: 2,
+        mensagem: 'Preparando download...'
+    });
 
     try {
-        avisoDemora = window.setTimeout(() => {
-            mostrarStatusDownloadSite('Ainda processando... videos de 3 a 5 minutos podem demorar mais, principalmente em MP4.');
-        }, 20000);
         timeoutDownload = window.setTimeout(() => {
             controller?.abort();
         }, 430000);
 
-        const response = await fetch(`${VIDEO_API_URL}/api/video/download`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, modo: modoEscolhido }),
-            signal: controller?.signal
-        });
-
-        if (!response.ok) {
-            const dados = await lerJsonResposta(response);
-            throw new Error(dados?.mensagem || dados?.erro || 'Nao consegui baixar esse link.');
+        const info = await verificarLinkDownloadSite(url);
+        if (info?.duracao_segundos) {
+            mostrarProgressoDownloadSite({
+                etapa: 'validado',
+                progresso: 8,
+                mensagem: `Duracao detectada: ${formatarDuracaoDownloadSite(info.duracao_segundos)}.`
+            });
         }
 
-        const blob = await response.blob();
-        const nomeArquivo = obterNomeArquivoResposta(response, nomes[modoEscolhido] || nomes.video_hd);
+        const job = await criarJobDownloadSite(url, modoEscolhido);
+        if (job) {
+            const jobFinal = await aguardarJobDownloadSite(job.id);
+            await baixarResultadoJobDownloadSite(jobFinal, nomes[modoEscolhido] || nomes.video_hd);
+        } else {
+            mostrarProgressoDownloadSite({
+                etapa: 'baixando',
+                progresso: 20,
+                mensagem: 'Servidor antigo detectado. Usando download direto...'
+            });
+            await baixarVideoSiteLegado(url, modoEscolhido, nomes[modoEscolhido] || nomes.video_hd, controller?.signal);
+        }
 
-        baixarBlobSite(blob, nomeArquivo);
-        mostrarStatusDownloadSite('Download pronto. Se nao abriu, confira se o navegador bloqueou o download.', 'success');
+        mostrarProgressoDownloadSite({
+            etapa: 'concluido',
+            progresso: 100,
+            mensagem: 'Download pronto. Se nao abriu, confira se o navegador bloqueou o download.'
+        }, 'success');
     } catch (erro) {
         console.error('Erro no download do site:', erro);
         const mensagem = erro.name === 'AbortError'
@@ -1062,7 +1269,6 @@ async function baixarVideoSite(modo = '') {
         mostrarStatusDownloadSite(mensagem, 'error');
     } finally {
         window.clearTimeout(timeoutDownload);
-        window.clearTimeout(avisoDemora);
         botoes.forEach((botao) => {
             botao.disabled = false;
         });
@@ -4385,7 +4591,21 @@ function criarCardResumoAdmin(titulo, valor, detalhe) {
 }
 
 function renderizarLogsAdmin(logs = []) {
-    const itens = Array.isArray(logs) ? logs.slice(0, 12) : [];
+    adminLogsCache = Array.isArray(logs) ? logs : [];
+    const filtros = [
+        ['todos', 'Todos'],
+        ['error', 'Erros'],
+        ['automation', 'Automacao'],
+        ['media', 'Midia'],
+        ['security', 'Seguranca']
+    ];
+    const contagens = filtros.reduce((acc, [filtro]) => {
+        acc[filtro] = adminLogsCache.filter((log) => filtro === 'todos' || categorizarLogAdmin(log) === filtro || (filtro === 'error' && log.nivel === 'error')).length;
+        return acc;
+    }, {});
+    const itens = adminLogsCache
+        .filter((log) => adminLogFiltroAtual === 'todos' || categorizarLogAdmin(log) === adminLogFiltroAtual || (adminLogFiltroAtual === 'error' && log.nivel === 'error'))
+        .slice(0, 18);
 
     return `
         <article class="admin-log-card">
@@ -4396,11 +4616,51 @@ function renderizarLogsAdmin(logs = []) {
                 </div>
                 <small>Atualiza a cada 10s</small>
             </div>
+            <div class="admin-log-filters" role="group" aria-label="Filtros de logs">
+                ${filtros.map(([filtro, label]) => `
+                    <button type="button"
+                            class="${adminLogFiltroAtual === filtro ? 'active' : ''}"
+                            onclick="filtrarLogsAdmin('${filtro}')">
+                        ${escaparHTML(label)}
+                        <span>${contagens[filtro] || 0}</span>
+                    </button>
+                `).join('')}
+            </div>
             <div class="admin-log-list">
-                ${itens.map(renderizarLogAdmin).join('') || '<div class="admin-log-empty">Nenhum evento recente registrado.</div>'}
+                ${itens.map(renderizarLogAdmin).join('') || '<div class="admin-log-empty">Nenhum evento recente neste filtro.</div>'}
             </div>
         </article>
     `;
+}
+
+function categorizarLogAdmin(log = {}) {
+    const tipo = String(log.tipo || '').toLowerCase();
+    const mensagem = String(log.mensagem || '').toLowerCase();
+
+    if (log.nivel === 'error') return 'error';
+    if (tipo.includes('media') || tipo.includes('video') || mensagem.includes('midia') || mensagem.includes('video')) return 'media';
+    if (tipo.includes('automation') || tipo.includes('automacao') || tipo.includes('command_block') || mensagem.includes('automacao')) return 'automation';
+    if (tipo.includes('security') || tipo.includes('anti_raid') || tipo.includes('raid') || tipo.includes('mod') || mensagem.includes('raid')) return 'security';
+    return 'info';
+}
+
+function rotuloCategoriaLogAdmin(categoria) {
+    return {
+        error: 'Erro',
+        media: 'Midia',
+        automation: 'Automacao',
+        security: 'Seguranca',
+        info: 'Info'
+    }[categoria] || 'Info';
+}
+
+function filtrarLogsAdmin(filtro = 'todos') {
+    adminLogFiltroAtual = ['todos', 'error', 'automation', 'media', 'security'].includes(filtro) ? filtro : 'todos';
+    const painel = document.getElementById('admin-log-panel');
+
+    if (painel) {
+        painel.innerHTML = renderizarLogsAdmin(adminLogsCache);
+    }
 }
 
 function renderizarLogAdmin(log = {}) {
@@ -4410,12 +4670,16 @@ function renderizarLogAdmin(log = {}) {
             .map(([chave, valor]) => `${chave}: ${valor}`)
             .join(' | ')
         : '';
-    const nivel = log.nivel === 'error' ? 'error' : 'info';
+    const categoria = categorizarLogAdmin(log);
+    const nivel = log.nivel === 'error' ? 'error' : categoria;
 
     return `
         <div class="admin-log-row ${nivel}">
             <time>${escaparHTML(formatarDataHora(log.criado_em))}</time>
-            <strong>${escaparHTML(log.tipo || 'evento')}</strong>
+            <strong>
+                <span>${escaparHTML(rotuloCategoriaLogAdmin(categoria))}</span>
+                ${escaparHTML(log.tipo || 'evento')}
+            </strong>
             <span>${escaparHTML(log.mensagem || '--')}</span>
             ${contexto ? `<small>${escaparHTML(contexto)}</small>` : ''}
         </div>

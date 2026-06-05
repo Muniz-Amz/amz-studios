@@ -502,6 +502,46 @@ html[data-site-theme] body {
     font-weight: 800;
 }
 
+.site-download-progress-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.site-download-progress-head strong,
+.site-download-progress-head span {
+    color: var(--site-text);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.site-download-progress-bar {
+    height: 8px;
+    overflow: hidden;
+    background: rgba(127, 127, 127, 0.18);
+    border: 1px solid var(--site-border);
+}
+
+.site-download-progress-bar span {
+    display: block;
+    height: 100%;
+    background: var(--site-button-bg);
+    transition: width 0.35s ease;
+}
+
+.site-downloads-status small {
+    display: block;
+    margin-top: 9px;
+    color: var(--site-muted);
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.45;
+}
+
 .site-downloads-status.success {
     border-color: rgba(52, 201, 111, 0.42);
     color: var(--app-success);
@@ -3859,6 +3899,43 @@ section {
     font-weight: 800;
 }
 
+.admin-log-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-log-filters button {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #020202;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.admin-log-filters button.active,
+.admin-log-filters button:hover {
+    border-color: rgba(255, 255, 255, 0.42);
+    background: #ffffff;
+    color: #000000;
+}
+
+.admin-log-filters button span {
+    min-width: 20px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    color: inherit;
+    text-align: center;
+}
+
 .admin-log-list {
     display: grid;
     gap: 7px;
@@ -3880,6 +3957,18 @@ section {
     border-color: rgba(255, 103, 103, 0.36);
 }
 
+.admin-log-row.media {
+    border-color: rgba(45, 183, 255, 0.34);
+}
+
+.admin-log-row.automation {
+    border-color: rgba(255, 242, 0, 0.28);
+}
+
+.admin-log-row.security {
+    border-color: rgba(52, 201, 111, 0.34);
+}
+
 .admin-log-row time,
 .admin-log-row small {
     color: rgba(255, 255, 255, 0.38);
@@ -3892,6 +3981,16 @@ section {
     font-size: 11px;
     font-weight: 900;
     text-transform: uppercase;
+}
+
+.admin-log-row strong span {
+    display: inline-flex;
+    margin-right: 7px;
+    padding: 2px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.46);
+    font-size: 9px;
+    letter-spacing: 0.08em;
 }
 
 .admin-log-row span {
@@ -4490,6 +4589,7 @@ html[data-site-theme] .admin-summary-card,
 html[data-site-theme] .admin-system-card,
 html[data-site-theme] .admin-log-card,
 html[data-site-theme] .admin-log-row,
+html[data-site-theme] .admin-log-filters button,
 html[data-site-theme] .admin-system-grid section,
 html[data-site-theme] .admin-server-card,
 html[data-site-theme] .admin-loading,
@@ -4538,6 +4638,12 @@ html[data-site-theme] .automation-option-card:hover,
 html[data-site-theme] .admin-server-card:hover {
     background: var(--app-hover) !important;
     border-color: var(--app-border-strong) !important;
+}
+
+html[data-site-theme] .admin-log-filters button.active {
+    background: var(--app-button-bg) !important;
+    border-color: var(--app-button-border-strong) !important;
+    color: var(--app-button-text) !important;
 }
 
 html[data-site-theme] .admin-log-row.error {

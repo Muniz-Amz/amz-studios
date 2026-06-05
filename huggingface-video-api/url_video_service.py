@@ -1,7 +1,9 @@
 import base64
 import binascii
 import os
+import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -62,12 +64,79 @@ class UrlVideoService:
             raise UrlVideoError("Envie um link valido (http/https).")
         return parsed.geturl()
 
+    def analisar_url(self, url: str) -> dict:
+        if YoutubeDL is None:
+            raise UrlVideoError("Dependencia yt-dlp nao instalada no servidor.")
+
+        url = self._validar_url(url)
+        temp_dir = tempfile.mkdtemp(prefix="amz-video-check-")
+        cookies_file = self._cookies_file(temp_dir)
+        ydl_opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "noplaylist": True,
+            "skip_download": True,
+            "socket_timeout": int(self.limits.timeout_seconds),
+        }
+
+        if cookies_file:
+            ydl_opts["cookiefile"] = str(cookies_file)
+
+        try:
+            try:
+                with YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+            except Exception as erro:
+                detalhe = str(erro).strip().splitlines()[-1][-400:]
+                raise UrlVideoError(f"Nao consegui verificar esse link. {detalhe}") from erro
+
+            duracao = info.get("duration") if isinstance(info, dict) else None
+            return {
+                "url": url,
+                "titulo": (info.get("title") if isinstance(info, dict) else None) or "Video",
+                "duracao_segundos": int(duracao) if duracao else None,
+                "limite_segundos": int(self.limits.max_seconds),
+                "permitido": not duracao or int(duracao) <= int(self.limits.max_seconds),
+                "origem": (info.get("extractor_key") if isinstance(info, dict) else None) or "",
+            }
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def _rotulo_limite_tempo(self):
         segundos = int(self.limits.max_seconds)
         if segundos >= 60 and segundos % 60 == 0:
             minutos = segundos // 60
             return f"{minutos} minuto" if minutos == 1 else f"{minutos} minutos"
         return f"{segundos}s"
+
+    def _notificar_progresso(self, progress_callback, etapa, progresso, mensagem):
+        if not progress_callback:
+            return
+
+        try:
+            progress_callback(etapa, max(0, min(int(progresso), 100)), mensagem)
+        except Exception:
+            pass
+
+    def _criar_hook_download(self, progress_callback):
+        def hook(dados):
+            status = dados.get("status")
+
+            if status == "downloading":
+                baixado = dados.get("downloaded_bytes") or 0
+                total = dados.get("total_bytes") or dados.get("total_bytes_estimate") or 0
+                if total:
+                    progresso = 12 + int((baixado / total) * 48)
+                    mensagem = f"Baixando arquivo... {min(100, int((baixado / total) * 100))}%"
+                else:
+                    progresso = 30
+                    mensagem = "Baixando arquivo..."
+
+                self._notificar_progresso(progress_callback, "baixando", progresso, mensagem)
+            elif status == "finished":
+                self._notificar_progresso(progress_callback, "convertendo", 66, "Download concluido. Convertendo arquivo...")
+
+        return hook
 
     def _run_ffmpeg(self, args):
         comando = [self.ffmpeg, "-hide_banner", "-loglevel", "error", "-y", *args]
@@ -139,7 +208,7 @@ class UrlVideoService:
 
         return 0.0
 
-    def _converter_para_mp4(self, input_path: Path, temp_dir: str, max_width=None) -> Path:
+    def _converter_para_mp4(self, input_path: Path, temp_dir: str, max_width=None, progress_callback=None) -> Path:
         output_path = Path(temp_dir) / "amz-video.mp4"
         largura = int(max_width or self.limits.max_width)
         max_width = max(2, (largura // 2) * 2)
@@ -211,6 +280,7 @@ class UrlVideoService:
             "+faststart",
             str(output_path),
         ])
+        self._notificar_progresso(progress_callback, "convertendo", 72, "Convertendo para MP4 compativel...")
         self._run_ffmpeg(args)
 
         return output_path
@@ -224,10 +294,11 @@ class UrlVideoService:
         tamanho_mb = round(tamanho / (1024 * 1024), 2)
         raise UrlVideoError(f"Arquivo ficou grande demais ({tamanho_mb} MB). Limite: {limite_mb} MB.")
 
-    def download_video(self, url: str, temp_dir: str, max_bytes=None, max_width=None) -> Path:
+    def download_video(self, url: str, temp_dir: str, max_bytes=None, max_width=None, progress_callback=None) -> Path:
         if YoutubeDL is None:
             raise UrlVideoError("Dependencia yt-dlp nao instalada no servidor.")
 
+        self._notificar_progresso(progress_callback, "validando", 4, "Validando link...")
         url = self._validar_url(url)
 
         limite_bytes = int(max_bytes or self.limits.max_output_bytes)
@@ -235,6 +306,7 @@ class UrlVideoService:
 
         outtmpl = str(Path(temp_dir) / "video.%(ext)s")
         cookies_file = self._cookies_file(temp_dir)
+        self._notificar_progresso(progress_callback, "baixando", 10, "Iniciando download do video...")
 
         def filtro_por_duracao(info_dict, *, incomplete=False):
             if incomplete:
@@ -260,6 +332,7 @@ class UrlVideoService:
             "socket_timeout": int(self.limits.timeout_seconds),
             "max_filesize": limite_bytes,
             "match_filter": filtro_por_duracao,
+            "progress_hooks": [self._criar_hook_download(progress_callback)],
             "overwrites": True,
         }
 
@@ -286,15 +359,17 @@ class UrlVideoService:
         if not candidato.exists():
             raise UrlVideoError("Nao consegui gerar o arquivo final do video.")
 
-        convertido = self._converter_para_mp4(candidato, temp_dir, max_width=max_width)
+        convertido = self._converter_para_mp4(candidato, temp_dir, max_width=max_width, progress_callback=progress_callback)
+        self._notificar_progresso(progress_callback, "finalizando", 94, "Validando tamanho final...")
         self._validar_tamanho_saida(convertido, limite_bytes)
 
         return convertido
 
-    def download_audio(self, url: str, temp_dir: str, max_bytes=None) -> Path:
+    def download_audio(self, url: str, temp_dir: str, max_bytes=None, progress_callback=None) -> Path:
         if YoutubeDL is None:
             raise UrlVideoError("Dependencia yt-dlp nao instalada no servidor.")
 
+        self._notificar_progresso(progress_callback, "validando", 4, "Validando link...")
         url = self._validar_url(url)
 
         limite_bytes = int(max_bytes or self.limits.max_output_bytes)
@@ -302,6 +377,7 @@ class UrlVideoService:
 
         outtmpl = str(Path(temp_dir) / "audio.%(ext)s")
         cookies_file = self._cookies_file(temp_dir)
+        self._notificar_progresso(progress_callback, "baixando", 10, "Iniciando download do audio...")
 
         def filtro_por_duracao(info_dict, *, incomplete=False):
             if incomplete:
@@ -322,6 +398,7 @@ class UrlVideoService:
             "fragment_retries": 2,
             "socket_timeout": int(self.limits.timeout_seconds),
             "match_filter": filtro_por_duracao,
+            "progress_hooks": [self._criar_hook_download(progress_callback)],
             "overwrites": True,
         }
 
@@ -345,6 +422,7 @@ class UrlVideoService:
             raise UrlVideoError("Nao consegui gerar o arquivo de audio.")
 
         output_path = Path(temp_dir) / "amz-audio.mp3"
+        self._notificar_progresso(progress_callback, "convertendo", 72, "Convertendo para MP3...")
         self._run_ffmpeg([
             "-i",
             str(arquivos[0]),
@@ -355,6 +433,7 @@ class UrlVideoService:
             "0:a:0?",
             str(output_path),
         ])
+        self._notificar_progresso(progress_callback, "finalizando", 94, "Validando tamanho final...")
         self._validar_tamanho_saida(output_path, limite_bytes)
 
         return output_path

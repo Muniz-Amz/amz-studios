@@ -21,6 +21,34 @@ def formatar_limite_segundos(segundos):
     return f"{segundos}s"
 
 
+def formatar_erro_midia(erro, origem="arquivo"):
+    texto = str(erro or "").strip()
+    texto_lower = texto.lower()
+
+    if "sign in to confirm" in texto_lower or "not a bot" in texto_lower or "youtube bloqueou" in texto_lower:
+        return (
+            "YouTube bloqueou esse link no servidor. "
+            "Tente outro link, use TikTok/Instagram ou atualize os cookies do yt-dlp."
+        )
+
+    if "grande demais" in texto_lower or "file is larger" in texto_lower or "max_filesize" in texto_lower:
+        return "Arquivo grande demais para o limite atual. Tente um video menor ou o modo MP3."
+
+    if "longo demais" in texto_lower or "duration" in texto_lower:
+        return "Video longo demais para esse comando. Use um corte menor e tente de novo."
+
+    if "demorou demais" in texto_lower or "timeout" in texto_lower:
+        return "Processamento demorou demais e foi cancelado para proteger o servidor."
+
+    if "envie uma imagem" in texto_lower or "envie um video" in texto_lower or "formato" in texto_lower:
+        return texto
+
+    if origem == "link":
+        return "Nao consegui baixar esse link agora. Tente outro link ou outro formato."
+
+    return "Nao consegui processar esse arquivo. Tente um arquivo menor ou outro formato."
+
+
 class MediaCog(commands.Cog):
     midia = app_commands.Group(name="midia", description="Conversao e download de midia do AMZ Bot.")
 
@@ -79,7 +107,9 @@ class MediaCog(commands.Cog):
                         file=discord.File(output_path, filename=output_path.name),
                     )
         except MediaError as erro:
-            await interaction.followup.send(f"Nao deu para processar: {erro}", ephemeral=True)
+            mensagem = formatar_erro_midia(erro, "arquivo")
+            self.bot.registrar_evento("media_file_rejected", mensagem, nivel="warning", guild_id=interaction.guild_id)
+            await interaction.followup.send(f"Nao deu para processar: {mensagem}", ephemeral=True)
         except Exception as erro:
             print(f"[MIDIA] Erro inesperado em slash command: {erro}")
             self.bot.registrar_evento("media_slash_error", f"Erro ao processar midia: {erro}", nivel="error", guild_id=interaction.guild_id)
@@ -136,7 +166,9 @@ class MediaCog(commands.Cog):
                         file=discord.File(output_path, filename=output_path.name),
                     )
         except UrlVideoError as erro:
-            await interaction.followup.send(f"Nao deu para baixar esse link: {erro}", ephemeral=True)
+            mensagem = formatar_erro_midia(erro, "link")
+            self.bot.registrar_evento("video_download_rejected", mensagem, nivel="warning", guild_id=interaction.guild_id)
+            await interaction.followup.send(f"Nao deu para baixar esse link: {mensagem}", ephemeral=True)
         except Exception as erro:
             print(f"[MIDIA] Erro inesperado em /baixarvideo: {erro}")
             self.bot.registrar_evento("video_download_error", f"Erro ao baixar video por link: {erro}", nivel="error", guild_id=interaction.guild_id)
