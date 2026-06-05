@@ -145,6 +145,8 @@ def status():
         "max_seconds": video_service.limits.max_seconds,
         "max_width": video_service.limits.max_width,
         "fps": video_service.limits.fps,
+        "check_timeout_seconds": video_service.limits.check_timeout_seconds,
+        "yt_dlp_version": video_service.versao_ytdlp(),
     })
 
 

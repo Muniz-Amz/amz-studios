@@ -27,6 +27,7 @@ class UrlVideoLimits:
     max_output_mb: int = int(os.getenv("AMZ_URLVIDEO_MAX_OUTPUT_MB", "50"))
     max_seconds: int = int(os.getenv("AMZ_URLVIDEO_MAX_SECONDS", "300"))
     timeout_seconds: int = int(os.getenv("AMZ_URLVIDEO_TIMEOUT_SECONDS", "420"))
+    check_timeout_seconds: int = int(os.getenv("AMZ_URLVIDEO_CHECK_TIMEOUT_SECONDS", "35"))
     max_width: int = int(os.getenv("AMZ_URLVIDEO_MAX_WIDTH", "720"))
     fps: int = int(os.getenv("AMZ_URLVIDEO_FPS", "24"))
 
@@ -39,6 +40,16 @@ class UrlVideoService:
     def __init__(self, limits=None):
         self.limits = limits or UrlVideoLimits()
         self.ffmpeg = os.getenv("FFMPEG_BINARY", "").strip() or imageio_ffmpeg.get_ffmpeg_exe()
+
+    def versao_ytdlp(self):
+        if YoutubeDL is None:
+            return "indisponivel"
+
+        try:
+            from yt_dlp.version import __version__
+            return __version__
+        except Exception:
+            return "desconhecida"
 
     def _cookies_file(self, temp_dir: str):
         cookies_path = os.getenv("AMZ_YTDLP_COOKIES_PATH", "").strip()
@@ -65,14 +76,20 @@ class UrlVideoService:
             raise UrlVideoError("Envie um link valido (http/https).")
         return parsed.geturl()
 
-    def _opcoes_rede_ytdlp(self):
+    def _opcoes_rede_ytdlp(self, timeout_seconds=None, attempts=None):
         opcoes = {
-            "socket_timeout": int(self.limits.timeout_seconds),
+            "socket_timeout": int(timeout_seconds or self.limits.timeout_seconds),
             "retries": int(os.getenv("AMZ_YTDLP_RETRIES", "4")),
             "fragment_retries": int(os.getenv("AMZ_YTDLP_FRAGMENT_RETRIES", "4")),
             "extractor_retries": int(os.getenv("AMZ_YTDLP_EXTRACTOR_RETRIES", "3")),
             "file_access_retries": int(os.getenv("AMZ_YTDLP_FILE_RETRIES", "3")),
         }
+
+        if attempts is not None:
+            opcoes["retries"] = max(1, int(attempts))
+            opcoes["fragment_retries"] = max(1, int(attempts))
+            opcoes["extractor_retries"] = max(1, int(attempts))
+            opcoes["file_access_retries"] = max(1, int(attempts))
 
         if os.getenv("AMZ_YTDLP_FORCE_IPV4", "").strip().lower() in {"1", "true", "yes"}:
             opcoes["force_ipv4"] = True
@@ -187,7 +204,7 @@ class UrlVideoService:
         temp_dir = tempfile.mkdtemp(prefix="amz-video-check-")
         cookies_file = self._cookies_file(temp_dir)
         ydl_opts = {
-            **self._opcoes_rede_ytdlp(),
+            **self._opcoes_rede_ytdlp(timeout_seconds=min(int(self.limits.check_timeout_seconds), int(self.limits.timeout_seconds)), attempts=1),
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,

@@ -1062,6 +1062,15 @@ function normalizarErroDownloadSite(mensagem = '') {
     return texto.replace(/^ERROR:\s*/i, '').slice(0, 260);
 }
 
+function ehLinkYoutubeDownloadSite(url) {
+    try {
+        const host = new URL(url).hostname.toLowerCase();
+        return host === 'youtu.be' || host.endsWith('.youtu.be') || host === 'youtube.com' || host.endsWith('.youtube.com');
+    } catch {
+        return false;
+    }
+}
+
 function validarLinkDownloadSite(url) {
     let parsed;
 
@@ -1083,7 +1092,7 @@ function validarLinkDownloadSite(url) {
         return 'Por enquanto use links de Instagram, TikTok ou YouTube curto.';
     }
 
-    if ((host.includes('youtube.com') || host === 'youtu.be' || host.endsWith('.youtu.be')) && parsed.searchParams.has('list')) {
+    if (ehLinkYoutubeDownloadSite(url) && parsed.searchParams.has('list')) {
         return 'Playlists do YouTube nao sao aceitas. Envie o link de um video unico.';
     }
 
@@ -1108,6 +1117,15 @@ function baixarBlobSite(blob, nomeArquivo) {
 }
 
 async function verificarLinkDownloadSite(url) {
+    if (ehLinkYoutubeDownloadSite(url)) {
+        mostrarProgressoDownloadSite({
+            etapa: 'validando',
+            progresso: 6,
+            mensagem: 'YouTube pode bloquear a verificacao previa. Indo direto para a fila...'
+        });
+        return null;
+    }
+
     mostrarProgressoDownloadSite({
         etapa: 'validando',
         progresso: 6,
