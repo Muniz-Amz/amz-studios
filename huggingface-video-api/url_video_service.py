@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -64,6 +65,120 @@ class UrlVideoService:
             raise UrlVideoError("Envie um link valido (http/https).")
         return parsed.geturl()
 
+    def _opcoes_rede_ytdlp(self):
+        opcoes = {
+            "socket_timeout": int(self.limits.timeout_seconds),
+            "retries": int(os.getenv("AMZ_YTDLP_RETRIES", "4")),
+            "fragment_retries": int(os.getenv("AMZ_YTDLP_FRAGMENT_RETRIES", "4")),
+            "extractor_retries": int(os.getenv("AMZ_YTDLP_EXTRACTOR_RETRIES", "3")),
+            "file_access_retries": int(os.getenv("AMZ_YTDLP_FILE_RETRIES", "3")),
+        }
+
+        if os.getenv("AMZ_YTDLP_FORCE_IPV4", "").strip().lower() in {"1", "true", "yes"}:
+            opcoes["force_ipv4"] = True
+
+        return opcoes
+
+    def _max_tentativas_ytdlp(self):
+        try:
+            return max(1, min(int(os.getenv("AMZ_YTDLP_ATTEMPTS", "3")), 5))
+        except ValueError:
+            return 3
+
+    def _texto_erro_ytdlp(self, erro):
+        return " ".join(linha.strip() for linha in str(erro).splitlines() if linha.strip())
+
+    def _erro_temporario_ytdlp(self, erro):
+        texto = self._texto_erro_ytdlp(erro).lower()
+        termos = (
+            "unexpected_eof_while_reading",
+            "eof occurred in violation of protocol",
+            "unable to download api page",
+            "connection reset",
+            "connection aborted",
+            "read timed out",
+            "timed out",
+            "temporarily unavailable",
+            "remote end closed connection",
+            "ssl:",
+        )
+        return any(termo in texto for termo in termos)
+
+    def _mensagem_erro_ytdlp(self, erro, acao):
+        texto = self._texto_erro_ytdlp(erro)
+        texto_lower = texto.lower()
+
+        if "video longo demais" in texto_lower:
+            return "Video longo demais para este servidor. Use um link de ate " + self._rotulo_limite_tempo() + "."
+
+        if "sign in to confirm" in texto_lower or "confirm you're not a bot" in texto_lower:
+            return "YouTube bloqueou este link com verificacao anti-bot. Tente outro video publico ou outra plataforma."
+
+        if "private video" in texto_lower or "this video is private" in texto_lower:
+            return "Este video e privado ou exige login. Use um link publico."
+
+        if "unsupported url" in texto_lower:
+            return "Esse tipo de link ainda nao e suportado. Use Instagram, TikTok ou YouTube publico."
+
+        if "requested format is not available" in texto_lower:
+            return "A plataforma nao liberou um formato compativel para baixar este arquivo."
+
+        if (
+            "unexpected_eof_while_reading" in texto_lower
+            or "eof occurred in violation of protocol" in texto_lower
+            or "ssl:" in texto_lower
+        ):
+            return (
+                "A conexao segura com a plataforma falhou temporariamente. "
+                "Tente novamente em alguns segundos; se repetir, reinicie o Space para atualizar o yt-dlp."
+            )
+
+        if "unable to download api page" in texto_lower or "connection reset" in texto_lower:
+            return "A plataforma recusou a conexao agora. Tente novamente ou use outro link publico."
+
+        if "yt-dlp -u" in texto_lower or "latest version" in texto_lower:
+            return "O servidor precisa atualizar o yt-dlp. Reinicie/rebuild o Space e tente novamente."
+
+        detalhe = texto[-260:] if texto else "erro desconhecido"
+        return f"Nao consegui {acao}. {detalhe}"
+
+    def _limpar_arquivos_parciais(self, ydl_opts):
+        outtmpl = ydl_opts.get("outtmpl")
+        if not outtmpl:
+            return
+
+        pasta = Path(str(outtmpl)).parent
+        if not pasta.exists():
+            return
+
+        for padrao in ("*.part", "*.ytdl", "*.tmp"):
+            for arquivo in pasta.glob(padrao):
+                try:
+                    arquivo.unlink()
+                except OSError:
+                    pass
+
+    def _executar_ytdlp(self, ydl_opts, url, *, download, acao, progress_callback=None):
+        total_tentativas = self._max_tentativas_ytdlp()
+
+        for tentativa in range(1, total_tentativas + 1):
+            try:
+                with YoutubeDL(ydl_opts) as ydl:
+                    return ydl.extract_info(url, download=download)
+            except Exception as erro:
+                if tentativa < total_tentativas and self._erro_temporario_ytdlp(erro):
+                    etapa = "baixando" if download else "validando"
+                    progresso = 10 if download else 6
+                    mensagem = f"Conexao instavel. Tentando novamente ({tentativa + 1}/{total_tentativas})..."
+                    self._notificar_progresso(progress_callback, etapa, progresso, mensagem)
+                    self._limpar_arquivos_parciais(ydl_opts)
+                    time.sleep(min(2 * tentativa, 6))
+                    continue
+
+                raise UrlVideoError(self._mensagem_erro_ytdlp(erro, acao)) from erro
+
+        raise UrlVideoError(f"Nao consegui {acao} agora.")
+
     def analisar_url(self, url: str) -> dict:
         if YoutubeDL is None:
             raise UrlVideoError("Dependencia yt-dlp nao instalada no servidor.")
@@ -72,23 +187,18 @@ class UrlVideoService:
         temp_dir = tempfile.mkdtemp(prefix="amz-video-check-")
         cookies_file = self._cookies_file(temp_dir)
         ydl_opts = {
+            **self._opcoes_rede_ytdlp(),
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
             "skip_download": True,
-            "socket_timeout": int(self.limits.timeout_seconds),
         }
 
         if cookies_file:
             ydl_opts["cookiefile"] = str(cookies_file)
 
         try:
-            try:
-                with YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(url, download=False)
-            except Exception as erro:
-                detalhe = str(erro).strip().splitlines()[-1][-400:]
-                raise UrlVideoError(f"Nao consegui verificar esse link. {detalhe}") from erro
+            info = self._executar_ytdlp(ydl_opts, url, download=False, acao="verificar esse link")
 
             duracao = info.get("duration") if isinstance(info, dict) else None
             return {
@@ -317,6 +427,7 @@ class UrlVideoService:
             return None
 
         ydl_opts = {
+            **self._opcoes_rede_ytdlp(),
             "outtmpl": outtmpl,
             "format": os.getenv(
                 "AMZ_URLVIDEO_FORMAT",
@@ -327,9 +438,6 @@ class UrlVideoService:
             "noplaylist": True,
             "quiet": True,
             "no_warnings": True,
-            "retries": 2,
-            "fragment_retries": 2,
-            "socket_timeout": int(self.limits.timeout_seconds),
             "max_filesize": limite_bytes,
             "match_filter": filtro_por_duracao,
             "progress_hooks": [self._criar_hook_download(progress_callback)],
@@ -339,12 +447,7 @@ class UrlVideoService:
         if cookies_file:
             ydl_opts["cookiefile"] = str(cookies_file)
 
-        try:
-            with YoutubeDL(ydl_opts) as ydl:
-                ydl.extract_info(url, download=True)
-        except Exception as erro:
-            detalhe = str(erro).strip().splitlines()[-1][-400:]
-            raise UrlVideoError(f"Nao consegui baixar esse video. {detalhe}")
+        self._executar_ytdlp(ydl_opts, url, download=True, acao="baixar esse video", progress_callback=progress_callback)
 
         candidato = Path(temp_dir) / "video.mp4"
         if not candidato.exists():
@@ -388,15 +491,13 @@ class UrlVideoService:
             return None
 
         ydl_opts = {
+            **self._opcoes_rede_ytdlp(),
             "outtmpl": outtmpl,
             "format": os.getenv("AMZ_URLAUDIO_FORMAT", "ba/b"),
             "ffmpeg_location": self.ffmpeg,
             "noplaylist": True,
             "quiet": True,
             "no_warnings": True,
-            "retries": 2,
-            "fragment_retries": 2,
-            "socket_timeout": int(self.limits.timeout_seconds),
             "match_filter": filtro_por_duracao,
             "progress_hooks": [self._criar_hook_download(progress_callback)],
             "overwrites": True,
@@ -405,12 +506,7 @@ class UrlVideoService:
         if cookies_file:
             ydl_opts["cookiefile"] = str(cookies_file)
 
-        try:
-            with YoutubeDL(ydl_opts) as ydl:
-                ydl.extract_info(url, download=True)
-        except Exception as erro:
-            detalhe = str(erro).strip().splitlines()[-1][-400:]
-            raise UrlVideoError(f"Nao consegui baixar o audio desse link. {detalhe}")
+        self._executar_ytdlp(ydl_opts, url, download=True, acao="baixar o audio desse link", progress_callback=progress_callback)
 
         arquivos = sorted(
             (item for item in Path(temp_dir).glob("audio.*") if item.is_file() and not item.name.endswith(".part")),
