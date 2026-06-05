@@ -1027,6 +1027,41 @@ function formatarDuracaoDownloadSite(segundos) {
     return `${minutos}m ${String(resto).padStart(2, '0')}s`;
 }
 
+function normalizarErroDownloadSite(mensagem = '') {
+    const texto = String(mensagem || '').trim();
+    const textoNormalizado = texto.toLowerCase();
+
+    if (!texto) {
+        return 'Nao consegui baixar esse link agora. Tente novamente em alguns segundos.';
+    }
+
+    if (textoNormalizado.includes('confirm you') && textoNormalizado.includes('not a bot')) {
+        return 'YouTube bloqueou este link com verificacao anti-bot. Tente outro video publico ou use TikTok/Instagram.';
+    }
+
+    if (textoNormalizado.includes('sign in to confirm')) {
+        return 'YouTube pediu login para este video. Use um link publico que nao exija conta.';
+    }
+
+    if (textoNormalizado.includes('unexpected_eof_while_reading') || textoNormalizado.includes('eof occurred in violation of protocol') || textoNormalizado.includes('ssl:')) {
+        return 'A conexao com a plataforma falhou temporariamente. Tente novamente em alguns segundos.';
+    }
+
+    if (textoNormalizado.includes('private video') || textoNormalizado.includes('video is private')) {
+        return 'Este video e privado ou exige login. Use um link publico.';
+    }
+
+    if (textoNormalizado.includes('unsupported url')) {
+        return 'Esse tipo de link ainda nao e suportado. Use Instagram, TikTok ou YouTube publico.';
+    }
+
+    if (textoNormalizado.includes('requested format is not available')) {
+        return 'A plataforma nao liberou um formato compativel para baixar esse arquivo.';
+    }
+
+    return texto.replace(/^ERROR:\s*/i, '').slice(0, 260);
+}
+
 function validarLinkDownloadSite(url) {
     let parsed;
 
@@ -1090,7 +1125,7 @@ async function verificarLinkDownloadSite(url) {
     const dados = await lerJsonResposta(response);
 
     if (!response.ok || dados.status !== 'sucesso') {
-        throw new Error(dados?.mensagem || dados?.erro || 'Nao consegui verificar esse link.');
+        throw new Error(normalizarErroDownloadSite(dados?.mensagem || dados?.erro || 'Nao consegui verificar esse link.'));
     }
 
     const duracao = Number.parseInt(dados.duracao_segundos, 10);
@@ -1121,7 +1156,7 @@ async function criarJobDownloadSite(url, modo) {
     const dados = await lerJsonResposta(response);
 
     if (!response.ok || dados.status !== 'sucesso' || !dados.job?.id) {
-        throw new Error(dados?.mensagem || dados?.erro || 'Nao consegui iniciar esse download.');
+        throw new Error(normalizarErroDownloadSite(dados?.mensagem || dados?.erro || 'Nao consegui iniciar esse download.'));
     }
 
     return dados.job;
@@ -1137,7 +1172,7 @@ async function aguardarJobDownloadSite(jobId) {
         const dados = await lerJsonResposta(response);
 
         if (!response.ok || dados.status !== 'sucesso') {
-            throw new Error(dados?.mensagem || dados?.erro || 'Nao consegui acompanhar esse download.');
+            throw new Error(normalizarErroDownloadSite(dados?.mensagem || dados?.erro || 'Nao consegui acompanhar esse download.'));
         }
 
         const job = dados.job || {};
@@ -1148,7 +1183,7 @@ async function aguardarJobDownloadSite(jobId) {
         });
 
         if (job.status === 'done') return job;
-        if (job.status === 'error') throw new Error(job.erro || job.mensagem || 'Falha no download.');
+        if (job.status === 'error') throw new Error(normalizarErroDownloadSite(job.erro || job.mensagem || 'Falha no download.'));
     }
 
     throw new Error('Download demorou demais. Tente MP3, MP4 leve ou um video menor.');
@@ -1168,7 +1203,7 @@ async function baixarResultadoJobDownloadSite(job, nomeFallback) {
 
     if (!response.ok) {
         const dados = await lerJsonResposta(response);
-        throw new Error(dados?.mensagem || dados?.erro || 'Nao consegui baixar o arquivo pronto.');
+        throw new Error(normalizarErroDownloadSite(dados?.mensagem || dados?.erro || 'Nao consegui baixar o arquivo pronto.'));
     }
 
     const blob = await response.blob();
@@ -1186,7 +1221,7 @@ async function baixarVideoSiteLegado(url, modoEscolhido, nomeFallback, signal) {
 
     if (!response.ok) {
         const dados = await lerJsonResposta(response);
-        throw new Error(dados?.mensagem || dados?.erro || 'Nao consegui baixar esse link.');
+        throw new Error(normalizarErroDownloadSite(dados?.mensagem || dados?.erro || 'Nao consegui baixar esse link.'));
     }
 
     const blob = await response.blob();
@@ -1265,7 +1300,7 @@ async function baixarVideoSite(modo = '') {
         console.error('Erro no download do site:', erro);
         const mensagem = erro.name === 'AbortError'
             ? 'Demorou demais para baixar esse link. Tente MP3, MP4 leve ou um video menor.'
-            : erro.message || 'Nao consegui baixar esse link agora.';
+            : normalizarErroDownloadSite(erro.message || 'Nao consegui baixar esse link agora.');
         mostrarStatusDownloadSite(mensagem, 'error');
     } finally {
         window.clearTimeout(timeoutDownload);
