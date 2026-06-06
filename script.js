@@ -4364,7 +4364,7 @@ function inicializarAplicacao() {
 
     const urlParams = new URLSearchParams(window.location.search);
 
-    if (hashAtualNormalizado() === '#amz-admin' || urlParams.get('admin') === '1') {
+    if (hashAtualNormalizado() === '#amz-admin') {
         abrirAreaAdmin();
         return;
     }
