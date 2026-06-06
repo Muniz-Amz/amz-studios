@@ -1,0 +1,287 @@
+AMZ STUDIOS - ARQUIVOS E RESPONSABILIDADES
+==========================================
+
+Este arquivo explica o que cada pasta e arquivo principal da pasta AMZ faz.
+Ele serve para manter o projeto organizado sem quebrar o site, o bot, o chat
+secreto, os downloads ou a API de videos.
+
+
+PASTAS DA RAIZ
+==============
+
+.git/
+  Pasta interna do Git. Guarda historico, commits, branches e configuracoes do
+  repositorio. Nao editar manualmente.
+
+amz-chat-secreto/
+  Pagina privada/escondida do chat secreto. Responsavel por login, conversa,
+  envio de imagens/videos, criptografia ponta-a-ponta, Supabase e chamadas de
+  voz/video via WebRTC.
+
+assets/
+  Arquivos publicos usados pelo site no GitHub Pages, como logo, favicon e
+  downloads dos aplicativos.
+
+backend/
+  Backend da AMZ. Contem API do painel, bot Discord, comandos, servicos,
+  seguranca e acesso ao banco de dados.
+
+docs/
+  Documentacao interna do projeto. Serve para explicar estrutura, deploy,
+  manutencao e responsabilidades dos arquivos.
+
+huggingface-video-api/
+  API separada para baixar, validar e converter videos em MP4/MP3. Essa pasta
+  e enviada para o Hugging Face Space em modo Docker.
+
+
+ARQUIVOS DA RAIZ
+================
+
+.gitattributes
+  Define regras de texto/binario e quebra de linha para evitar que o Git mude
+  arquivos de forma baguncada entre Windows e hospedagem.
+
+.gitignore
+  Lista arquivos que nao devem entrar no Git, como .env, logs, caches Python e
+  arquivos locais temporarios.
+
+.server-err.log
+  Log local de erro do servidor. Ignorado pelo Git. Serve apenas para debug
+  local.
+
+.server-out.log
+  Log local de saida do servidor. Ignorado pelo Git. Serve apenas para debug
+  local.
+
+google8c9936da8e6a1d03.html
+  Arquivo de verificacao do Google Search Console. Nao remover, pois comprova
+  que o site pertence a conta configurada.
+
+index.html
+  Pagina principal do site AMZ Studios no GitHub Pages. Contem SEO, estrutura
+  visual, secoes, botoes, downloads e painel.
+
+musicamz-log.txt
+  Log local do MusicAmz. Ignorado pelo Git. Nao faz parte do site publicado.
+
+README.md
+  Resumo principal do repositorio. Explica a estrutura geral e cuidados para
+  nao quebrar caminhos publicos.
+
+robots.txt
+  Arquivo de orientacao para buscadores. Diz o que pode ou nao ser rastreado.
+
+script.js
+  JavaScript principal do site. Controla tema, painel, login Discord,
+  configuracoes do bot, downloads, chamadas de API e interacoes da interface.
+
+sitemap.txt
+  Lista simples de URLs para ajudar buscadores. Usada como apoio ao sitemap.
+
+sitemap.xml
+  Sitemap oficial em XML para Google Search Console e buscadores.
+
+style.css
+  CSS principal do site. Controla tema claro/escuro, layout, botoes, cards,
+  dashboard, downloads e responsividade.
+
+
+PASTA amz-chat-secreto/
+=======================
+
+amz-chat-secreto/app.js
+  Logica principal do chat secreto. Faz login, restaura sessao, conecta no
+  Supabase, envia/recebe mensagens, criptografa textos/midias, limpa arquivos
+  antigos e controla chamadas de voz/video via WebRTC.
+
+amz-chat-secreto/config.js
+  Configuracoes do chat secreto. Guarda URL/chave publica do Supabase, usuarios,
+  hashes de senha, tempo de sessao, limite de midias, criptografia e servidores
+  STUN das chamadas.
+
+amz-chat-secreto/index.html
+  Estrutura visual do chat secreto. Contem tela de login, sidebar, conversa,
+  botoes de midia e painel de chamada.
+
+amz-chat-secreto/README.md
+  Documentacao especifica do chat secreto. Explica ativacao, Supabase,
+  privacidade, criptografia e chamadas.
+
+amz-chat-secreto/style.css
+  CSS do chat secreto. Controla visual escuro, login, sidebar, mensagens,
+  midias, composer e painel de chamadas.
+
+amz-chat-secreto/supabase.sql
+  Script base do Supabase. Cria tabelas, indices, policies RLS, bucket de midia
+  e funcoes de limpeza.
+
+amz-chat-secreto/supabase-cleanup-schedule-10h.sql
+  Script que agenda limpeza periodica no Supabase. Cria controle de limpeza e
+  roda a checagem pelo cron.
+
+amz-chat-secreto/supabase-e2ee-hotfix.sql
+  Hotfix para aceitar arquivos criptografados no Storage do Supabase.
+
+amz-chat-secreto/supabase-storage-hotfix.sql
+  Hotfix da limpeza de midias. Usa fila e Storage API para evitar erro de
+  delecao direta em tabelas internas do Storage.
+
+
+PASTA assets/
+=============
+
+assets/logo.ico
+  Favicon do site AMZ Studios.
+
+assets/logo.png
+  Logo principal usada no site, chat secreto e cards.
+
+assets/README.md
+  Documentacao curta da pasta assets.
+
+assets/meu-site-downloads/
+  Pasta publica com arquivos que aparecem na secao de downloads do site.
+
+assets/meu-site-downloads/Amz Clicker.exe
+  Instalador/executavel do AMZ Clicker para Windows.
+
+assets/meu-site-downloads/MusicAmz.apk
+  APK do aplicativo MusicAmz para Android.
+
+
+PASTA backend/
+==============
+
+backend/.env
+  Arquivo local de variaveis sensiveis. Deve ficar fora do Git. Guarda tokens,
+  chaves e configuracoes privadas do backend.
+
+backend/app.py
+  Servidor HTTP/API do painel. Responsavel por rotas usadas pelo site,
+  dashboard, configuracoes, status, logs e integracoes do bot.
+
+backend/bot.py
+  Inicializacao do bot Discord. Carrega cogs, conecta no Discord e prepara os
+  comandos/eventos.
+
+backend/database.py
+  Camada de banco de dados. Responsavel por ler, salvar, validar e organizar
+  configuracoes do bot e dados dos servidores.
+
+backend/README.md
+  Documentacao curta do backend.
+
+backend/requirements.txt
+  Dependencias Python do backend e bot.
+
+backend/cogs/
+  Pasta com categorias de comandos/eventos do Discord.
+
+backend/cogs/__init__.py
+  Marca a pasta cogs como pacote Python.
+
+backend/cogs/admin.py
+  Comandos administrativos do bot.
+
+backend/cogs/cleanup.py
+  Comandos e rotinas de limpeza de mensagens/canais.
+
+backend/cogs/media.py
+  Comandos de midia, como baixar, converter ou extrair audio/video.
+
+backend/cogs/mention.py
+  Eventos/respostas ligadas a mencoes do bot.
+
+backend/cogs/moderation.py
+  Comandos de moderacao, punicoes, logs e funcoes de seguranca.
+
+backend/cogs/status.py
+  Comandos de status, informacoes e verificacoes do bot.
+
+backend/cogs/welcome.py
+  Eventos e comandos de entrada/saida, boas-vindas e despedidas.
+
+backend/security/
+  Funcoes relacionadas a permissao e seguranca.
+
+backend/security/__init__.py
+  Marca a pasta security como pacote Python.
+
+backend/security/discord_permissions.py
+  Funcoes auxiliares para verificar permissoes do Discord.
+
+backend/services/
+  Servicos reutilizaveis entre API, painel e comandos do bot.
+
+backend/services/__init__.py
+  Marca a pasta services como pacote Python.
+
+backend/services/cleanup_service.py
+  Regras de limpeza automatica e controle de exclusao por canal.
+
+backend/services/deploy_service.py
+  Servico relacionado a deploy/status operacional.
+
+backend/services/media_service.py
+  Regras de processamento de midia usadas pelos comandos.
+
+backend/services/url_video_service.py
+  Servico para verificar, baixar e converter links de video.
+
+backend/services/welcome_service.py
+  Regras de boas-vindas, saidas e mensagens automaticas.
+
+
+PASTA docs/
+===========
+
+docs/ARQUIVOS_E_RESPONSABILIDADES.txt
+  Este arquivo. Explica o papel de cada pasta e arquivo.
+
+docs/DEPLOYMENT_CHECKLIST.md
+  Checklist para deploy, manutencao, GitHub Pages, Supabase, backend e API de
+  video.
+
+docs/PROJECT_STRUCTURE.md
+  Mapa tecnico da estrutura do projeto.
+
+
+PASTA huggingface-video-api/
+============================
+
+huggingface-video-api/app.py
+  API HTTP da ferramenta de videos. Expoe rotas para status, verificacao,
+  criacao de jobs, progresso e download.
+
+huggingface-video-api/Dockerfile
+  Configura o container Docker usado no Hugging Face Space.
+
+huggingface-video-api/README.md
+  Documentacao da API de video e configuracao do Hugging Face Space.
+
+huggingface-video-api/requirements.txt
+  Dependencias Python da API de video.
+
+huggingface-video-api/url_video_service.py
+  Logica pesada da API de video: validacao de link, yt-dlp, ffmpeg,
+  conversao, limites e tratamento de erros.
+
+
+ARQUIVOS LOCAIS IGNORADOS
+=========================
+
+__pycache__/
+  Cache criado pelo Python. Pode ser apagado sem problema.
+
+*.pyc
+  Arquivos compilados de Python. Nao devem ir para o Git.
+
+*.log
+  Logs locais de execucao/debug. Nao devem ir para o Git.
+
+.env
+  Arquivo de segredo local. Nunca deve ser publicado.
+
+venv/, .venv/, env/
+  Ambientes virtuais Python locais. Nao fazem parte do projeto publicado.
