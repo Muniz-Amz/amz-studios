@@ -306,9 +306,17 @@ async function cleanupExpiredMessages() {
         const { data: expiredPaths } = await state.supabase.rpc("get_expired_secret_chat_media_paths");
 
         if (Array.isArray(expiredPaths) && expiredPaths.length > 0) {
-            await state.supabase.storage
+            const { error: mediaCleanupError } = await state.supabase.storage
                 .from(config.bucketName || "secret-chat-media")
                 .remove(expiredPaths);
+
+            if (mediaCleanupError) {
+                throw mediaCleanupError;
+            }
+
+            await state.supabase.rpc("clear_secret_chat_media_cleanup_paths", {
+                media_paths: expiredPaths
+            });
         }
 
         await state.supabase.rpc("cleanup_secret_chat_messages");

@@ -28,6 +28,14 @@ Se aparecer `Direct deletion from storage tables is not allowed`, rode o arquivo
 Se ativar a criptografia e o upload de midia falhar por tipo de arquivo, rode
 `supabase-e2ee-hotfix.sql` no SQL Editor do Supabase.
 
+## Limpeza automatica no Supabase
+
+Para deixar o Supabase rodando a limpeza sozinho a cada 10 horas, rode
+`supabase-cleanup-schedule-10h.sql` no SQL Editor depois de rodar `supabase.sql`.
+
+Se o Supabase reclamar que `pg_cron` nao existe, ative o modulo em
+`Database > Extensions` ou `Integrations > Cron` e rode o arquivo de novo.
+
 ## Privacidade
 
 - A pagina nao aparece no menu do site.
@@ -38,7 +46,8 @@ Se ativar a criptografia e o upload de midia falhar por tipo de arquivo, rode
 - Texto, imagens e videos sao criptografados no navegador antes de ir para o Supabase.
 - O banco usa RLS e so libera mensagens da sala quando o navegador envia a chave gerada pela chave privada.
 - Mensagens e midias antigas deixam de aparecer depois de 24h.
-- O SQL cria uma limpeza automatica que apaga mensagens e arquivos antigos quando novas mensagens entram ou quando o app chama a rotina.
+- O SQL apaga mensagens antigas quando novas mensagens entram, quando o app chama a rotina ou quando o agendamento de 10h estiver ativo.
+- Midias antigas entram em uma fila de limpeza e sao apagadas pela API de Storage quando alguem abre o chat.
 
 ## Criptografia ponta-a-ponta
 

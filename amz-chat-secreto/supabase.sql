@@ -17,6 +17,16 @@ create table if not exists public.secret_chat_messages (
 create index if not exists secret_chat_messages_room_created_idx
     on public.secret_chat_messages (room_id, created_at desc);
 
+create table if not exists public.secret_chat_media_cleanup_queue (
+    id uuid primary key default gen_random_uuid(),
+    room_id text not null,
+    object_path text not null unique,
+    queued_at timestamptz not null default now()
+);
+
+create index if not exists secret_chat_media_cleanup_queue_room_idx
+    on public.secret_chat_media_cleanup_queue (room_id, queued_at);
+
 create or replace function public.current_secret_chat_room()
 returns text
 language sql
@@ -29,9 +39,11 @@ as $$
 $$;
 
 alter table public.secret_chat_messages enable row level security;
+alter table public.secret_chat_media_cleanup_queue enable row level security;
 
 drop policy if exists "secret chat read messages" on public.secret_chat_messages;
 drop policy if exists "secret chat insert messages" on public.secret_chat_messages;
+drop policy if exists "secret chat read media cleanup queue" on public.secret_chat_media_cleanup_queue;
 
 create policy "secret chat read messages"
     on public.secret_chat_messages
@@ -55,6 +67,12 @@ create policy "secret chat insert messages"
             or attachment_url is not null
         )
     );
+
+create policy "secret chat read media cleanup queue"
+    on public.secret_chat_media_cleanup_queue
+    for select
+    to anon
+    using (room_id = public.current_secret_chat_room());
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
@@ -108,21 +126,75 @@ create policy "secret chat delete expired media"
         and (storage.foldername(name))[1] = public.current_secret_chat_room()
     );
 
-create or replace function public.get_expired_secret_chat_media_paths()
-returns text[]
-language sql
+create or replace function public.queue_expired_secret_chat_media()
+returns integer
+language plpgsql
 security definer
 set search_path = public
 as $$
-    select coalesce(array_agg(attachment_path), '{}'::text[])
+declare
+    queued_paths integer := 0;
+begin
+    insert into public.secret_chat_media_cleanup_queue (room_id, object_path)
+    select distinct room_id, attachment_path
     from public.secret_chat_messages
-    where room_id = public.current_secret_chat_room()
-      and attachment_path is not null
-      and created_at < now() - interval '1 day';
+    where attachment_path is not null
+      and created_at < now() - interval '1 day'
+    on conflict (object_path) do nothing;
+
+    get diagnostics queued_paths = row_count;
+
+    return queued_paths;
+end;
+$$;
+
+revoke all on function public.queue_expired_secret_chat_media() from public;
+grant execute on function public.queue_expired_secret_chat_media() to anon;
+
+create or replace function public.get_expired_secret_chat_media_paths()
+returns text[]
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    media_paths text[] := '{}'::text[];
+begin
+    perform public.queue_expired_secret_chat_media();
+
+    select coalesce(array_agg(object_path), '{}'::text[])
+    into media_paths
+    from public.secret_chat_media_cleanup_queue
+    where room_id = public.current_secret_chat_room();
+
+    return media_paths;
+end;
 $$;
 
 revoke all on function public.get_expired_secret_chat_media_paths() from public;
 grant execute on function public.get_expired_secret_chat_media_paths() to anon;
+
+create or replace function public.clear_secret_chat_media_cleanup_paths(media_paths text[])
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    cleared_paths integer := 0;
+begin
+    delete from public.secret_chat_media_cleanup_queue
+    where room_id = public.current_secret_chat_room()
+      and object_path = any(coalesce(media_paths, '{}'::text[]));
+
+    get diagnostics cleared_paths = row_count;
+
+    return cleared_paths;
+end;
+$$;
+
+revoke all on function public.clear_secret_chat_media_cleanup_paths(text[]) from public;
+grant execute on function public.clear_secret_chat_media_cleanup_paths(text[]) to anon;
 
 create or replace function public.cleanup_secret_chat_messages()
 returns integer
@@ -133,6 +205,8 @@ as $$
 declare
     deleted_messages integer := 0;
 begin
+    perform public.queue_expired_secret_chat_media();
+
     delete from public.secret_chat_messages
     where created_at < now() - interval '1 day';
 

@@ -1,4 +1,4 @@
-drop policy if exists "secret chat delete expired media" on storage.objects;
+create extension if not exists pgcrypto;
 
 create table if not exists public.secret_chat_media_cleanup_queue (
     id uuid primary key default gen_random_uuid(),
@@ -19,16 +19,6 @@ create policy "secret chat read media cleanup queue"
     for select
     to anon
     using (room_id = public.current_secret_chat_room());
-
-create policy "secret chat delete expired media"
-    on storage.objects
-    for delete
-    to anon
-    using (
-        bucket_id = 'secret-chat-media'
-        and created_at < now() - interval '1 day'
-        and (storage.foldername(name))[1] = public.current_secret_chat_room()
-    );
 
 create or replace function public.queue_expired_secret_chat_media()
 returns integer
@@ -122,3 +112,15 @@ $$;
 
 revoke all on function public.cleanup_secret_chat_messages() from public;
 grant execute on function public.cleanup_secret_chat_messages() to anon;
+
+create extension if not exists pg_cron;
+
+select cron.schedule(
+    'amz_secret_chat_cleanup_10h',
+    '10 hours',
+    $$select public.cleanup_secret_chat_messages();$$
+);
+
+select jobname, schedule, command
+from cron.job
+where jobname = 'amz_secret_chat_cleanup_10h';
