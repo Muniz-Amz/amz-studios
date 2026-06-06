@@ -52,4 +52,4 @@ console.log([...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2
 - Videos ate 60 MB.
 - Conversas expiram depois de 24 horas.
 - Cada imagem ou video enviado aparece com botao `Salvar midia`.
-- Usuarios fixos: `muniz` e `amigo`.
+- Usuarios fixos: `muniz` e `monteiro`.

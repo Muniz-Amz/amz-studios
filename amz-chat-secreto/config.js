@@ -18,11 +18,11 @@ window.AMZ_SECRET_CHAT_CONFIG = {
         },
         {
             id: "perfil_2",
-            username: "amigo",
-            name: "Amigo",
+            username: "monteiro",
+            name: "Monteiro",
             role: "Perfil convidado",
             color: "#30f27b",
-            passwordHash: "138f0751e266539d93d550de82b42141fc32bd52e59b856621b29cfb0c2349ff"
+            passwordHash: "0819bdd4d7e68afa5a611b6f88392e1cba2d9993eed3d7f2998c8a04558037b5"
         }
     ]
 };
