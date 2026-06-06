@@ -1,6 +1,6 @@
 window.AMZ_SECRET_CHAT_CONFIG = {
-    supabaseUrl: "",
-    supabaseAnonKey: "",
+    supabaseUrl: "https://hymspkeuhtajznjypscb.supabase.co",
+    supabaseAnonKey: "sb_publishable_jirjANipi8EZTHXYip8C5A_XZ80KPtH",
     bucketName: "secret-chat-media",
     roomSalt: "amz-studios-private-chat",
     sessionHours: 8,
