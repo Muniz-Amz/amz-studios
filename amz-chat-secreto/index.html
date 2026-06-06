@@ -8,7 +8,7 @@
     <title>AMZ Chat Privado</title>
     <link rel="icon" href="../assets/logo.ico" type="image/x-icon">
     <style>[hidden]{display:none!important}</style>
-    <link rel="stylesheet" href="./style.css?v=media-ttl-1">
+    <link rel="stylesheet" href="./style.css?v=call-1">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
 <body>
@@ -83,11 +83,51 @@
                         <span class="eyebrow">Página de conversa · 24h</span>
                         <h2>Bate-papo privado</h2>
                     </div>
-                    <div class="connection-state" id="connection-state">
-                        <span></span>
-                        <strong id="connection-label">Conectando</strong>
+                    <div class="header-actions">
+                        <div class="call-actions">
+                            <button class="call-button" id="start-voice-call" type="button">
+                                <i class="ph ph-phone-call"></i>
+                                Voz
+                            </button>
+                            <button class="call-button" id="start-video-call" type="button">
+                                <i class="ph ph-video-camera"></i>
+                                Video
+                            </button>
+                            <button class="call-button danger" id="end-call" type="button" hidden>
+                                <i class="ph ph-phone-disconnect"></i>
+                                Encerrar
+                            </button>
+                        </div>
+                        <div class="connection-state" id="connection-state">
+                            <span></span>
+                            <strong id="connection-label">Conectando</strong>
+                        </div>
                     </div>
                 </header>
+
+                <section class="call-panel" id="call-panel" hidden>
+                    <div class="call-panel-head">
+                        <div>
+                            <span class="section-label">Chamada privada</span>
+                            <strong id="call-status">Pronto para ligar</strong>
+                        </div>
+                        <div class="incoming-call-actions" id="incoming-call-actions" hidden>
+                            <button class="call-button accept" id="accept-call" type="button">
+                                <i class="ph ph-phone-call"></i>
+                                Aceitar
+                            </button>
+                            <button class="call-button danger" id="decline-call" type="button">
+                                <i class="ph ph-x"></i>
+                                Recusar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="call-videos">
+                        <video class="remote-video" id="remote-video" autoplay playsinline></video>
+                        <video class="local-video" id="local-video" autoplay playsinline muted></video>
+                    </div>
+                </section>
 
                 <div class="messages" id="messages" aria-live="polite"></div>
 
@@ -109,7 +149,7 @@
         </section>
     </main>
 
-    <script src="./config.js?v=e2ee-1"></script>
-    <script type="module" src="./app.js?v=e2ee-1"></script>
+    <script src="./config.js?v=call-1"></script>
+    <script type="module" src="./app.js?v=call-1"></script>
 </body>
 </html>

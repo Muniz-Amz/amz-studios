@@ -58,6 +58,13 @@ Se o Supabase reclamar que `pg_cron` nao existe, ative o modulo em
 - Mensagens antigas enviadas antes da criptografia ficam em outra sala/hash e expiram pela limpeza de 24h.
 - Depois de ativar, rode `supabase-e2ee-hotfix.sql` para aceitar arquivos criptografados no Storage.
 
+## Chamadas de voz e video
+
+- As chamadas usam WebRTC no navegador.
+- O Supabase Realtime e usado apenas para avisar, aceitar e conectar a chamada.
+- Audio e video nao sao salvos no banco nem no Storage.
+- Em algumas redes pode ser necessario configurar um servidor TURN para melhorar conexao.
+
 ## Trocar usuarios e senha
 
 Os usuarios ficam em `config.js`, dentro de `accounts`.

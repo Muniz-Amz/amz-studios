@@ -9,6 +9,10 @@ window.AMZ_SECRET_CHAT_CONFIG = {
     encryptionIterations: 250000,
     maxImageMb: 10,
     maxVideoMb: 60,
+    rtcIceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:global.stun.twilio.com:3478" }
+    ],
     accounts: [
         {
             id: "perfil_1",

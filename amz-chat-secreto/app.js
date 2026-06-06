@@ -10,7 +10,18 @@ const state = {
     roomId: "",
     encryptionKey: null,
     mediaFile: null,
-    onlineProfiles: new Set()
+    onlineProfiles: new Set(),
+    call: {
+        peer: null,
+        localStream: null,
+        remoteStream: null,
+        id: "",
+        mode: "",
+        status: "idle",
+        incomingOffer: null,
+        targetProfileId: "",
+        pendingCandidates: []
+    }
 };
 
 const elements = {
@@ -30,7 +41,17 @@ const elements = {
     messageText: document.querySelector("#message-text"),
     mediaInput: document.querySelector("#media-input"),
     attachmentPreview: document.querySelector("#attachment-preview"),
-    leaveChat: document.querySelector("#leave-chat")
+    leaveChat: document.querySelector("#leave-chat"),
+    startVoiceCall: document.querySelector("#start-voice-call"),
+    startVideoCall: document.querySelector("#start-video-call"),
+    endCall: document.querySelector("#end-call"),
+    acceptCall: document.querySelector("#accept-call"),
+    declineCall: document.querySelector("#decline-call"),
+    callPanel: document.querySelector("#call-panel"),
+    callStatus: document.querySelector("#call-status"),
+    incomingCallActions: document.querySelector("#incoming-call-actions"),
+    localVideo: document.querySelector("#local-video"),
+    remoteVideo: document.querySelector("#remote-video")
 };
 
 const isConfigured = Boolean(config.supabaseUrl && config.supabaseAnonKey);
@@ -40,6 +61,14 @@ const encryptionIterations = Math.max(100000, Number(config.encryptionIterations
 const encryptedTextPrefix = "amzenc:v1";
 const encryptedMediaMagic = new TextEncoder().encode("AMZENC1");
 const encryptionSalt = `${config.roomSalt || "amz-secret"}:e2ee:v1`;
+const rtcConfig = {
+    iceServers: Array.isArray(config.rtcIceServers) && config.rtcIceServers.length
+        ? config.rtcIceServers
+        : [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:global.stun.twilio.com:3478" }
+        ]
+};
 
 async function boot() {
     showLogin();
@@ -50,7 +79,13 @@ async function boot() {
     elements.mediaInput.addEventListener("change", selectMedia);
     elements.messages.addEventListener("click", saveMediaFromMessage);
     elements.messageText.addEventListener("input", autosizeComposer);
+    elements.startVoiceCall.addEventListener("click", () => startOutgoingCall("voice"));
+    elements.startVideoCall.addEventListener("click", () => startOutgoingCall("video"));
+    elements.endCall.addEventListener("click", () => endActiveCall("Encerrando chamada.", true));
+    elements.acceptCall.addEventListener("click", acceptIncomingCall);
+    elements.declineCall.addEventListener("click", declineIncomingCall);
     window.addEventListener("hashchange", guardConversationRoute);
+    window.addEventListener("beforeunload", () => endActiveCall("Saindo da chamada.", true));
     renderPresence();
     await restoreSession();
     guardConversationRoute();
@@ -285,6 +320,9 @@ function subscribeRealtime() {
                 scrollToBottom();
             }
         })
+        .on("broadcast", { event: "call-signal" }, async (payload) => {
+            await handleCallSignal(payload.payload);
+        })
         .on("presence", { event: "sync" }, () => {
             const presence = state.channel.presenceState();
             state.onlineProfiles = new Set(Object.keys(presence));
@@ -299,6 +337,391 @@ function subscribeRealtime() {
                 setConnectionState("Online", "ready");
             }
         });
+}
+
+async function startOutgoingCall(mode) {
+    if (!isConfigured || !state.channel) {
+        alert("Entre no chat conectado para iniciar uma chamada.");
+        return;
+    }
+
+    if (state.call.status !== "idle") {
+        alert("Ja existe uma chamada em andamento.");
+        return;
+    }
+
+    const target = getRemoteAccount();
+
+    if (!target) {
+        alert("Nao encontrei outro participante para chamar.");
+        return;
+    }
+
+    if (!state.onlineProfiles.has(target.id)) {
+        alert(`${target.name} precisa estar online para receber a chamada.`);
+        return;
+    }
+
+    state.call.id = crypto.randomUUID();
+    state.call.mode = mode;
+    state.call.status = "calling";
+    state.call.targetProfileId = target.id;
+    state.call.pendingCandidates = [];
+    updateCallUi(`Chamando ${target.name} por ${mode === "video" ? "video" : "voz"}...`);
+
+    try {
+        await prepareLocalStream(mode);
+        const peer = createPeerConnection();
+        addLocalTracks(peer);
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+
+        await sendCallSignal({
+            signal: "offer",
+            call_id: state.call.id,
+            mode,
+            target_profile_id: target.id,
+            description: serializeDescription(peer.localDescription)
+        });
+    } catch (error) {
+        console.error(error);
+        await endActiveCall(`Nao consegui iniciar a chamada: ${formatError(error)}`, false);
+    }
+}
+
+async function acceptIncomingCall() {
+    const offer = state.call.incomingOffer;
+
+    if (!offer) {
+        return;
+    }
+
+    state.call.status = "connecting";
+    updateCallUi("Aceitando chamada...");
+
+    try {
+        await prepareLocalStream(offer.mode);
+        const peer = createPeerConnection();
+        addLocalTracks(peer);
+        await peer.setRemoteDescription(new RTCSessionDescription(offer.description));
+        await flushPendingCandidates();
+
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+
+        await sendCallSignal({
+            signal: "answer",
+            call_id: state.call.id,
+            target_profile_id: state.call.targetProfileId,
+            description: serializeDescription(peer.localDescription)
+        });
+
+        state.call.status = "active";
+        updateCallUi("Chamada conectada.");
+    } catch (error) {
+        console.error(error);
+        await sendCallSignal({
+            signal: "reject",
+            call_id: state.call.id,
+            target_profile_id: state.call.targetProfileId,
+            reason: formatError(error)
+        });
+        await endActiveCall(`Nao consegui aceitar: ${formatError(error)}`, false);
+    }
+}
+
+async function declineIncomingCall() {
+    if (state.call.status !== "incoming") {
+        return;
+    }
+
+    await sendCallSignal({
+        signal: "reject",
+        call_id: state.call.id,
+        target_profile_id: state.call.targetProfileId
+    });
+    await endActiveCall("Chamada recusada.", false);
+}
+
+async function handleCallSignal(payload) {
+    if (!payload || payload.room_id !== state.roomId || !state.selectedProfile) {
+        return;
+    }
+
+    if (payload.from_profile_id === state.selectedProfile.id) {
+        return;
+    }
+
+    if (payload.target_profile_id && payload.target_profile_id !== state.selectedProfile.id) {
+        return;
+    }
+
+    if (payload.signal === "offer") {
+        await receiveCallOffer(payload);
+        return;
+    }
+
+    if (payload.call_id !== state.call.id) {
+        return;
+    }
+
+    if (payload.signal === "answer" && state.call.peer) {
+        await state.call.peer.setRemoteDescription(new RTCSessionDescription(payload.description));
+        await flushPendingCandidates();
+        state.call.status = "active";
+        updateCallUi("Chamada conectada.");
+        return;
+    }
+
+    if (payload.signal === "ice") {
+        await addRemoteIceCandidate(payload.candidate);
+        return;
+    }
+
+    if (payload.signal === "reject") {
+        await endActiveCall("Chamada recusada.", false);
+        return;
+    }
+
+    if (payload.signal === "busy") {
+        await endActiveCall("A outra pessoa ja esta em chamada.", false);
+        return;
+    }
+
+    if (payload.signal === "hangup") {
+        await endActiveCall("Chamada encerrada pela outra pessoa.", false);
+    }
+}
+
+async function receiveCallOffer(payload) {
+    if (state.call.status !== "idle") {
+        await sendCallSignal({
+            signal: "busy",
+            call_id: payload.call_id,
+            target_profile_id: payload.from_profile_id
+        });
+        return;
+    }
+
+    state.call.id = payload.call_id;
+    state.call.mode = payload.mode || "voice";
+    state.call.status = "incoming";
+    state.call.incomingOffer = payload;
+    state.call.targetProfileId = payload.from_profile_id;
+    state.call.pendingCandidates = [];
+    updateCallUi(`${payload.from_name || "Alguem"} esta ligando por ${state.call.mode === "video" ? "video" : "voz"}.`);
+}
+
+async function prepareLocalStream(mode) {
+    if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("este navegador nao liberou camera/microfone");
+    }
+
+    stopLocalStream();
+    state.call.localStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: mode === "video"
+    });
+    elements.localVideo.srcObject = state.call.localStream;
+    await elements.localVideo.play().catch(() => {});
+}
+
+function createPeerConnection() {
+    const peer = new RTCPeerConnection(rtcConfig);
+    state.call.peer = peer;
+    state.call.remoteStream = new MediaStream();
+    elements.remoteVideo.srcObject = state.call.remoteStream;
+
+    peer.onicecandidate = (event) => {
+        if (event.candidate) {
+            sendCallSignal({
+                signal: "ice",
+                call_id: state.call.id,
+                target_profile_id: state.call.targetProfileId,
+                candidate: event.candidate.toJSON()
+            });
+        }
+    };
+
+    peer.ontrack = (event) => {
+        for (const track of event.streams?.[0]?.getTracks?.() || [event.track]) {
+            if (!state.call.remoteStream.getTracks().some((item) => item.id === track.id)) {
+                state.call.remoteStream.addTrack(track);
+            }
+        }
+        elements.remoteVideo.srcObject = state.call.remoteStream;
+        elements.remoteVideo.play().catch(() => {});
+    };
+
+    peer.onconnectionstatechange = () => {
+        if (peer.connectionState === "connected") {
+            state.call.status = "active";
+            updateCallUi("Chamada conectada.");
+        }
+
+        if (["failed", "disconnected"].includes(peer.connectionState)) {
+            updateCallUi("Conexao instavel. Tentando manter a chamada...");
+        }
+
+        if (peer.connectionState === "closed") {
+            endActiveCall("Chamada finalizada.", false);
+        }
+    };
+
+    return peer;
+}
+
+function addLocalTracks(peer) {
+    for (const track of state.call.localStream.getTracks()) {
+        peer.addTrack(track, state.call.localStream);
+    }
+}
+
+async function addRemoteIceCandidate(candidate) {
+    if (!candidate) {
+        return;
+    }
+
+    if (!state.call.peer || !state.call.peer.remoteDescription) {
+        state.call.pendingCandidates.push(candidate);
+        return;
+    }
+
+    try {
+        await state.call.peer.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch (error) {
+        console.warn("Candidato ICE ignorado:", formatError(error));
+    }
+}
+
+async function flushPendingCandidates() {
+    const candidates = state.call.pendingCandidates.splice(0);
+
+    for (const candidate of candidates) {
+        await addRemoteIceCandidate(candidate);
+    }
+}
+
+async function sendCallSignal(payload) {
+    if (!state.channel || !state.selectedProfile) {
+        return;
+    }
+
+    await state.channel.send({
+        type: "broadcast",
+        event: "call-signal",
+        payload: {
+            room_id: state.roomId,
+            from_profile_id: state.selectedProfile.id,
+            from_name: state.selectedProfile.name,
+            created_at: new Date().toISOString(),
+            ...payload
+        }
+    });
+}
+
+async function endActiveCall(statusText = "Chamada encerrada.", notifyRemote = true) {
+    const hadCall = state.call.status !== "idle";
+    const callId = state.call.id;
+    const targetProfileId = state.call.targetProfileId;
+
+    if (notifyRemote && hadCall && callId && targetProfileId) {
+        await sendCallSignal({
+            signal: "hangup",
+            call_id: callId,
+            target_profile_id: targetProfileId
+        }).catch(() => {});
+    }
+
+    closePeerConnection();
+    stopLocalStream();
+    stopRemoteStream();
+    resetCallState();
+
+    if (hadCall) {
+        showCallNotice(statusText);
+    }
+}
+
+function closePeerConnection() {
+    if (state.call.peer) {
+        state.call.peer.onicecandidate = null;
+        state.call.peer.ontrack = null;
+        state.call.peer.onconnectionstatechange = null;
+        state.call.peer.close();
+    }
+}
+
+function stopLocalStream() {
+    if (state.call.localStream) {
+        for (const track of state.call.localStream.getTracks()) {
+            track.stop();
+        }
+    }
+    elements.localVideo.srcObject = null;
+}
+
+function stopRemoteStream() {
+    if (state.call.remoteStream) {
+        for (const track of state.call.remoteStream.getTracks()) {
+            track.stop();
+        }
+    }
+    elements.remoteVideo.srcObject = null;
+}
+
+function resetCallState() {
+    state.call = {
+        peer: null,
+        localStream: null,
+        remoteStream: null,
+        id: "",
+        mode: "",
+        status: "idle",
+        incomingOffer: null,
+        targetProfileId: "",
+        pendingCandidates: []
+    };
+    updateCallUi();
+}
+
+function updateCallUi(statusText = "") {
+    const isIdle = state.call.status === "idle";
+    const isIncoming = state.call.status === "incoming";
+
+    elements.callPanel.hidden = isIdle;
+    elements.incomingCallActions.hidden = !isIncoming;
+    elements.endCall.hidden = isIdle || isIncoming;
+    elements.startVoiceCall.disabled = !isIdle;
+    elements.startVideoCall.disabled = !isIdle;
+    elements.callPanel.classList.toggle("voice-only", state.call.mode !== "video");
+
+    if (statusText) {
+        elements.callStatus.textContent = statusText;
+    }
+}
+
+function showCallNotice(text) {
+    elements.callPanel.hidden = false;
+    elements.incomingCallActions.hidden = true;
+    elements.endCall.hidden = true;
+    elements.callStatus.textContent = text;
+    window.setTimeout(() => {
+        if (state.call.status === "idle") {
+            elements.callPanel.hidden = true;
+        }
+    }, 2600);
+}
+
+function getRemoteAccount() {
+    return accounts.find((account) => account.id !== state.selectedProfile?.id);
+}
+
+function serializeDescription(description) {
+    return {
+        type: description.type,
+        sdp: description.sdp
+    };
 }
 
 async function cleanupExpiredMessages() {
@@ -619,7 +1042,8 @@ function renderPresence() {
     }).join("");
 }
 
-function leaveChat() {
+async function leaveChat() {
+    await endActiveCall("Saindo da chamada.", true);
     localStorage.removeItem("amz-secret-session");
     sessionStorage.removeItem("amz-secret-e2ee-key");
     if (state.channel && state.supabase) {
