@@ -22,3 +22,5 @@ Thumbs.db
 # Logs locais do servidor
 .server-err.log
 .server-out.log
+*.log
+musicamz-log.txt
