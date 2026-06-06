@@ -34,14 +34,17 @@ const elements = {
 const isConfigured = Boolean(config.supabaseUrl && config.supabaseAnonKey);
 
 function boot() {
+    showLogin();
     elements.setupWarning.hidden = isConfigured;
     elements.loginForm.addEventListener("submit", enterChat);
     elements.leaveChat.addEventListener("click", leaveChat);
     elements.messageForm.addEventListener("submit", sendMessage);
     elements.mediaInput.addEventListener("change", selectMedia);
     elements.messageText.addEventListener("input", autosizeComposer);
+    window.addEventListener("hashchange", guardConversationRoute);
     renderPresence();
     restoreSession();
+    guardConversationRoute();
 }
 
 function normalizeAccounts(source) {
@@ -135,6 +138,13 @@ function restoreSession() {
     }
 }
 
+function guardConversationRoute() {
+    if (window.location.hash === "#conversa" && !state.selectedProfile) {
+        showLogin();
+        window.location.hash = "login";
+    }
+}
+
 function saveSession(profileId, roomId) {
     const sessionHours = Number(config.sessionHours || 8);
     localStorage.setItem("amz-secret-session", JSON.stringify({
@@ -146,11 +156,11 @@ function saveSession(profileId, roomId) {
 
 async function startChat() {
     if (!state.selectedProfile) {
+        showLogin();
         return;
     }
 
-    elements.login.hidden = true;
-    elements.chat.hidden = false;
+    showChat();
     renderActiveProfile();
     renderPresence();
 
@@ -440,10 +450,21 @@ function leaveChat() {
     state.supabase = null;
     state.roomId = "";
     state.onlineProfiles = new Set();
-    elements.chat.hidden = true;
-    elements.login.hidden = false;
+    showLogin();
     window.location.hash = "login";
     renderPresence();
+}
+
+function showLogin() {
+    elements.chat.hidden = true;
+    elements.login.hidden = false;
+    elements.activeProfile.innerHTML = "";
+    elements.messages.innerHTML = "";
+}
+
+function showChat() {
+    elements.login.hidden = true;
+    elements.chat.hidden = false;
 }
 
 function renderEmpty(text) {
