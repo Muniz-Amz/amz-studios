@@ -268,6 +268,14 @@ function subscribeRealtime() {
 
 async function cleanupExpiredMessages() {
     try {
+        const { data: expiredPaths } = await state.supabase.rpc("get_expired_secret_chat_media_paths");
+
+        if (Array.isArray(expiredPaths) && expiredPaths.length > 0) {
+            await state.supabase.storage
+                .from(config.bucketName || "secret-chat-media")
+                .remove(expiredPaths);
+        }
+
         await state.supabase.rpc("cleanup_secret_chat_messages");
     } catch (error) {
         console.warn("Limpeza automática indisponível:", formatError(error));

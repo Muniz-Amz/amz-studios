@@ -20,6 +20,11 @@ supabaseUrl: "https://SEU-PROJETO.supabase.co",
 supabaseAnonKey: "SUA_ANON_KEY"
 ```
 
+## Corrigir erro de Storage
+
+Se aparecer `Direct deletion from storage tables is not allowed`, rode o arquivo
+`supabase-storage-hotfix.sql` no SQL Editor do Supabase.
+
 ## Privacidade
 
 - A pagina nao aparece no menu do site.
