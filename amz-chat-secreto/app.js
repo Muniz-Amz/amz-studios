@@ -1,15 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const config = window.AMZ_SECRET_CHAT_CONFIG || {};
-const profiles = Array.isArray(config.profiles) && config.profiles.length === 2
-    ? config.profiles
-    : [
-        { id: "perfil_1", name: "Perfil 1", role: "Principal", color: "#42b9ff" },
-        { id: "perfil_2", name: "Perfil 2", role: "Convidado", color: "#30f27b" }
-    ];
+const accounts = normalizeAccounts(config.accounts || config.profiles);
 
 const state = {
-    selectedProfile: profiles[0],
+    selectedProfile: null,
     supabase: null,
     channel: null,
     roomId: "",
@@ -20,9 +15,9 @@ const state = {
 const elements = {
     login: document.querySelector("#secret-login"),
     chat: document.querySelector("#chat-app"),
-    profileGrid: document.querySelector("#profile-grid"),
-    roomCode: document.querySelector("#room-code"),
-    enterChat: document.querySelector("#enter-chat"),
+    loginForm: document.querySelector("#login-form"),
+    username: document.querySelector("#login-username"),
+    password: document.querySelector("#login-password"),
     setupWarning: document.querySelector("#setup-warning"),
     activeProfile: document.querySelector("#active-profile"),
     presenceList: document.querySelector("#presence-list"),
@@ -39,69 +34,132 @@ const elements = {
 const isConfigured = Boolean(config.supabaseUrl && config.supabaseAnonKey);
 
 function boot() {
-    renderProfiles();
-    renderPresence();
     elements.setupWarning.hidden = isConfigured;
-    elements.enterChat.addEventListener("click", enterChat);
+    elements.loginForm.addEventListener("submit", enterChat);
     elements.leaveChat.addEventListener("click", leaveChat);
     elements.messageForm.addEventListener("submit", sendMessage);
     elements.mediaInput.addEventListener("change", selectMedia);
     elements.messageText.addEventListener("input", autosizeComposer);
-    elements.roomCode.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-            enterChat();
+    renderPresence();
+    restoreSession();
+}
+
+function normalizeAccounts(source) {
+    const fallback = [
+        {
+            id: "perfil_1",
+            username: "muniz",
+            name: "Muniz",
+            role: "Perfil principal",
+            color: "#42b9ff",
+            passwordHash: ""
+        },
+        {
+            id: "perfil_2",
+            username: "amigo",
+            name: "Amigo",
+            role: "Perfil convidado",
+            color: "#30f27b",
+            passwordHash: ""
         }
-    });
+    ];
 
-    const savedProfile = localStorage.getItem("amz-secret-profile");
-    const savedRoom = localStorage.getItem("amz-secret-room");
-    const profile = profiles.find((item) => item.id === savedProfile);
-
-    if (profile && savedRoom && isConfigured) {
-        state.selectedProfile = profile;
-        state.roomId = savedRoom;
-        startChat();
+    if (!Array.isArray(source) || source.length < 1) {
+        return fallback;
     }
+
+    return source.map((account, index) => ({
+        id: account.id || `perfil_${index + 1}`,
+        username: normalizeUsername(account.username || account.name || `perfil${index + 1}`),
+        name: account.name || account.username || `Perfil ${index + 1}`,
+        role: account.role || "Participante",
+        color: account.color || (index === 0 ? "#42b9ff" : "#30f27b"),
+        passwordHash: account.passwordHash || ""
+    }));
 }
 
-function renderProfiles() {
-    elements.profileGrid.innerHTML = profiles.map((profile) => `
-        <button class="profile-card ${profile.id === state.selectedProfile.id ? "active" : ""}" type="button" data-profile="${escapeHtml(profile.id)}" style="--profile-color:${escapeAttribute(profile.color)}">
-            <span class="profile-avatar">${escapeHtml(getInitials(profile.name))}</span>
-            <strong>${escapeHtml(profile.name)}</strong>
-            <small>${escapeHtml(profile.role)}</small>
-        </button>
-    `).join("");
+async function enterChat(event) {
+    event.preventDefault();
 
-    elements.profileGrid.querySelectorAll(".profile-card").forEach((button) => {
-        button.addEventListener("click", () => {
-            state.selectedProfile = profiles.find((profile) => profile.id === button.dataset.profile) || profiles[0];
-            renderProfiles();
-        });
-    });
-}
+    const username = normalizeUsername(elements.username.value);
+    const password = elements.password.value;
+    const account = accounts.find((item) => item.username === username);
 
-async function enterChat() {
-    if (!isConfigured) {
-        elements.setupWarning.hidden = false;
+    if (!account || !password) {
+        showSetupMessage("Usuário ou senha inválidos.");
         return;
     }
 
-    const roomCode = elements.roomCode.value.trim();
-
-    if (roomCode.length < 6) {
-        showSetupMessage("Use um código com pelo menos 6 caracteres.");
+    if (!account.passwordHash) {
+        showSetupMessage("Este usuário ainda não tem senha configurada em config.js.");
         return;
     }
 
-    state.roomId = await hashRoomCode(roomCode);
-    localStorage.setItem("amz-secret-profile", state.selectedProfile.id);
-    localStorage.setItem("amz-secret-room", state.roomId);
-    elements.roomCode.value = "";
+    const typedHash = await hashPassword(username, password);
+
+    if (typedHash !== account.passwordHash) {
+        showSetupMessage("Usuário ou senha inválidos.");
+        return;
+    }
+
+    state.selectedProfile = account;
+    state.roomId = await hashRoomPassword(password);
+    saveSession(account.id, state.roomId);
+    elements.password.value = "";
+    window.location.hash = "conversa";
     startChat();
 }
 
+function restoreSession() {
+    try {
+        const session = JSON.parse(localStorage.getItem("amz-secret-session") || "null");
+
+        if (!session || session.expiresAt < Date.now()) {
+            localStorage.removeItem("amz-secret-session");
+            return;
+        }
+
+        const account = accounts.find((item) => item.id === session.profileId);
+
+        if (!account || !session.roomId) {
+            localStorage.removeItem("amz-secret-session");
+            return;
+        }
+
+        state.selectedProfile = account;
+        state.roomId = session.roomId;
+        window.location.hash = "conversa";
+        startChat();
+    } catch {
+        localStorage.removeItem("amz-secret-session");
+    }
+}
+
+function saveSession(profileId, roomId) {
+    const sessionHours = Number(config.sessionHours || 8);
+    localStorage.setItem("amz-secret-session", JSON.stringify({
+        profileId,
+        roomId,
+        expiresAt: Date.now() + sessionHours * 60 * 60 * 1000
+    }));
+}
+
 async function startChat() {
+    if (!state.selectedProfile) {
+        return;
+    }
+
+    elements.login.hidden = true;
+    elements.chat.hidden = false;
+    renderActiveProfile();
+    renderPresence();
+
+    if (!isConfigured) {
+        setConnectionState("Config pendente", "error");
+        renderEmpty("Login aceito. Para o bate-papo funcionar entre dois aparelhos, configure o Supabase em config.js e rode o arquivo supabase.sql.");
+        return;
+    }
+
     state.supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
         global: {
             headers: {
@@ -109,9 +167,7 @@ async function startChat() {
             }
         }
     });
-    elements.login.hidden = true;
-    elements.chat.hidden = false;
-    renderActiveProfile();
+
     setConnectionState("Conectando", "loading");
 
     try {
@@ -129,7 +185,7 @@ function renderActiveProfile() {
     elements.activeProfile.innerHTML = `
         <div class="profile-avatar" style="--profile-color:${escapeAttribute(state.selectedProfile.color)}">${escapeHtml(getInitials(state.selectedProfile.name))}</div>
         <strong>${escapeHtml(state.selectedProfile.name)}</strong>
-        <span>${escapeHtml(state.selectedProfile.role)}</span>
+        <span>@${escapeHtml(state.selectedProfile.username)} · ${escapeHtml(state.selectedProfile.role)}</span>
     `;
 }
 
@@ -198,6 +254,11 @@ function subscribeRealtime() {
 
 async function sendMessage(event) {
     event.preventDefault();
+
+    if (!isConfigured || !state.supabase) {
+        alert("Configure o Supabase para enviar mensagens de verdade.");
+        return;
+    }
 
     const body = elements.messageText.value.trim();
 
@@ -358,11 +419,11 @@ function renderMedia(message) {
 }
 
 function renderPresence() {
-    elements.presenceList.innerHTML = profiles.map((profile) => {
-        const online = state.onlineProfiles.has(profile.id) || profile.id === state.selectedProfile.id;
+    elements.presenceList.innerHTML = accounts.map((account) => {
+        const online = state.onlineProfiles.has(account.id) || account.id === state.selectedProfile?.id;
         return `
             <div class="presence-item ${online ? "online" : ""}">
-                <span>${escapeHtml(profile.name)}</span>
+                <span>${escapeHtml(account.name)}</span>
                 <span class="presence-dot" title="${online ? "Online" : "Offline"}"></span>
             </div>
         `;
@@ -370,16 +431,18 @@ function renderPresence() {
 }
 
 function leaveChat() {
-    localStorage.removeItem("amz-secret-profile");
-    localStorage.removeItem("amz-secret-room");
+    localStorage.removeItem("amz-secret-session");
     if (state.channel && state.supabase) {
         state.supabase.removeChannel(state.channel);
     }
+    state.selectedProfile = null;
     state.channel = null;
+    state.supabase = null;
     state.roomId = "";
     state.onlineProfiles = new Set();
     elements.chat.hidden = true;
     elements.login.hidden = false;
+    window.location.hash = "login";
     renderPresence();
 }
 
@@ -416,11 +479,22 @@ function scrollToBottom() {
     elements.messages.scrollTop = elements.messages.scrollHeight;
 }
 
-async function hashRoomCode(roomCode) {
-    const source = `${config.roomSalt || "amz-secret"}:${roomCode}`;
+async function hashPassword(username, password) {
+    return sha256(`${config.roomSalt || "amz-secret"}:${username}:${password}`);
+}
+
+async function hashRoomPassword(password) {
+    return sha256(`${config.roomSalt || "amz-secret"}:${password}`);
+}
+
+async function sha256(source) {
     const bytes = new TextEncoder().encode(source);
     const hash = await crypto.subtle.digest("SHA-256", bytes);
     return [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function normalizeUsername(value) {
+    return String(value || "").trim().toLowerCase();
 }
 
 function getInitials(name) {

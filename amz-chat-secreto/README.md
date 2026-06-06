@@ -1,6 +1,6 @@
 # AMZ Chat Secreto
 
-Pagina escondida para conversa privada entre dois perfis, com texto, imagem e video.
+Pagina escondida para conversa privada com login por usuario e senha, texto, imagem e video.
 
 ## Link
 
@@ -25,11 +25,27 @@ supabaseAnonKey: "SUA_ANON_KEY"
 - A pagina nao aparece no menu do site.
 - A pagina nao entra no sitemap.
 - O HTML usa `noindex` para pedir que Google nao indexe.
-- Use um codigo de conversa longo, porque ele vira a chave privada da sala.
-- O banco usa RLS e so libera mensagens da sala quando o navegador envia a chave gerada pelo codigo.
+- O login usa hash de senha no `config.js`, sem deixar a senha escrita em texto puro.
+- Os dois usuarios usam a mesma senha da sala para cair na mesma conversa.
+- O banco usa RLS e so libera mensagens da sala quando o navegador envia a chave gerada pela senha.
+
+## Trocar usuarios e senha
+
+Os usuarios ficam em `config.js`, dentro de `accounts`.
+
+Para gerar um novo hash de senha, use:
+
+```js
+const salt = "amz-studios-private-chat";
+const username = "muniz";
+const password = "SUA_SENHA";
+const bytes = new TextEncoder().encode(`${salt}:${username}:${password}`);
+const hash = await crypto.subtle.digest("SHA-256", bytes);
+console.log([...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, "0")).join(""));
+```
 
 ## Limites atuais
 
 - Imagens ate 10 MB.
 - Videos ate 60 MB.
-- Perfis fixos: `Muniz` e `Amigo`.
+- Usuarios fixos: `muniz` e `amigo`.

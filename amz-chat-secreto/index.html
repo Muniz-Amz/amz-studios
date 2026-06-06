@@ -19,24 +19,31 @@
             </div>
 
             <div class="login-card">
-                <span class="eyebrow">Link escondido</span>
-                <h1>Chat privado para 2 perfis.</h1>
+                <span class="eyebrow">Acesso privado</span>
+                <h1>Entrar na conversa.</h1>
                 <p>
-                    Escolha seu perfil, digite o código combinado e converse com envio de texto,
-                    imagens e vídeos sem aparecer no menu do site.
+                    Digite seu usuário e senha para abrir a página privada de bate-papo.
+                    Depois do login, você pode enviar mensagens, imagens e vídeos.
                 </p>
 
-                <div class="profile-grid" id="profile-grid" aria-label="Escolha seu perfil"></div>
+                <form class="auth-form" id="login-form">
+                    <label class="secret-field" for="login-username">
+                        <span>Usuário</span>
+                        <input id="login-username" type="text" autocomplete="username" placeholder="Seu usuário">
+                    </label>
 
-                <label class="secret-field" for="room-code">
-                    <span>Código da conversa</span>
-                    <input id="room-code" type="password" autocomplete="off" placeholder="Digite o código combinado">
-                </label>
+                    <label class="secret-field" for="login-password">
+                        <span>Senha</span>
+                        <input id="login-password" type="password" autocomplete="current-password" placeholder="Sua senha">
+                    </label>
 
-                <button class="primary-button" id="enter-chat" type="button">
-                    Entrar no chat
-                    <i class="ph ph-arrow-right"></i>
-                </button>
+                    <button class="primary-button" id="enter-chat" type="submit">
+                        Entrar na conversa
+                        <i class="ph ph-arrow-right"></i>
+                    </button>
+                </form>
+
+                <small class="login-hint">A sessão fica salva neste navegador por algumas horas.</small>
 
                 <div class="setup-warning" id="setup-warning" hidden>
                     Configure o Supabase em <code>config.js</code> para ativar o chat em tempo real.
@@ -54,21 +61,21 @@
                 <div class="active-profile" id="active-profile"></div>
 
                 <div class="online-card">
-                    <span class="section-label">Perfis</span>
+                    <span class="section-label">Participantes</span>
                     <div id="presence-list" class="presence-list"></div>
                 </div>
 
                 <button class="ghost-button" id="leave-chat" type="button">
                     <i class="ph ph-sign-out"></i>
-                    Sair deste perfil
+                    Sair da conta
                 </button>
             </aside>
 
             <section class="conversation">
                 <header class="conversation-header">
                     <div>
-                        <span class="eyebrow">Sala privada</span>
-                        <h2>Conversa segura por link</h2>
+                        <span class="eyebrow">Página de conversa</span>
+                        <h2>Bate-papo privado</h2>
                     </div>
                     <div class="connection-state" id="connection-state">
                         <span></span>
@@ -88,7 +95,7 @@
 
                     <textarea id="message-text" rows="1" maxlength="1200" placeholder="Escreva uma mensagem..."></textarea>
 
-                    <button class="send-button" type="submit">
+                    <button class="send-button" type="submit" title="Enviar">
                         <i class="ph ph-paper-plane-tilt"></i>
                     </button>
                 </form>
