@@ -25,16 +25,28 @@ supabaseAnonKey: "SUA_ANON_KEY"
 Se aparecer `Direct deletion from storage tables is not allowed`, rode o arquivo
 `supabase-storage-hotfix.sql` no SQL Editor do Supabase.
 
+Se ativar a criptografia e o upload de midia falhar por tipo de arquivo, rode
+`supabase-e2ee-hotfix.sql` no SQL Editor do Supabase.
+
 ## Privacidade
 
 - A pagina nao aparece no menu do site.
 - A pagina nao entra no sitemap.
 - O HTML usa `noindex` para pedir que Google nao indexe.
 - O login usa hash de senha no `config.js`, sem deixar a senha escrita em texto puro.
-- Os dois usuarios usam a mesma senha da sala para cair na mesma conversa.
-- O banco usa RLS e so libera mensagens da sala quando o navegador envia a chave gerada pela senha.
+- Os dois usuarios usam a mesma chave privada da conversa para cair na mesma sala criptografada.
+- Texto, imagens e videos sao criptografados no navegador antes de ir para o Supabase.
+- O banco usa RLS e so libera mensagens da sala quando o navegador envia a chave gerada pela chave privada.
 - Mensagens e midias antigas deixam de aparecer depois de 24h.
 - O SQL cria uma limpeza automatica que apaga mensagens e arquivos antigos quando novas mensagens entram ou quando o app chama a rotina.
+
+## Criptografia ponta-a-ponta
+
+- A chave privada da conversa nao deve ser enviada por mensagem, print ou commit.
+- A chave privada nao fica salva no site; ela fica somente na sessao da aba do navegador.
+- O Supabase ainda consegue ver metadados como horario, tamanho do arquivo, perfil e sala em hash.
+- Mensagens antigas enviadas antes da criptografia ficam em outra sala/hash e expiram pela limpeza de 24h.
+- Depois de ativar, rode `supabase-e2ee-hotfix.sql` para aceitar arquivos criptografados no Storage.
 
 ## Trocar usuarios e senha
 

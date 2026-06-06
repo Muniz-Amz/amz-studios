@@ -431,6 +431,24 @@ button {
     object-fit: contain;
 }
 
+.message-media-placeholder {
+    border: 1px dashed var(--line);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--muted);
+    margin-top: 12px;
+    padding: 28px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.message-media-placeholder.error {
+    border-color: rgba(255, 77, 94, 0.55);
+    color: #ff9aa4;
+}
+
 .file-link {
     display: inline-flex;
     align-items: center;

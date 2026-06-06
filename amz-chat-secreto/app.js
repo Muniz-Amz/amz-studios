@@ -8,6 +8,7 @@ const state = {
     supabase: null,
     channel: null,
     roomId: "",
+    encryptionKey: null,
     mediaFile: null,
     onlineProfiles: new Set()
 };
@@ -18,6 +19,7 @@ const elements = {
     loginForm: document.querySelector("#login-form"),
     username: document.querySelector("#login-username"),
     password: document.querySelector("#login-password"),
+    privateKey: document.querySelector("#login-private-key"),
     setupWarning: document.querySelector("#setup-warning"),
     activeProfile: document.querySelector("#active-profile"),
     presenceList: document.querySelector("#presence-list"),
@@ -33,8 +35,13 @@ const elements = {
 
 const isConfigured = Boolean(config.supabaseUrl && config.supabaseAnonKey);
 const messageRetentionHours = Math.max(1, Number(config.messageRetentionHours || 24));
+const encryptionEnabled = config.encryptionEnabled !== false;
+const encryptionIterations = Math.max(100000, Number(config.encryptionIterations || 250000));
+const encryptedTextPrefix = "amzenc:v1";
+const encryptedMediaMagic = new TextEncoder().encode("AMZENC1");
+const encryptionSalt = `${config.roomSalt || "amz-secret"}:e2ee:v1`;
 
-function boot() {
+async function boot() {
     showLogin();
     elements.setupWarning.hidden = isConfigured;
     elements.loginForm.addEventListener("submit", enterChat);
@@ -45,7 +52,7 @@ function boot() {
     elements.messageText.addEventListener("input", autosizeComposer);
     window.addEventListener("hashchange", guardConversationRoute);
     renderPresence();
-    restoreSession();
+    await restoreSession();
     guardConversationRoute();
 }
 
@@ -88,10 +95,16 @@ async function enterChat(event) {
 
     const username = normalizeUsername(elements.username.value);
     const password = elements.password.value;
+    const privateKey = elements.privateKey.value.trim();
     const account = accounts.find((item) => item.username === username);
 
     if (!account || !password) {
         showSetupMessage("Usuário ou senha inválidos.");
+        return;
+    }
+
+    if (encryptionEnabled && privateKey.length < 16) {
+        showSetupMessage("Use uma chave privada da conversa com pelo menos 16 caracteres.");
         return;
     }
 
@@ -108,14 +121,19 @@ async function enterChat(event) {
     }
 
     state.selectedProfile = account;
-    state.roomId = await hashRoomPassword(password);
+    state.encryptionKey = encryptionEnabled ? await deriveEncryptionKey(privateKey) : null;
+    state.roomId = encryptionEnabled ? await hashRoomSecret(privateKey) : await hashRoomSecret(password);
     saveSession(account.id, state.roomId);
+    if (encryptionEnabled) {
+        sessionStorage.setItem("amz-secret-e2ee-key", privateKey);
+    }
     elements.password.value = "";
+    elements.privateKey.value = "";
     window.location.hash = "conversa";
     startChat();
 }
 
-function restoreSession() {
+async function restoreSession() {
     try {
         const session = JSON.parse(localStorage.getItem("amz-secret-session") || "null");
 
@@ -131,12 +149,21 @@ function restoreSession() {
             return;
         }
 
+        const privateKey = sessionStorage.getItem("amz-secret-e2ee-key");
+
+        if (encryptionEnabled && !privateKey) {
+            localStorage.removeItem("amz-secret-session");
+            return;
+        }
+
         state.selectedProfile = account;
         state.roomId = session.roomId;
+        state.encryptionKey = encryptionEnabled ? await deriveEncryptionKey(privateKey) : null;
         window.location.hash = "conversa";
         startChat();
     } catch {
         localStorage.removeItem("amz-secret-session");
+        sessionStorage.removeItem("amz-secret-e2ee-key");
     }
 }
 
@@ -159,6 +186,12 @@ function saveSession(profileId, roomId) {
 async function startChat() {
     if (!state.selectedProfile) {
         showLogin();
+        return;
+    }
+
+    if (encryptionEnabled && !state.encryptionKey) {
+        showLogin();
+        showSetupMessage("Digite a chave privada da conversa para descriptografar as mensagens.");
         return;
     }
 
@@ -222,7 +255,9 @@ async function loadMessages() {
         return;
     }
 
-    data.forEach(renderMessage);
+    for (const message of data) {
+        await renderMessage(message);
+    }
     scrollToBottom();
 }
 
@@ -243,10 +278,10 @@ function subscribeRealtime() {
     });
 
     state.channel
-        .on("broadcast", { event: "message" }, (payload) => {
+        .on("broadcast", { event: "message" }, async (payload) => {
             if (payload.payload?.room_id === state.roomId && !isExpiredMessage(payload.payload)) {
                 removeEmptyState();
-                renderMessage(payload.payload);
+                await renderMessage(payload.payload);
                 scrollToBottom();
             }
         })
@@ -299,6 +334,7 @@ async function sendMessage(event) {
     elements.messageForm.classList.add("is-sending");
 
     try {
+        const encryptedBody = body ? await encryptText(body) : null;
         const attachment = state.mediaFile ? await uploadMedia(state.mediaFile) : {};
         const { data, error } = await state.supabase
             .from("secret_chat_messages")
@@ -306,7 +342,7 @@ async function sendMessage(event) {
                 room_id: state.roomId,
                 profile_id: state.selectedProfile.id,
                 profile_name: state.selectedProfile.name,
-                body,
+                body: encryptedBody,
                 attachment_url: attachment.url || null,
                 attachment_path: attachment.path || null,
                 attachment_type: attachment.type || null,
@@ -321,7 +357,7 @@ async function sendMessage(event) {
         }
 
         removeEmptyState();
-        renderMessage(data);
+        await renderMessage(data);
         scrollToBottom();
         await state.channel?.send({
             type: "broadcast",
@@ -342,13 +378,20 @@ async function sendMessage(event) {
 
 async function uploadMedia(file) {
     const safeName = file.name.replace(/[^\w.-]+/g, "-").slice(-90);
-    const path = `${state.roomId}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+    const encryptedFile = encryptionEnabled
+        ? await encryptFile(file)
+        : {
+            blob: file,
+            contentType: file.type,
+            suffix: ""
+        };
+    const path = `${state.roomId}/${Date.now()}-${crypto.randomUUID()}-${safeName}${encryptedFile.suffix}`;
     const { error } = await state.supabase.storage
         .from(config.bucketName || "secret-chat-media")
-        .upload(path, file, {
+        .upload(path, encryptedFile.blob, {
             cacheControl: "3600",
             upsert: false,
-            contentType: file.type
+            contentType: encryptedFile.contentType
         });
 
     if (error) {
@@ -410,12 +453,13 @@ function clearMedia() {
     elements.attachmentPreview.innerHTML = "";
 }
 
-function renderMessage(message) {
+async function renderMessage(message) {
     if (isExpiredMessage(message)) {
         return;
     }
 
     const isOwn = message.profile_id === state.selectedProfile.id;
+    const body = await decryptMessageBody(message.body);
     const media = renderMedia(message);
     const node = document.createElement("article");
     node.className = `message ${isOwn ? "own" : ""}`;
@@ -424,11 +468,12 @@ function renderMessage(message) {
             <span>${escapeHtml(message.profile_name || "Perfil")}</span>
             <time>${formatTime(message.created_at)}</time>
         </header>
-        ${message.body ? `<div class="message-body">${escapeHtml(message.body)}</div>` : ""}
+        ${body ? `<div class="message-body">${escapeHtml(body)}</div>` : ""}
         ${media}
     `;
     removeEmptyState();
     elements.messages.appendChild(node);
+    hydrateMessageMedia(node, message);
 }
 
 function renderMedia(message) {
@@ -436,18 +481,19 @@ function renderMedia(message) {
         return "";
     }
 
-    const saveAction = renderSaveMediaAction(message);
+    const saveAction = renderSaveMediaAction(message, true);
+    const placeholder = `<div class="message-media-placeholder" data-media-placeholder>Descriptografando mídia...</div>`;
 
     if (message.attachment_type === "image") {
         return `
-            <img class="message-media" src="${escapeAttribute(message.attachment_url)}" alt="${escapeAttribute(message.attachment_name || "Imagem enviada")}" loading="lazy">
+            ${placeholder}
             ${saveAction}
         `;
     }
 
     if (message.attachment_type === "video") {
         return `
-            <video class="message-media" src="${escapeAttribute(message.attachment_url)}" controls playsinline preload="metadata"></video>
+            ${placeholder}
             ${saveAction}
         `;
     }
@@ -461,17 +507,60 @@ function renderMedia(message) {
     `;
 }
 
-function renderSaveMediaAction(message) {
+function renderSaveMediaAction(message, hidden = false) {
     const fileName = message.attachment_name || `amz-chat-${message.attachment_type || "midia"}-${message.id || Date.now()}`;
 
     return `
         <div class="media-actions">
-            <a class="media-save" href="${escapeAttribute(message.attachment_url)}" download="${escapeAttribute(fileName)}" data-save-media data-url="${escapeAttribute(message.attachment_url)}" data-name="${escapeAttribute(fileName)}" target="_blank" rel="noopener">
+            <a class="media-save" href="${escapeAttribute(message.attachment_url)}" download="${escapeAttribute(fileName)}" data-save-media data-url="${escapeAttribute(message.attachment_url)}" data-name="${escapeAttribute(fileName)}" target="_blank" rel="noopener" ${hidden ? "hidden" : ""}>
                 <i class="ph ph-download-simple"></i>
                 Salvar mídia
             </a>
         </div>
     `;
+}
+
+async function hydrateMessageMedia(node, message) {
+    if (!message.attachment_url || !["image", "video"].includes(message.attachment_type)) {
+        return;
+    }
+
+    const placeholder = node.querySelector("[data-media-placeholder]");
+    const saveAction = node.querySelector("[data-save-media]");
+
+    if (!placeholder) {
+        return;
+    }
+
+    try {
+        const response = await fetch(message.attachment_url, { mode: "cors" });
+
+        if (!response.ok) {
+            throw new Error("mídia indisponível");
+        }
+
+        const encryptedBlob = await response.blob();
+        const mediaBlob = encryptionEnabled
+            ? await decryptMediaBlob(encryptedBlob, message)
+            : encryptedBlob;
+        const objectUrl = URL.createObjectURL(mediaBlob);
+
+        if (message.attachment_type === "image") {
+            placeholder.outerHTML = `<img class="message-media" src="${escapeAttribute(objectUrl)}" alt="${escapeAttribute(message.attachment_name || "Imagem enviada")}" loading="lazy">`;
+        } else {
+            placeholder.outerHTML = `<video class="message-media" src="${escapeAttribute(objectUrl)}" controls playsinline preload="metadata"></video>`;
+        }
+
+        if (saveAction) {
+            saveAction.hidden = false;
+            saveAction.href = objectUrl;
+            saveAction.dataset.url = objectUrl;
+        }
+    } catch (error) {
+        console.warn("Não consegui descriptografar mídia:", formatError(error));
+        placeholder.textContent = "Não consegui abrir esta mídia. Verifique se a chave privada está correta.";
+        placeholder.classList.add("error");
+    }
 }
 
 async function saveMediaFromMessage(event) {
@@ -524,10 +613,12 @@ function renderPresence() {
 
 function leaveChat() {
     localStorage.removeItem("amz-secret-session");
+    sessionStorage.removeItem("amz-secret-e2ee-key");
     if (state.channel && state.supabase) {
         state.supabase.removeChannel(state.channel);
     }
     state.selectedProfile = null;
+    state.encryptionKey = null;
     state.channel = null;
     state.supabase = null;
     state.roomId = "";
@@ -594,12 +685,184 @@ function isExpiredMessage(message) {
     return new Date(message.created_at).getTime() < Date.now() - messageRetentionHours * 60 * 60 * 1000;
 }
 
+async function deriveEncryptionKey(secret) {
+    const keyMaterial = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(secret),
+        "PBKDF2",
+        false,
+        ["deriveKey"]
+    );
+
+    return crypto.subtle.deriveKey(
+        {
+            name: "PBKDF2",
+            salt: new TextEncoder().encode(encryptionSalt),
+            iterations: encryptionIterations,
+            hash: "SHA-256"
+        },
+        keyMaterial,
+        {
+            name: "AES-GCM",
+            length: 256
+        },
+        false,
+        ["encrypt", "decrypt"]
+    );
+}
+
+async function encryptText(text) {
+    if (!encryptionEnabled || !state.encryptionKey) {
+        return text;
+    }
+
+    const encrypted = await encryptBytes(new TextEncoder().encode(text));
+    return [
+        encryptedTextPrefix,
+        bytesToBase64(encrypted.iv),
+        bytesToBase64(encrypted.ciphertext)
+    ].join(":");
+}
+
+async function decryptMessageBody(body) {
+    if (!body) {
+        return "";
+    }
+
+    if (!encryptionEnabled) {
+        return body;
+    }
+
+    if (!body.startsWith(`${encryptedTextPrefix}:`)) {
+        return "[mensagem antiga sem criptografia]";
+    }
+
+    try {
+        const [, , ivBase64, ciphertextBase64] = body.split(":");
+        const plaintext = await decryptBytes(
+            base64ToBytes(ivBase64),
+            base64ToBytes(ciphertextBase64)
+        );
+        return new TextDecoder().decode(plaintext);
+    } catch {
+        return "[não consegui descriptografar esta mensagem]";
+    }
+}
+
+async function encryptFile(file) {
+    const plainBytes = new Uint8Array(await file.arrayBuffer());
+    const encrypted = await encryptBytes(plainBytes);
+    const payload = concatBytes(encryptedMediaMagic, encrypted.iv, encrypted.ciphertext);
+
+    return {
+        blob: new Blob([payload], { type: "application/octet-stream" }),
+        contentType: "application/octet-stream",
+        suffix: ".amzenc"
+    };
+}
+
+async function decryptMediaBlob(blob, message) {
+    const payload = new Uint8Array(await blob.arrayBuffer());
+    const magic = payload.slice(0, encryptedMediaMagic.length);
+    const hasMagic = bytesToBase64(magic) === bytesToBase64(encryptedMediaMagic);
+
+    if (!hasMagic) {
+        throw new Error("mídia sem criptografia");
+    }
+
+    const ivStart = encryptedMediaMagic.length;
+    const ivEnd = ivStart + 12;
+    const iv = payload.slice(ivStart, ivEnd);
+    const ciphertext = payload.slice(ivEnd);
+    const plainBytes = await decryptBytes(iv, ciphertext);
+
+    return new Blob([plainBytes], {
+        type: guessMimeType(message.attachment_name, message.attachment_type)
+    });
+}
+
+async function encryptBytes(plainBytes) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+        {
+            name: "AES-GCM",
+            iv
+        },
+        state.encryptionKey,
+        plainBytes
+    ));
+
+    return { iv, ciphertext };
+}
+
+async function decryptBytes(iv, ciphertext) {
+    return new Uint8Array(await crypto.subtle.decrypt(
+        {
+            name: "AES-GCM",
+            iv
+        },
+        state.encryptionKey,
+        ciphertext
+    ));
+}
+
+function concatBytes(...chunks) {
+    const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const output = new Uint8Array(total);
+    let offset = 0;
+
+    for (const chunk of chunks) {
+        output.set(chunk, offset);
+        offset += chunk.length;
+    }
+
+    return output;
+}
+
+function bytesToBase64(bytes) {
+    let binary = "";
+    const chunkSize = 0x8000;
+
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+        binary += String.fromCharCode(...bytes.slice(index, index + chunkSize));
+    }
+
+    return btoa(binary);
+}
+
+function base64ToBytes(value) {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+    }
+
+    return bytes;
+}
+
+function guessMimeType(fileName = "", type = "") {
+    const extension = fileName.split(".").pop()?.toLowerCase();
+    const mimeTypes = {
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        png: "image/png",
+        webp: "image/webp",
+        gif: "image/gif",
+        mp4: "video/mp4",
+        webm: "video/webm",
+        mov: "video/quicktime"
+    };
+
+    return mimeTypes[extension] || (type === "image" ? "image/png" : "video/mp4");
+}
+
 async function hashPassword(username, password) {
     return sha256(`${config.roomSalt || "amz-secret"}:${username}:${password}`);
 }
 
-async function hashRoomPassword(password) {
-    return sha256(`${config.roomSalt || "amz-secret"}:${password}`);
+async function hashRoomSecret(secret) {
+    return sha256(`${config.roomSalt || "amz-secret"}:${secret}`);
 }
 
 async function sha256(source) {

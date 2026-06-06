@@ -69,7 +69,8 @@ values (
         'image/gif',
         'video/mp4',
         'video/webm',
-        'video/quicktime'
+        'video/quicktime',
+        'application/octet-stream'
     ]
 )
 on conflict (id) do update

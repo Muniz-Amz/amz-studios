@@ -38,13 +38,18 @@
                         <input id="login-password" type="password" autocomplete="current-password" placeholder="Sua senha">
                     </label>
 
+                    <label class="secret-field" for="login-private-key">
+                        <span>Chave privada da conversa</span>
+                        <input id="login-private-key" type="password" autocomplete="off" placeholder="Chave combinada fora do site">
+                    </label>
+
                     <button class="primary-button" id="enter-chat" type="submit">
                         Entrar na conversa
                         <i class="ph ph-arrow-right"></i>
                     </button>
                 </form>
 
-                <small class="login-hint">A sessão fica salva neste navegador por algumas horas.</small>
+                <small class="login-hint">A chave privada não fica salva no site. Combine ela com o Monteiro fora daqui.</small>
 
                 <div class="setup-warning" id="setup-warning" hidden>
                     Configure o Supabase em <code>config.js</code> para ativar o chat em tempo real.
@@ -104,7 +109,7 @@
         </section>
     </main>
 
-    <script src="./config.js?v=supabase-live-1"></script>
-    <script type="module" src="./app.js?v=storage-cleanup-fix-1"></script>
+    <script src="./config.js?v=e2ee-1"></script>
+    <script type="module" src="./app.js?v=e2ee-1"></script>
 </body>
 </html>
