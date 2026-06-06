@@ -28,6 +28,8 @@ supabaseAnonKey: "SUA_ANON_KEY"
 - O login usa hash de senha no `config.js`, sem deixar a senha escrita em texto puro.
 - Os dois usuarios usam a mesma senha da sala para cair na mesma conversa.
 - O banco usa RLS e so libera mensagens da sala quando o navegador envia a chave gerada pela senha.
+- Mensagens e midias antigas deixam de aparecer depois de 24h.
+- O SQL cria uma limpeza automatica que apaga mensagens e arquivos antigos quando novas mensagens entram ou quando o app chama a rotina.
 
 ## Trocar usuarios e senha
 
@@ -48,4 +50,6 @@ console.log([...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2
 
 - Imagens ate 10 MB.
 - Videos ate 60 MB.
+- Conversas expiram depois de 24 horas.
+- Cada imagem ou video enviado aparece com botao `Salvar midia`.
 - Usuarios fixos: `muniz` e `amigo`.

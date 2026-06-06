@@ -37,7 +37,10 @@ create policy "secret chat read messages"
     on public.secret_chat_messages
     for select
     to anon
-    using (room_id = public.current_secret_chat_room());
+    using (
+        room_id = public.current_secret_chat_room()
+        and created_at >= now() - interval '1 day'
+    );
 
 create policy "secret chat insert messages"
     on public.secret_chat_messages
@@ -92,3 +95,47 @@ create policy "secret chat upload media"
         bucket_id = 'secret-chat-media'
         and (storage.foldername(name))[1] is not null
     );
+
+create or replace function public.cleanup_secret_chat_messages()
+returns integer
+language plpgsql
+security definer
+set search_path = public, storage
+as $$
+declare
+    deleted_messages integer := 0;
+begin
+    delete from public.secret_chat_messages
+    where created_at < now() - interval '1 day';
+
+    get diagnostics deleted_messages = row_count;
+
+    delete from storage.objects
+    where bucket_id = 'secret-chat-media'
+      and created_at < now() - interval '1 day';
+
+    return deleted_messages;
+end;
+$$;
+
+revoke all on function public.cleanup_secret_chat_messages() from public;
+grant execute on function public.cleanup_secret_chat_messages() to anon;
+
+create or replace function public.secret_chat_cleanup_after_insert()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, storage
+as $$
+begin
+    perform public.cleanup_secret_chat_messages();
+    return null;
+end;
+$$;
+
+drop trigger if exists secret_chat_cleanup_after_insert on public.secret_chat_messages;
+
+create trigger secret_chat_cleanup_after_insert
+    after insert on public.secret_chat_messages
+    for each statement
+    execute function public.secret_chat_cleanup_after_insert();

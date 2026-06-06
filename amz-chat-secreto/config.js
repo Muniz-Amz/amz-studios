@@ -4,6 +4,7 @@ window.AMZ_SECRET_CHAT_CONFIG = {
     bucketName: "secret-chat-media",
     roomSalt: "amz-studios-private-chat",
     sessionHours: 8,
+    messageRetentionHours: 24,
     maxImageMb: 10,
     maxVideoMb: 60,
     accounts: [

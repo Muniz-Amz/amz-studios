@@ -32,6 +32,7 @@ const elements = {
 };
 
 const isConfigured = Boolean(config.supabaseUrl && config.supabaseAnonKey);
+const messageRetentionHours = Math.max(1, Number(config.messageRetentionHours || 24));
 
 function boot() {
     showLogin();
@@ -40,6 +41,7 @@ function boot() {
     elements.leaveChat.addEventListener("click", leaveChat);
     elements.messageForm.addEventListener("submit", sendMessage);
     elements.mediaInput.addEventListener("change", selectMedia);
+    elements.messages.addEventListener("click", saveMediaFromMessage);
     elements.messageText.addEventListener("input", autosizeComposer);
     window.addEventListener("hashchange", guardConversationRoute);
     renderPresence();
@@ -166,7 +168,7 @@ async function startChat() {
 
     if (!isConfigured) {
         setConnectionState("Config pendente", "error");
-        renderEmpty("Login aceito. Para o bate-papo funcionar entre dois aparelhos, configure o Supabase em config.js e rode o arquivo supabase.sql.");
+        renderEmpty(`Login aceito. Para o bate-papo funcionar entre dois aparelhos, configure o Supabase em config.js e rode o arquivo supabase.sql. As conversas expiram em ${messageRetentionHours}h.`);
         return;
     }
 
@@ -181,6 +183,7 @@ async function startChat() {
     setConnectionState("Conectando", "loading");
 
     try {
+        await cleanupExpiredMessages();
         await loadMessages();
         subscribeRealtime();
         setConnectionState("Online", "ready");
@@ -204,6 +207,7 @@ async function loadMessages() {
         .from("secret_chat_messages")
         .select("*")
         .eq("room_id", state.roomId)
+        .gte("created_at", getRetentionCutoffIso())
         .order("created_at", { ascending: true })
         .limit(120);
 
@@ -214,7 +218,7 @@ async function loadMessages() {
     elements.messages.innerHTML = "";
 
     if (!data.length) {
-        renderEmpty("Nenhuma mensagem ainda. Manda a primeira e inaugura a sala.");
+        renderEmpty(`Nenhuma mensagem recente. As conversas somem depois de ${messageRetentionHours}h.`);
         return;
     }
 
@@ -240,7 +244,7 @@ function subscribeRealtime() {
 
     state.channel
         .on("broadcast", { event: "message" }, (payload) => {
-            if (payload.payload?.room_id === state.roomId) {
+            if (payload.payload?.room_id === state.roomId && !isExpiredMessage(payload.payload)) {
                 removeEmptyState();
                 renderMessage(payload.payload);
                 scrollToBottom();
@@ -260,6 +264,14 @@ function subscribeRealtime() {
                 setConnectionState("Online", "ready");
             }
         });
+}
+
+async function cleanupExpiredMessages() {
+    try {
+        await state.supabase.rpc("cleanup_secret_chat_messages");
+    } catch (error) {
+        console.warn("Limpeza automática indisponível:", formatError(error));
+    }
 }
 
 async function sendMessage(event) {
@@ -391,6 +403,10 @@ function clearMedia() {
 }
 
 function renderMessage(message) {
+    if (isExpiredMessage(message)) {
+        return;
+    }
+
     const isOwn = message.profile_id === state.selectedProfile.id;
     const media = renderMedia(message);
     const node = document.createElement("article");
@@ -412,12 +428,20 @@ function renderMedia(message) {
         return "";
     }
 
+    const saveAction = renderSaveMediaAction(message);
+
     if (message.attachment_type === "image") {
-        return `<img class="message-media" src="${escapeAttribute(message.attachment_url)}" alt="${escapeAttribute(message.attachment_name || "Imagem enviada")}" loading="lazy">`;
+        return `
+            <img class="message-media" src="${escapeAttribute(message.attachment_url)}" alt="${escapeAttribute(message.attachment_name || "Imagem enviada")}" loading="lazy">
+            ${saveAction}
+        `;
     }
 
     if (message.attachment_type === "video") {
-        return `<video class="message-media" src="${escapeAttribute(message.attachment_url)}" controls playsinline preload="metadata"></video>`;
+        return `
+            <video class="message-media" src="${escapeAttribute(message.attachment_url)}" controls playsinline preload="metadata"></video>
+            ${saveAction}
+        `;
     }
 
     return `
@@ -425,7 +449,57 @@ function renderMedia(message) {
             <i class="ph ph-download-simple"></i>
             ${escapeHtml(message.attachment_name || "Abrir arquivo")}
         </a>
+        ${saveAction}
     `;
+}
+
+function renderSaveMediaAction(message) {
+    const fileName = message.attachment_name || `amz-chat-${message.attachment_type || "midia"}-${message.id || Date.now()}`;
+
+    return `
+        <div class="media-actions">
+            <a class="media-save" href="${escapeAttribute(message.attachment_url)}" download="${escapeAttribute(fileName)}" data-save-media data-url="${escapeAttribute(message.attachment_url)}" data-name="${escapeAttribute(fileName)}" target="_blank" rel="noopener">
+                <i class="ph ph-download-simple"></i>
+                Salvar mídia
+            </a>
+        </div>
+    `;
+}
+
+async function saveMediaFromMessage(event) {
+    const action = event.target.closest("[data-save-media]");
+
+    if (!action) {
+        return;
+    }
+
+    event.preventDefault();
+    const url = action.dataset.url;
+    const fileName = action.dataset.name || "amz-chat-midia";
+    action.classList.add("is-saving");
+
+    try {
+        const response = await fetch(url, { mode: "cors" });
+
+        if (!response.ok) {
+            throw new Error("download indisponível");
+        }
+
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const downloadLink = document.createElement("a");
+        downloadLink.href = objectUrl;
+        downloadLink.download = fileName;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        downloadLink.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+        console.warn("Fallback de salvamento:", formatError(error));
+        window.open(url, "_blank", "noopener");
+    } finally {
+        action.classList.remove("is-saving");
+    }
 }
 
 function renderPresence() {
@@ -498,6 +572,18 @@ function autosizeComposer() {
 
 function scrollToBottom() {
     elements.messages.scrollTop = elements.messages.scrollHeight;
+}
+
+function getRetentionCutoffIso() {
+    return new Date(Date.now() - messageRetentionHours * 60 * 60 * 1000).toISOString();
+}
+
+function isExpiredMessage(message) {
+    if (!message?.created_at) {
+        return false;
+    }
+
+    return new Date(message.created_at).getTime() < Date.now() - messageRetentionHours * 60 * 60 * 1000;
 }
 
 async function hashPassword(username, password) {
