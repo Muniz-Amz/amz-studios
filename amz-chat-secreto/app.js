@@ -36,6 +36,9 @@ const elements = {
     presenceList: document.querySelector("#presence-list"),
     connectionState: document.querySelector("#connection-state"),
     connectionLabel: document.querySelector("#connection-label"),
+    conversationAvatar: document.querySelector("#conversation-avatar"),
+    chatTitle: document.querySelector("#chat-title"),
+    chatSubtitle: document.querySelector("#chat-subtitle"),
     messages: document.querySelector("#messages"),
     messageForm: document.querySelector("#message-form"),
     messageText: document.querySelector("#message-text"),
@@ -233,6 +236,7 @@ async function startChat() {
     showChat();
     renderActiveProfile();
     renderPresence();
+    renderConversationHeader();
 
     if (!isConfigured) {
         setConnectionState("Config pendente", "error");
@@ -268,6 +272,24 @@ function renderActiveProfile() {
         <strong>${escapeHtml(state.selectedProfile.name)}</strong>
         <span>@${escapeHtml(state.selectedProfile.username)} · ${escapeHtml(state.selectedProfile.role)}</span>
     `;
+}
+
+function renderConversationHeader() {
+    if (!state.selectedProfile) {
+        elements.conversationAvatar.textContent = "AMZ";
+        elements.chatTitle.textContent = "Bate-papo privado";
+        elements.chatSubtitle.textContent = `Pagina de conversa · ${messageRetentionHours}h`;
+        return;
+    }
+
+    const target = getRemoteAccount();
+    const targetOnline = target ? state.onlineProfiles.has(target.id) : false;
+
+    elements.conversationAvatar.textContent = target ? getInitials(target.name) : "AMZ";
+    elements.chatTitle.textContent = target ? target.name : "Bate-papo privado";
+    elements.chatSubtitle.textContent = target
+        ? `${targetOnline ? "Online" : "Offline"} · mensagens somem em ${messageRetentionHours}h`
+        : `Pagina de conversa · ${messageRetentionHours}h`;
 }
 
 async function loadMessages() {
@@ -327,6 +349,7 @@ function subscribeRealtime() {
             const presence = state.channel.presenceState();
             state.onlineProfiles = new Set(Object.keys(presence));
             renderPresence();
+            renderConversationHeader();
         })
         .subscribe(async (status) => {
             if (status === "SUBSCRIBED") {
