@@ -113,12 +113,72 @@ $$;
 revoke all on function public.cleanup_secret_chat_messages() from public;
 grant execute on function public.cleanup_secret_chat_messages() to anon;
 
+create table if not exists public.secret_chat_cleanup_control (
+    id boolean primary key default true check (id),
+    last_run_at timestamptz
+);
+
+insert into public.secret_chat_cleanup_control (id, last_run_at)
+values (true, null)
+on conflict (id) do nothing;
+
+create or replace function public.run_secret_chat_cleanup_if_due()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    last_cleanup timestamptz;
+    deleted_messages integer := 0;
+begin
+    select last_run_at
+    into last_cleanup
+    from public.secret_chat_cleanup_control
+    where id = true
+    for update;
+
+    if last_cleanup is not null and last_cleanup > now() - interval '10 hours' then
+        return 0;
+    end if;
+
+    deleted_messages := public.cleanup_secret_chat_messages();
+
+    update public.secret_chat_cleanup_control
+    set last_run_at = now()
+    where id = true;
+
+    return deleted_messages;
+end;
+$$;
+
+revoke all on function public.run_secret_chat_cleanup_if_due() from public;
+grant execute on function public.run_secret_chat_cleanup_if_due() to anon;
+
+select public.run_secret_chat_cleanup_if_due();
+
 create extension if not exists pg_cron;
+
+do $$
+declare
+    existing_job_id bigint;
+begin
+    select jobid
+    into existing_job_id
+    from cron.job
+    where jobname = 'amz_secret_chat_cleanup_10h'
+    limit 1;
+
+    if existing_job_id is not null then
+        perform cron.unschedule(existing_job_id);
+    end if;
+end;
+$$;
 
 select cron.schedule(
     'amz_secret_chat_cleanup_10h',
-    '10 hours',
-    $$select public.cleanup_secret_chat_messages();$$
+    '0 * * * *',
+    $$select public.run_secret_chat_cleanup_if_due();$$
 );
 
 select jobname, schedule, command

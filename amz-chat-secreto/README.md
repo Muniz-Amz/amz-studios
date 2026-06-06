@@ -32,6 +32,7 @@ Se ativar a criptografia e o upload de midia falhar por tipo de arquivo, rode
 
 Para deixar o Supabase rodando a limpeza sozinho a cada 10 horas, rode
 `supabase-cleanup-schedule-10h.sql` no SQL Editor depois de rodar `supabase.sql`.
+O cron confere a cada hora e so executa a limpeza quando ja passaram 10 horas.
 
 Se o Supabase reclamar que `pg_cron` nao existe, ative o modulo em
 `Database > Extensions` ou `Integrations > Cron` e rode o arquivo de novo.
