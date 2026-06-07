@@ -32,7 +32,8 @@ const state = {
         incomingOffer: null,
         targetProfileId: "",
         pendingCandidates: [],
-        facingMode: "user"
+        facingMode: "user",
+        cameraFallback: false
     }
 };
 
@@ -448,9 +449,10 @@ async function startOutgoingCall(mode) {
 
     try {
         await prepareLocalStream(mode);
-        updateCallUi(`Chamando ${target.name} por ${mode === "video" ? "video" : "voz"}...`);
+        updateCallUi(getCallingStatus(target, mode));
         const peer = createPeerConnection();
         addLocalTracks(peer);
+        ensureVideoReceiveLine(peer);
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
 
@@ -481,7 +483,7 @@ async function acceptIncomingCall() {
 
     try {
         await prepareLocalStream(offer.mode);
-        updateCallUi("Aceitando chamada...");
+        updateCallUi(getAcceptingStatus());
         const peer = createPeerConnection();
         addLocalTracks(peer);
         await peer.setRemoteDescription(new RTCSessionDescription(offer.description));
@@ -498,7 +500,7 @@ async function acceptIncomingCall() {
         });
 
         state.call.status = "active";
-        updateCallUi("Conectado");
+        updateCallUi(getConnectedCallStatus());
     } catch (error) {
         console.error(error);
         await sendCallSignal({
@@ -578,7 +580,7 @@ async function handleCallSignal(payload) {
         await state.call.peer.setRemoteDescription(new RTCSessionDescription(payload.description));
         await flushPendingCandidates();
         state.call.status = "active";
-        updateCallUi("Conectado");
+        updateCallUi(getConnectedCallStatus());
         return;
     }
 
@@ -682,7 +684,21 @@ async function prepareLocalStream(mode) {
     }
 
     stopLocalStream();
-    state.call.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints(mode));
+    state.call.cameraFallback = false;
+
+    try {
+        state.call.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints(mode));
+    } catch (error) {
+        if (mode !== "video") {
+            throw error;
+        }
+
+        console.warn("Camera indisponivel, continuando chamada de video com audio:", formatError(error));
+        state.call.cameraFallback = true;
+        state.call.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints("voice"));
+        updateCallUi("Câmera indisponível. Chamada continua com áudio.");
+    }
+
     elements.localVideo.srcObject = state.call.localStream;
     updateCallMediaVisibility();
     await elements.localVideo.play().catch(() => {});
@@ -773,13 +789,16 @@ function createPeerConnection() {
         }
         elements.remoteVideo.srcObject = state.call.remoteStream;
         updateCallMediaVisibility();
+        if (state.call.status === "active") {
+            updateCallUi(getConnectedCallStatus());
+        }
         elements.remoteVideo.play().catch(() => {});
     };
 
     peer.onconnectionstatechange = () => {
         if (peer.connectionState === "connected") {
             state.call.status = "active";
-            updateCallUi("Conectado");
+            updateCallUi(getConnectedCallStatus());
         }
 
         if (["failed", "disconnected"].includes(peer.connectionState)) {
@@ -797,6 +816,20 @@ function createPeerConnection() {
 function addLocalTracks(peer) {
     for (const track of state.call.localStream.getTracks()) {
         peer.addTrack(track, state.call.localStream);
+    }
+}
+
+function ensureVideoReceiveLine(peer) {
+    if (state.call.mode !== "video" || hasLocalVideoTrack() || !peer.addTransceiver) {
+        return;
+    }
+
+    const alreadyHasVideoLine = peer.getTransceivers?.().some((transceiver) => {
+        return transceiver.receiver?.track?.kind === "video" || transceiver.sender?.track?.kind === "video";
+    });
+
+    if (!alreadyHasVideoLine) {
+        peer.addTransceiver("video", { direction: "recvonly" });
     }
 }
 
@@ -909,7 +942,8 @@ function resetCallState() {
         incomingOffer: null,
         targetProfileId: "",
         pendingCandidates: [],
-        facingMode: "user"
+        facingMode: "user",
+        cameraFallback: false
     };
     updateCallUi();
 }
@@ -917,14 +951,15 @@ function resetCallState() {
 function updateCallUi(statusText = "") {
     const isIdle = state.call.status === "idle";
     const isVideoCall = state.call.mode === "video";
-    const canSwitchCamera = isVideoCall && !["idle", "incoming"].includes(state.call.status);
+    const hasLocalVideo = hasLocalVideoTrack();
+    const canSwitchCamera = isVideoCall && hasLocalVideo && !["idle", "incoming"].includes(state.call.status);
 
     elements.callPanel.hidden = isIdle;
     elements.conversation.classList.toggle("has-call-panel", !isIdle);
     elements.incomingCallActions.hidden = true;
     elements.endCall.hidden = isIdle || state.call.status === "incoming";
     elements.switchCamera.hidden = !canSwitchCamera;
-    elements.switchCamera.disabled = !canSwitchCamera || !state.call.localStream;
+    elements.switchCamera.disabled = !canSwitchCamera;
     elements.switchCamera.title = state.call.facingMode === "environment"
         ? "Alternar para câmera frontal"
         : "Alternar para câmera traseira";
@@ -940,13 +975,38 @@ function updateCallUi(statusText = "") {
 }
 
 function updateCallMediaVisibility() {
-    const hasLocalVideo = Boolean(state.call.localStream?.getVideoTracks().some((track) => track.readyState !== "ended"));
-    const hasRemoteVideo = Boolean(state.call.remoteStream?.getVideoTracks().some((track) => track.readyState !== "ended"));
+    const hasLocalVideo = hasLocalVideoTrack();
+    const hasRemoteVideo = hasRemoteVideoTrack();
     const hasVideoFeed = state.call.mode === "video" && (hasLocalVideo || hasRemoteVideo);
 
     elements.callPanel.classList.toggle("has-video-feed", hasVideoFeed);
     elements.callPanel.classList.toggle("has-local-video", hasLocalVideo);
     elements.callPanel.classList.toggle("has-remote-video", hasRemoteVideo);
+}
+
+function hasLocalVideoTrack() {
+    return Boolean(state.call.localStream?.getVideoTracks().some((track) => track.readyState !== "ended"));
+}
+
+function hasRemoteVideoTrack() {
+    return Boolean(state.call.remoteStream?.getVideoTracks().some((track) => track.readyState !== "ended"));
+}
+
+function getCallingStatus(target, mode) {
+    const label = `Chamando ${target.name} por ${mode === "video" ? "video" : "voz"}...`;
+    return state.call.cameraFallback ? `${label} sem sua câmera.` : label;
+}
+
+function getAcceptingStatus() {
+    return state.call.cameraFallback ? "Aceitando chamada sem sua câmera..." : "Aceitando chamada...";
+}
+
+function getConnectedCallStatus() {
+    if (state.call.mode === "video" && !hasRemoteVideoTrack()) {
+        return "Conectado · sem câmera do outro";
+    }
+
+    return "Conectado";
 }
 
 function showCallNotice(text) {
