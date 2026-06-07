@@ -19,6 +19,8 @@ const state = {
     lastRenderedDateKey: "",
     lastRenderedProfileId: "",
     lastRenderedGroupKey: "",
+    autoFollowMessages: true,
+    unreadMessages: 0,
     call: {
         peer: null,
         localStream: null,
@@ -91,8 +93,8 @@ async function boot() {
     elements.messageForm.addEventListener("submit", sendMessage);
     elements.mediaInput.addEventListener("change", selectMedia);
     elements.messages.addEventListener("click", saveMediaFromMessage);
-    elements.messages.addEventListener("scroll", updateComposerState);
-    elements.scrollBottom.addEventListener("click", scrollToBottom);
+    elements.messages.addEventListener("scroll", handleMessagesScroll);
+    elements.scrollBottom.addEventListener("click", () => scrollToBottom({ behavior: "smooth", force: true }));
     elements.messageText.addEventListener("input", autosizeComposer);
     elements.messageText.addEventListener("keydown", handleComposerKeydown);
     elements.startVoiceCall.addEventListener("click", () => startOutgoingCall("voice"));
@@ -348,10 +350,13 @@ async function loadMessages() {
         return;
     }
 
+    state.autoFollowMessages = true;
+    state.unreadMessages = 0;
+
     for (const message of data) {
         await renderMessage(message);
     }
-    scrollToBottom();
+    scrollToBottom({ force: true });
 }
 
 function subscribeRealtime() {
@@ -960,8 +965,8 @@ async function renderMessage(message) {
         return;
     }
 
-    const shouldStickToBottom = isNearMessageBottom();
     const isOwn = message.profile_id === state.selectedProfile.id;
+    const shouldStickToBottom = isOwn || state.autoFollowMessages || isNearMessageBottom(260);
     const authorName = getMessageAuthorName(message);
     const body = await decryptMessageBody(message.body);
     const media = renderMedia(message);
@@ -985,9 +990,10 @@ async function renderMessage(message) {
     markMessageAsRendered(message);
     hydrateMessageMedia(node, message);
 
-    if (shouldStickToBottom || isOwn) {
-        scrollToBottom();
+    if (shouldStickToBottom) {
+        scrollToBottom({ force: true });
     } else {
+        state.unreadMessages += 1;
         updateComposerState();
     }
 }
@@ -1041,7 +1047,7 @@ async function hydrateMessageMedia(node, message) {
         return;
     }
 
-    const shouldStickToBottom = isNearMessageBottom();
+    const shouldStickToBottom = state.autoFollowMessages || isNearMessageBottom(260);
     const placeholder = node.querySelector("[data-media-placeholder]");
     const saveAction = node.querySelector("[data-save-media]");
 
@@ -1075,7 +1081,7 @@ async function hydrateMessageMedia(node, message) {
         }
 
         if (shouldStickToBottom) {
-            requestAnimationFrame(scrollToBottom);
+            requestAnimationFrame(() => scrollToBottom({ force: true }));
         }
     } catch (error) {
         console.warn("Não consegui descriptografar mídia:", formatError(error));
@@ -1241,8 +1247,33 @@ function autosizeComposer() {
     updateComposerHeight();
 }
 
-function scrollToBottom() {
-    elements.messages.scrollTop = elements.messages.scrollHeight;
+function handleMessagesScroll() {
+    const nearBottom = isNearMessageBottom(220);
+    state.autoFollowMessages = nearBottom;
+
+    if (nearBottom) {
+        state.unreadMessages = 0;
+    }
+
+    updateComposerState();
+}
+
+function scrollToBottom(options = {}) {
+    const force = options.force !== false;
+    const behavior = options.behavior || "auto";
+    const top = elements.messages.scrollHeight;
+
+    if (typeof elements.messages.scrollTo === "function") {
+        elements.messages.scrollTo({ top, behavior });
+    } else {
+        elements.messages.scrollTop = top;
+    }
+
+    if (force) {
+        state.autoFollowMessages = true;
+        state.unreadMessages = 0;
+    }
+
     updateComposerState();
 }
 
@@ -1259,6 +1290,11 @@ function updateComposerState() {
     elements.messageForm.classList.toggle("is-away-from-bottom", awayFromBottom);
     elements.sendButton.disabled = !canSend;
     elements.scrollBottom.hidden = !awayFromBottom;
+    elements.scrollBottom.dataset.unread = state.unreadMessages > 0 ? String(Math.min(state.unreadMessages, 99)) : "";
+    elements.scrollBottom.title = state.unreadMessages > 0
+        ? `${state.unreadMessages} mensagem nova. Ir para o fim.`
+        : "Ir para o fim da conversa";
+    elements.scrollBottom.setAttribute("aria-label", elements.scrollBottom.title);
     updateComposerHeight();
 }
 

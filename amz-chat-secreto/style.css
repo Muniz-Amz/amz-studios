@@ -881,6 +881,25 @@ button {
     transform: translateY(-2px);
 }
 
+.scroll-bottom-button[data-unread]:not([data-unread=""])::after {
+    content: attr(data-unread);
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    min-width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    border: 2px solid var(--chat-bg);
+    border-radius: 999px;
+    background: var(--accent);
+    color: #071012;
+    padding: 0 5px;
+    font-size: 10px;
+    font-weight: 1000;
+    line-height: 1;
+}
+
 .composer {
     min-height: 68px;
     max-height: min(260px, 42dvh);
