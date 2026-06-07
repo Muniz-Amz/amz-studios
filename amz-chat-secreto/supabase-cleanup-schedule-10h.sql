@@ -98,13 +98,49 @@ set search_path = public
 as $$
 declare
     deleted_messages integer := 0;
+    deleted_expired integer := 0;
+    deleted_overflow integer := 0;
 begin
     perform public.queue_expired_secret_chat_media();
 
     delete from public.secret_chat_messages
     where created_at < now() - interval '1 day';
 
-    get diagnostics deleted_messages = row_count;
+    get diagnostics deleted_expired = row_count;
+
+    with overflow_messages as (
+        select id, room_id, attachment_path
+        from (
+            select
+                id,
+                room_id,
+                attachment_path,
+                row_number() over (
+                    partition by room_id
+                    order by created_at desc, id desc
+                ) as message_rank
+            from public.secret_chat_messages
+        ) ranked_messages
+        where message_rank > 30
+    ),
+    queued_media as (
+        insert into public.secret_chat_media_cleanup_queue (room_id, object_path)
+        select distinct room_id, attachment_path
+        from overflow_messages
+        where attachment_path is not null
+        on conflict (object_path) do nothing
+        returning 1
+    ),
+    deleted_rows as (
+        delete from public.secret_chat_messages
+        where id in (select id from overflow_messages)
+        returning 1
+    )
+    select count(*)
+    into deleted_overflow
+    from deleted_rows;
+
+    deleted_messages := deleted_expired + deleted_overflow;
 
     return deleted_messages;
 end;

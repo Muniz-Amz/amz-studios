@@ -75,6 +75,7 @@ const elements = {
 
 const isConfigured = Boolean(config.supabaseUrl && config.supabaseAnonKey);
 const messageRetentionHours = Math.max(1, Number(config.messageRetentionHours || 24));
+const messageHistoryLimit = Math.max(1, Number(config.messageHistoryLimit || 30));
 const encryptionEnabled = config.encryptionEnabled !== false;
 const encryptionIterations = Math.max(100000, Number(config.encryptionIterations || 250000));
 const encryptedTextPrefix = "amzenc:v1";
@@ -278,7 +279,7 @@ async function startChat() {
 
     if (!isConfigured) {
         setConnectionState("Config pendente", "error");
-        renderEmpty(`Login aceito. Para o bate-papo funcionar entre dois aparelhos, configure o Supabase em config.js e rode o arquivo supabase.sql. As conversas expiram em ${messageRetentionHours}h.`);
+        renderEmpty(`Login aceito. Para o bate-papo funcionar entre dois aparelhos, configure o Supabase em config.js e rode o arquivo supabase.sql. As conversas expiram em ${messageRetentionHours}h e o chat mantém as ${messageHistoryLimit} últimas.`);
         return;
     }
 
@@ -316,7 +317,7 @@ function renderConversationHeader() {
     if (!state.selectedProfile) {
         elements.conversationAvatar.textContent = "AMZ";
         elements.chatTitle.textContent = "Bate-papo privado";
-        elements.chatSubtitle.textContent = `Mensagens somem em ${messageRetentionHours}h`;
+        elements.chatSubtitle.textContent = getRetentionLabel();
         return;
     }
 
@@ -325,8 +326,8 @@ function renderConversationHeader() {
     elements.conversationAvatar.textContent = target ? getInitials(target.name) : "AMZ";
     elements.chatTitle.textContent = target ? target.name : "Bate-papo privado";
     elements.chatSubtitle.textContent = target
-        ? `Mensagens somem em ${messageRetentionHours}h`
-        : `Mensagens somem em ${messageRetentionHours}h`;
+        ? getRetentionLabel()
+        : getRetentionLabel();
 }
 
 function updateComposerHint() {
@@ -340,8 +341,8 @@ async function loadMessages() {
         .select("*")
         .eq("room_id", state.roomId)
         .gte("created_at", getRetentionCutoffIso())
-        .order("created_at", { ascending: true })
-        .limit(120);
+        .order("created_at", { ascending: false })
+        .limit(messageHistoryLimit);
 
     if (error) {
         throw error;
@@ -351,14 +352,14 @@ async function loadMessages() {
     elements.messages.innerHTML = "";
 
     if (!data.length) {
-        renderEmpty(`Nenhuma mensagem recente. As conversas somem depois de ${messageRetentionHours}h.`);
+        renderEmpty(`Nenhuma mensagem recente. As conversas somem depois de ${messageRetentionHours}h e apenas as ${messageHistoryLimit} últimas ficam no chat.`);
         return;
     }
 
     state.autoFollowMessages = true;
     state.unreadMessages = 0;
 
-    for (const message of data) {
+    for (const message of data.slice().reverse()) {
         await renderMessage(message);
     }
     scrollToBottom({ force: true });
@@ -388,6 +389,7 @@ function subscribeRealtime() {
             if (payload.payload?.room_id === state.roomId && !isExpiredMessage(payload.payload)) {
                 removeEmptyState();
                 await renderMessage(payload.payload);
+                trimVisibleMessages();
             }
         })
         .on("broadcast", { event: "call-signal" }, async (payload) => {
@@ -1019,6 +1021,7 @@ async function sendMessage(event) {
 
         removeEmptyState();
         await renderMessage(data);
+        trimVisibleMessages();
         scrollToBottom();
         await state.channel?.send({
             type: "broadcast",
@@ -1132,6 +1135,7 @@ async function renderMessage(message) {
     const grouped = isGroupedWithPreviousMessage(message);
     const node = document.createElement("article");
     node.className = `message ${isOwn ? "own" : ""} ${grouped ? "grouped" : ""}`.trim();
+    node.dataset.messageId = message.id || "";
     node.setAttribute("aria-label", `${authorName} às ${formatTime(message.created_at)}`);
     node.innerHTML = `
         ${grouped
@@ -1154,6 +1158,49 @@ async function renderMessage(message) {
     } else {
         state.unreadMessages += 1;
         updateComposerState();
+    }
+}
+
+function trimVisibleMessages() {
+    const messageNodes = [...elements.messages.querySelectorAll("article.message")];
+    const overflow = messageNodes.length - messageHistoryLimit;
+
+    if (overflow <= 0) {
+        return;
+    }
+
+    const shouldStickToBottom = state.autoFollowMessages || isNearMessageBottom(260);
+
+    for (const node of messageNodes.slice(0, overflow)) {
+        node.remove();
+    }
+
+    removeOrphanDateSeparators();
+
+    if (shouldStickToBottom) {
+        scrollToBottom({ force: true });
+    }
+}
+
+function removeOrphanDateSeparators() {
+    const separators = [...elements.messages.querySelectorAll(".message-date-separator")];
+
+    for (const separator of separators) {
+        let sibling = separator.nextElementSibling;
+        let hasMessageInGroup = false;
+
+        while (sibling && !sibling.classList.contains("message-date-separator")) {
+            if (sibling.matches("article.message")) {
+                hasMessageInGroup = true;
+                break;
+            }
+
+            sibling = sibling.nextElementSibling;
+        }
+
+        if (!hasMessageInGroup) {
+            separator.remove();
+        }
     }
 }
 
@@ -1644,6 +1691,10 @@ function stopTitleAlert() {
 
 function getRetentionCutoffIso() {
     return new Date(Date.now() - messageRetentionHours * 60 * 60 * 1000).toISOString();
+}
+
+function getRetentionLabel() {
+    return `Mensagens somem em ${messageRetentionHours}h · últimas ${messageHistoryLimit}`;
 }
 
 function isExpiredMessage(message) {

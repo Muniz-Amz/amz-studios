@@ -5,6 +5,7 @@ window.AMZ_SECRET_CHAT_CONFIG = {
     roomSalt: "amz-studios-private-chat",
     sessionHours: 8,
     messageRetentionHours: 24,
+    messageHistoryLimit: 30,
     encryptionEnabled: true,
     encryptionIterations: 250000,
     maxImageMb: 10,

@@ -28,6 +28,9 @@ Se aparecer `Direct deletion from storage tables is not allowed`, rode o arquivo
 Se ativar a criptografia e o upload de midia falhar por tipo de arquivo, rode
 `supabase-e2ee-hotfix.sql` no SQL Editor do Supabase.
 
+Se quiser aplicar apenas o limite de 30 mensagens sem recriar todo o banco, rode
+`supabase-message-limit-30.sql` no SQL Editor do Supabase.
+
 ## Limpeza automatica no Supabase
 
 Para deixar o Supabase rodando a limpeza sozinho a cada 10 horas, rode
@@ -47,6 +50,7 @@ Se o Supabase reclamar que `pg_cron` nao existe, ative o modulo em
 - Texto, imagens e videos sao criptografados no navegador antes de ir para o Supabase.
 - O banco usa RLS e so libera mensagens da sala quando o navegador envia a chave gerada pela chave privada.
 - Mensagens e midias antigas deixam de aparecer depois de 24h.
+- O chat mostra e mantém apenas as 30 mensagens mais recentes por sala.
 - O SQL apaga mensagens antigas quando novas mensagens entram, quando o app chama a rotina ou quando o agendamento de 10h estiver ativo.
 - Midias antigas entram em uma fila de limpeza e sao apagadas pela API de Storage quando alguem abre o chat.
 
@@ -99,6 +103,7 @@ console.log([...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2
 - Imagens ate 10 MB.
 - Videos ate 60 MB.
 - Conversas expiram depois de 24 horas.
+- O histórico visível fica limitado às 30 mensagens mais recentes.
 - Cada imagem ou video enviado aparece com botao `Salvar midia`.
 - Usuarios de login atuais: `usuario1` e `usuario2`.
 - Nomes visiveis no chat: `Usuario 1` e `Usuario 2`.
