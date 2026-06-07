@@ -11,6 +11,11 @@ const state = {
     encryptionKey: null,
     mediaFile: null,
     onlineProfiles: new Set(),
+    presenceReady: false,
+    notifiedPresenceAt: new Map(),
+    titleAlertTimer: null,
+    originalTitle: document.title,
+    audioContext: null,
     call: {
         peer: null,
         localStream: null,
@@ -40,6 +45,7 @@ const elements = {
     chatTitle: document.querySelector("#chat-title"),
     chatSubtitle: document.querySelector("#chat-subtitle"),
     messages: document.querySelector("#messages"),
+    scrollBottom: document.querySelector("#scroll-bottom"),
     messageForm: document.querySelector("#message-form"),
     messageText: document.querySelector("#message-text"),
     mediaInput: document.querySelector("#media-input"),
@@ -81,7 +87,10 @@ async function boot() {
     elements.messageForm.addEventListener("submit", sendMessage);
     elements.mediaInput.addEventListener("change", selectMedia);
     elements.messages.addEventListener("click", saveMediaFromMessage);
+    elements.messages.addEventListener("scroll", updateComposerState);
+    elements.scrollBottom.addEventListener("click", scrollToBottom);
     elements.messageText.addEventListener("input", autosizeComposer);
+    elements.messageText.addEventListener("keydown", handleComposerKeydown);
     elements.startVoiceCall.addEventListener("click", () => startOutgoingCall("voice"));
     elements.startVideoCall.addEventListener("click", () => startOutgoingCall("video"));
     elements.endCall.addEventListener("click", () => endActiveCall("Encerrando chamada.", true));
@@ -89,6 +98,15 @@ async function boot() {
     elements.declineCall.addEventListener("click", declineIncomingCall);
     window.addEventListener("hashchange", guardConversationRoute);
     window.addEventListener("beforeunload", () => endActiveCall("Saindo da chamada.", true));
+    window.addEventListener("resize", updateViewportHeight);
+    window.visualViewport?.addEventListener("resize", updateViewportHeight);
+    window.visualViewport?.addEventListener("scroll", updateViewportHeight);
+    if ("ResizeObserver" in window) {
+        new ResizeObserver(updateComposerHeight).observe(elements.messageForm);
+    }
+    updateViewportHeight();
+    updateComposerHeight();
+    updateComposerHint();
     renderPresence();
     await restoreSession();
     guardConversationRoute();
@@ -162,6 +180,8 @@ async function enterChat(event) {
     state.encryptionKey = encryptionEnabled ? await deriveEncryptionKey(privateKey) : null;
     state.roomId = encryptionEnabled ? await hashRoomSecret(privateKey) : await hashRoomSecret(password);
     saveSession(account.id, state.roomId);
+    requestNotificationPermission();
+    primeNotificationAudio();
     if (encryptionEnabled) {
         sessionStorage.setItem("amz-secret-e2ee-key", privateKey);
     }
@@ -292,6 +312,11 @@ function renderConversationHeader() {
         : `Pagina de conversa · ${messageRetentionHours}h`;
 }
 
+function updateComposerHint() {
+    elements.messageText.placeholder = "Escreva uma mensagem... Enter envia · Shift+Enter pula linha";
+    elements.messageText.title = "Enter envia. Shift+Enter pula linha.";
+}
+
 async function loadMessages() {
     const { data, error } = await state.supabase
         .from("secret_chat_messages")
@@ -323,6 +348,9 @@ function subscribeRealtime() {
         state.supabase.removeChannel(state.channel);
     }
 
+    state.presenceReady = false;
+    state.notifiedPresenceAt.clear();
+
     state.channel = state.supabase.channel(`amz-secret-chat:${state.roomId}`, {
         config: {
             broadcast: {
@@ -347,9 +375,12 @@ function subscribeRealtime() {
         })
         .on("presence", { event: "sync" }, () => {
             const presence = state.channel.presenceState();
-            state.onlineProfiles = new Set(Object.keys(presence));
+            const previousProfiles = new Set(state.onlineProfiles);
+            const nextProfiles = new Set(Object.keys(presence));
+            state.onlineProfiles = nextProfiles;
             renderPresence();
             renderConversationHeader();
+            notifyNewOnlineParticipants(previousProfiles, nextProfiles);
         })
         .subscribe(async (status) => {
             if (status === "SUBSCRIBED") {
@@ -905,6 +936,7 @@ function clearMedia() {
     elements.mediaInput.value = "";
     elements.attachmentPreview.hidden = true;
     elements.attachmentPreview.innerHTML = "";
+    updateComposerState();
 }
 
 async function renderMessage(message) {
@@ -912,6 +944,7 @@ async function renderMessage(message) {
         return;
     }
 
+    const shouldStickToBottom = isNearMessageBottom();
     const isOwn = message.profile_id === state.selectedProfile.id;
     const body = await decryptMessageBody(message.body);
     const media = renderMedia(message);
@@ -928,6 +961,10 @@ async function renderMessage(message) {
     removeEmptyState();
     elements.messages.appendChild(node);
     hydrateMessageMedia(node, message);
+
+    if (shouldStickToBottom || isOwn) {
+        scrollToBottom();
+    }
 }
 
 function renderMedia(message) {
@@ -979,6 +1016,7 @@ async function hydrateMessageMedia(node, message) {
         return;
     }
 
+    const shouldStickToBottom = isNearMessageBottom();
     const placeholder = node.querySelector("[data-media-placeholder]");
     const saveAction = node.querySelector("[data-save-media]");
 
@@ -1009,6 +1047,10 @@ async function hydrateMessageMedia(node, message) {
             saveAction.hidden = false;
             saveAction.href = objectUrl;
             saveAction.dataset.url = objectUrl;
+        }
+
+        if (shouldStickToBottom) {
+            requestAnimationFrame(scrollToBottom);
         }
     } catch (error) {
         console.warn("Não consegui descriptografar mídia:", formatError(error));
@@ -1067,6 +1109,7 @@ function renderPresence() {
 
 async function leaveChat() {
     await endActiveCall("Saindo da chamada.", true);
+    stopTitleAlert();
     localStorage.removeItem("amz-secret-session");
     sessionStorage.removeItem("amz-secret-e2ee-key");
     if (state.channel && state.supabase) {
@@ -1078,6 +1121,8 @@ async function leaveChat() {
     state.supabase = null;
     state.roomId = "";
     state.onlineProfiles = new Set();
+    state.presenceReady = false;
+    state.notifiedPresenceAt.clear();
     showLogin();
     window.location.hash = "login";
     renderPresence();
@@ -1122,10 +1167,210 @@ function showSetupMessage(text) {
 function autosizeComposer() {
     elements.messageText.style.height = "auto";
     elements.messageText.style.height = `${elements.messageText.scrollHeight}px`;
+    updateComposerState();
+    updateComposerHeight();
 }
 
 function scrollToBottom() {
     elements.messages.scrollTop = elements.messages.scrollHeight;
+    updateComposerState();
+}
+
+function isNearMessageBottom(threshold = 180) {
+    return elements.messages.scrollHeight - elements.messages.scrollTop - elements.messages.clientHeight <= threshold;
+}
+
+function updateComposerState() {
+    const awayFromBottom = !isNearMessageBottom(260);
+    elements.messageForm.classList.toggle("has-attachment", Boolean(state.mediaFile));
+    elements.messageForm.classList.toggle("is-away-from-bottom", awayFromBottom);
+    elements.scrollBottom.hidden = !awayFromBottom;
+    updateComposerHeight();
+}
+
+function handleComposerKeydown(event) {
+    if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey || event.isComposing) {
+        return;
+    }
+
+    event.preventDefault();
+
+    if (elements.messageForm.classList.contains("is-sending")) {
+        return;
+    }
+
+    if (!elements.messageText.value.trim() && !state.mediaFile) {
+        return;
+    }
+
+    if (typeof elements.messageForm.requestSubmit === "function") {
+        elements.messageForm.requestSubmit();
+    } else {
+        elements.messageForm.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    }
+}
+
+function updateViewportHeight() {
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    document.documentElement.style.setProperty("--chat-vh", `${Math.max(320, viewportHeight)}px`);
+}
+
+function updateComposerHeight() {
+    const composerHeight = elements.messageForm?.offsetHeight || 76;
+    document.documentElement.style.setProperty("--composer-height", `${Math.max(58, composerHeight)}px`);
+}
+
+function requestNotificationPermission() {
+    if (!("Notification" in window) || Notification.permission !== "default") {
+        return;
+    }
+
+    Notification.requestPermission().catch(() => {});
+}
+
+function primeNotificationAudio() {
+    try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+
+        state.audioContext ||= new AudioContextClass();
+        if (state.audioContext.state === "suspended") {
+            state.audioContext.resume().catch(() => {});
+        }
+    } catch {
+        state.audioContext = null;
+    }
+}
+
+function notifyNewOnlineParticipants(previousProfiles, nextProfiles) {
+    if (!state.selectedProfile) return;
+
+    if (!state.presenceReady) {
+        state.presenceReady = true;
+        return;
+    }
+
+    for (const account of accounts) {
+        if (account.id === state.selectedProfile.id) continue;
+        if (!nextProfiles.has(account.id) || previousProfiles.has(account.id)) continue;
+        notifyParticipantEntered(account);
+    }
+}
+
+function notifyParticipantEntered(account) {
+    const now = Date.now();
+    const lastNotification = state.notifiedPresenceAt.get(account.id) || 0;
+
+    if (now - lastNotification < 30000) {
+        return;
+    }
+
+    state.notifiedPresenceAt.set(account.id, now);
+
+    const title = "AMZ Chat Privado";
+    const body = `${account.name} entrou no bate-papo privado.`;
+
+    showBrowserNotification(title, body, account);
+    playStrongNotificationSound();
+    vibrateDevice();
+    flashPageTitle(`${account.name} entrou no chat`);
+}
+
+function showBrowserNotification(title, body, account) {
+    if (!("Notification" in window)) return;
+
+    if (Notification.permission === "default") {
+        requestNotificationPermission();
+        return;
+    }
+
+    if (Notification.permission !== "granted") {
+        return;
+    }
+
+    try {
+        const notification = new Notification(title, {
+            body,
+            icon: "../assets/logo.png",
+            badge: "../assets/logo.png",
+            tag: `amz-chat-presence-${account.id}`,
+            renotify: true,
+            requireInteraction: true,
+            silent: false
+        });
+
+        notification.onclick = () => {
+            window.focus();
+            notification.close();
+            stopTitleAlert();
+        };
+    } catch {}
+}
+
+function playStrongNotificationSound() {
+    try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+
+        state.audioContext ||= new AudioContextClass();
+        const audioContext = state.audioContext;
+
+        if (audioContext.state === "suspended") {
+            audioContext.resume().catch(() => {});
+        }
+
+        const startTime = audioContext.currentTime + 0.04;
+        const frequencies = [880, 660, 980];
+
+        frequencies.forEach((frequency, index) => {
+            const oscillator = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            const toneStart = startTime + index * 0.24;
+            const toneEnd = toneStart + 0.16;
+
+            oscillator.type = "sine";
+            oscillator.frequency.setValueAtTime(frequency, toneStart);
+            gain.gain.setValueAtTime(0.0001, toneStart);
+            gain.gain.exponentialRampToValueAtTime(0.28, toneStart + 0.025);
+            gain.gain.exponentialRampToValueAtTime(0.0001, toneEnd);
+
+            oscillator.connect(gain);
+            gain.connect(audioContext.destination);
+            oscillator.start(toneStart);
+            oscillator.stop(toneEnd + 0.02);
+        });
+    } catch {}
+}
+
+function vibrateDevice() {
+    if (!navigator.vibrate) return;
+    navigator.vibrate([250, 100, 250, 100, 350]);
+}
+
+function flashPageTitle(text) {
+    stopTitleAlert();
+
+    let visible = false;
+    let ticks = 0;
+
+    state.titleAlertTimer = window.setInterval(() => {
+        document.title = visible ? state.originalTitle : `● ${text}`;
+        visible = !visible;
+        ticks += 1;
+
+        if (ticks >= 16) {
+            stopTitleAlert();
+        }
+    }, 650);
+}
+
+function stopTitleAlert() {
+    if (state.titleAlertTimer) {
+        window.clearInterval(state.titleAlertTimer);
+        state.titleAlertTimer = null;
+    }
+
+    document.title = state.originalTitle;
 }
 
 function getRetentionCutoffIso() {

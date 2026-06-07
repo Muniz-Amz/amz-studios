@@ -1,5 +1,7 @@
 :root {
     color-scheme: dark;
+    --chat-vh: 100dvh;
+    --composer-height: 76px;
     --bg: #050809;
     --shell: #0b1113;
     --sidebar: #111b21;
@@ -56,8 +58,9 @@ button {
 }
 
 .secret-shell {
-    height: 100dvh;
+    height: var(--chat-vh);
     min-height: 100vh;
+    overflow: hidden;
 }
 
 .secret-login {
@@ -270,15 +273,16 @@ button {
 }
 
 .chat-app {
-    height: 100dvh;
+    height: var(--chat-vh);
     min-height: 0;
     display: grid;
     grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
     background: var(--shell);
+    overflow: hidden;
 }
 
 .chat-sidebar {
-    height: 100dvh;
+    height: var(--chat-vh);
     min-height: 0;
     border-right: 1px solid var(--line);
     background: var(--sidebar);
@@ -376,10 +380,16 @@ button {
 }
 
 .conversation {
-    height: 100dvh;
+    height: var(--chat-vh);
     min-height: 0;
+    position: relative;
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+        "header"
+        "call"
+        "messages";
+    overflow: hidden;
     background:
         linear-gradient(rgba(7, 16, 18, 0.9), rgba(7, 16, 18, 0.92)),
         radial-gradient(circle at 12px 12px, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
@@ -387,6 +397,7 @@ button {
 }
 
 .conversation-header {
+    grid-area: header;
     min-height: 74px;
     border-bottom: 1px solid var(--line);
     padding: 10px 18px;
@@ -515,6 +526,7 @@ button {
 }
 
 .call-panel {
+    grid-area: call;
     border-bottom: 1px solid var(--line);
     background: rgba(11, 17, 19, 0.96);
     padding: 14px 18px 18px;
@@ -571,12 +583,16 @@ button {
 }
 
 .messages {
+    grid-area: messages;
     min-height: 0;
+    min-block-size: 0;
     overflow-y: auto;
-    padding: 24px clamp(14px, 3vw, 36px);
+    padding: 24px clamp(14px, 3vw, 36px) calc(var(--composer-height) + 28px);
     display: flex;
     flex-direction: column;
     gap: 10px;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
     scroll-behavior: smooth;
 }
 
@@ -702,15 +718,50 @@ button {
     pointer-events: none;
 }
 
+.scroll-bottom-button {
+    position: absolute;
+    right: clamp(18px, 3vw, 36px);
+    bottom: calc(var(--composer-height) + 18px + env(safe-area-inset-bottom));
+    z-index: 25;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    background: rgba(17, 27, 33, 0.96);
+    color: var(--accent);
+    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.36);
+    backdrop-filter: blur(12px);
+}
+
+.scroll-bottom-button:hover {
+    border-color: var(--accent);
+    filter: brightness(1.08);
+}
+
 .composer {
     min-height: 68px;
+    max-height: min(260px, 42dvh);
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 20;
     border-top: 1px solid var(--line);
     background: rgba(17, 27, 33, 0.98);
-    padding: 10px 16px;
+    box-shadow: 0 -16px 34px rgba(0, 0, 0, 0.22);
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
     display: grid;
     grid-template-columns: 44px minmax(0, 1fr) 44px;
     align-items: end;
     gap: 10px;
+    overflow: visible;
+}
+
+.composer.is-sending {
+    opacity: 0.74;
+    pointer-events: none;
 }
 
 .attachment-preview {
@@ -756,7 +807,7 @@ button {
 
 .composer textarea {
     width: 100%;
-    max-height: 132px;
+    max-height: min(132px, 28dvh);
     min-height: 44px;
     resize: none;
     border: 1px solid transparent;
@@ -767,6 +818,7 @@ button {
     line-height: 1.38;
     outline: none;
     overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .composer textarea:focus {
@@ -848,7 +900,7 @@ button {
     }
 
     .conversation {
-        height: calc(100dvh - 68px);
+        height: calc(var(--chat-vh) - 68px);
     }
 
     .conversation-header {
@@ -929,7 +981,7 @@ button {
     }
 
     .messages {
-        padding: 12px 10px;
+        padding: 12px 10px calc(var(--composer-height) + 16px);
     }
 
     .empty-state {
@@ -944,9 +996,17 @@ button {
 
     .composer {
         min-height: 58px;
+        max-height: min(220px, 42dvh);
         grid-template-columns: 40px minmax(0, 1fr) 40px;
         gap: 8px;
-        padding: 8px 10px;
+        padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    }
+
+    .scroll-bottom-button {
+        right: 14px;
+        bottom: calc(var(--composer-height) + 14px + env(safe-area-inset-bottom));
+        width: 40px;
+        height: 40px;
     }
 
     .attach-button,
@@ -957,7 +1017,7 @@ button {
 
     .composer textarea {
         min-height: 40px;
-        max-height: 112px;
+        max-height: min(112px, 28dvh);
         padding: 10px 14px;
     }
 }

@@ -65,6 +65,20 @@ Se o Supabase reclamar que `pg_cron` nao existe, ative o modulo em
 - Audio e video nao sao salvos no banco nem no Storage.
 - Em algumas redes pode ser necessario configurar um servidor TURN para melhorar conexao.
 
+## Notificacoes de entrada
+
+- Quando o outro perfil entra no bate-papo, o navegador pode mostrar uma notificacao no PC.
+- A notificacao mostra apenas que o participante entrou; ela nao mostra conteudo da conversa.
+- Tambem toca um aviso curto, vibra em aparelhos compativeis e pisca o titulo da aba.
+- O navegador precisa estar aberto ou em segundo plano, e voce precisa permitir notificacoes quando ele pedir.
+- Para notificar com o navegador totalmente fechado, sera necessario criar Web Push/PWA com service worker.
+
+## Digitar mensagens
+
+- `Enter` envia a mensagem.
+- `Shift + Enter` quebra linha dentro do texto.
+- A barra de escrita fica presa no rodape da conversa, mesmo com muitas mensagens.
+
 ## Trocar usuarios e senha
 
 Os usuarios ficam em `config.js`, dentro de `accounts`.

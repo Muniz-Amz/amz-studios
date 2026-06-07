@@ -8,7 +8,7 @@
     <title>AMZ Chat Privado</title>
     <link rel="icon" href="../assets/logo.ico" type="image/x-icon">
     <style>[hidden]{display:none!important}</style>
-    <link rel="stylesheet" href="./style.css?v=whatsapp-ui-1">
+    <link rel="stylesheet" href="./style.css?v=composer-fixed-2">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
 <body>
@@ -133,6 +133,9 @@
                 </section>
 
                 <div class="messages" id="messages" aria-live="polite"></div>
+                <button class="scroll-bottom-button" id="scroll-bottom" type="button" hidden title="Ir para o fim da conversa">
+                    <i class="ph ph-arrow-down"></i>
+                </button>
 
                 <form class="composer" id="message-form">
                     <div class="attachment-preview" id="attachment-preview" hidden></div>
@@ -153,6 +156,6 @@
     </main>
 
     <script src="./config.js?v=whatsapp-ui-1"></script>
-    <script type="module" src="./app.js?v=whatsapp-ui-1"></script>
+    <script type="module" src="./app.js?v=composer-fixed-2"></script>
 </body>
 </html>
