@@ -121,16 +121,18 @@ function normalizeAccounts(source) {
     const fallback = [
         {
             id: "perfil_1",
-            username: "muniz",
-            name: "Muniz",
+            username: "usuario1",
+            displayHandle: "usuario1",
+            name: "Usuário 1",
             role: "Perfil principal",
             color: "#42b9ff",
             passwordHash: ""
         },
         {
             id: "perfil_2",
-            username: "amigo",
-            name: "Amigo",
+            username: "usuario2",
+            displayHandle: "usuario2",
+            name: "Usuário 2",
             role: "Perfil convidado",
             color: "#30f27b",
             passwordHash: ""
@@ -144,6 +146,9 @@ function normalizeAccounts(source) {
     return source.map((account, index) => ({
         id: account.id || `perfil_${index + 1}`,
         username: normalizeUsername(account.username || account.name || `perfil${index + 1}`),
+        displayHandle: normalizeUsername(account.displayHandle || account.handle || account.username || account.name || `perfil${index + 1}`),
+        aliases: Array.isArray(account.aliases) ? account.aliases.map(normalizeUsername).filter(Boolean) : [],
+        passwordHashUsername: normalizeUsername(account.passwordHashUsername || account.username || account.name || `perfil${index + 1}`),
         name: account.name || account.username || `Perfil ${index + 1}`,
         role: account.role || "Participante",
         color: account.color || (index === 0 ? "#42b9ff" : "#30f27b"),
@@ -157,7 +162,7 @@ async function enterChat(event) {
     const username = normalizeUsername(elements.username.value);
     const password = elements.password.value;
     const privateKey = elements.privateKey.value.trim();
-    const account = accounts.find((item) => item.username === username);
+    const account = accounts.find((item) => item.username === username || item.aliases.includes(username));
 
     if (!account || !password) {
         showSetupMessage("Usuário ou senha inválidos.");
@@ -174,7 +179,7 @@ async function enterChat(event) {
         return;
     }
 
-    const typedHash = await hashPassword(username, password);
+    const typedHash = await hashPassword(account.passwordHashUsername || account.username, password);
 
     if (typedHash !== account.passwordHash) {
         showSetupMessage("Usuário ou senha inválidos.");
@@ -295,7 +300,7 @@ function renderActiveProfile() {
     elements.activeProfile.innerHTML = `
         <div class="profile-avatar" style="--profile-color:${escapeAttribute(state.selectedProfile.color)}">${escapeHtml(getInitials(state.selectedProfile.name))}</div>
         <strong>${escapeHtml(state.selectedProfile.name)}</strong>
-        <span>@${escapeHtml(state.selectedProfile.username)} · ${escapeHtml(state.selectedProfile.role)}</span>
+        <span>@${escapeHtml(state.selectedProfile.displayHandle)} · ${escapeHtml(state.selectedProfile.role)}</span>
     `;
 }
 
@@ -957,17 +962,18 @@ async function renderMessage(message) {
 
     const shouldStickToBottom = isNearMessageBottom();
     const isOwn = message.profile_id === state.selectedProfile.id;
+    const authorName = getMessageAuthorName(message);
     const body = await decryptMessageBody(message.body);
     const media = renderMedia(message);
     const grouped = isGroupedWithPreviousMessage(message);
     const node = document.createElement("article");
     node.className = `message ${isOwn ? "own" : ""} ${grouped ? "grouped" : ""}`.trim();
-    node.setAttribute("aria-label", `${message.profile_name || "Perfil"} às ${formatTime(message.created_at)}`);
+    node.setAttribute("aria-label", `${authorName} às ${formatTime(message.created_at)}`);
     node.innerHTML = `
         ${grouped
             ? `<time class="message-time-inline">${formatTime(message.created_at)}</time>`
             : `<header class="message-head">
-                <span>${escapeHtml(message.profile_name || "Perfil")}</span>
+                <span>${escapeHtml(authorName)}</span>
                 <time>${formatTime(message.created_at)}</time>
             </header>`}
         ${body ? `<div class="message-body">${escapeHtml(body)}</div>` : ""}
@@ -1163,6 +1169,10 @@ function isGroupedWithPreviousMessage(message) {
 function markMessageAsRendered(message) {
     state.lastRenderedProfileId = message.profile_id || "";
     state.lastRenderedGroupKey = getMessageGroupKey(message.created_at);
+}
+
+function getMessageAuthorName(message) {
+    return accounts.find((account) => account.id === message.profile_id)?.name || message.profile_name || "Perfil";
 }
 
 async function leaveChat() {

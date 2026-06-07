@@ -87,7 +87,7 @@ Para gerar um novo hash de senha, use:
 
 ```js
 const salt = "amz-studios-private-chat";
-const username = "muniz";
+const username = "usuario1";
 const password = "SUA_SENHA";
 const bytes = new TextEncoder().encode(`${salt}:${username}:${password}`);
 const hash = await crypto.subtle.digest("SHA-256", bytes);
@@ -100,4 +100,5 @@ console.log([...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2
 - Videos ate 60 MB.
 - Conversas expiram depois de 24 horas.
 - Cada imagem ou video enviado aparece com botao `Salvar midia`.
-- Usuarios fixos: `muniz` e `monteiro`.
+- Usuarios de login atuais: `usuario1` e `usuario2`.
+- Nomes visiveis no chat: `Usuario 1` e `Usuario 2`.

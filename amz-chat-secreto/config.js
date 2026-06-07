@@ -16,16 +16,22 @@ window.AMZ_SECRET_CHAT_CONFIG = {
     accounts: [
         {
             id: "perfil_1",
-            username: "muniz",
-            name: "Muniz",
+            username: "usuario1",
+            aliases: ["muniz"],
+            passwordHashUsername: "muniz",
+            displayHandle: "usuario1",
+            name: "Usuário 1",
             role: "Perfil principal",
             color: "#42b9ff",
             passwordHash: "39f729ef2d3c3b404bb19b7fb2a6bba72f8250363b9fc13d03c647474cd18196"
         },
         {
             id: "perfil_2",
-            username: "monteiro",
-            name: "Monteiro",
+            username: "usuario2",
+            aliases: ["monteiro"],
+            passwordHashUsername: "monteiro",
+            displayHandle: "usuario2",
+            name: "Usuário 2",
             role: "Perfil convidado",
             color: "#30f27b",
             passwordHash: "0819bdd4d7e68afa5a611b6f88392e1cba2d9993eed3d7f2998c8a04558037b5"
