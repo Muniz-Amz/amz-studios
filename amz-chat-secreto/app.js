@@ -21,6 +21,7 @@ const state = {
     lastRenderedGroupKey: "",
     autoFollowMessages: true,
     unreadMessages: 0,
+    callPromptNode: null,
     call: {
         peer: null,
         localStream: null,
@@ -93,6 +94,7 @@ async function boot() {
     elements.messageForm.addEventListener("submit", sendMessage);
     elements.mediaInput.addEventListener("change", selectMedia);
     elements.messages.addEventListener("click", saveMediaFromMessage);
+    elements.messages.addEventListener("click", handleMessageCallAction);
     elements.messages.addEventListener("scroll", handleMessagesScroll);
     elements.scrollBottom.addEventListener("click", () => scrollToBottom({ behavior: "smooth", force: true }));
     elements.messageText.addEventListener("input", autosizeComposer);
@@ -466,6 +468,8 @@ async function acceptIncomingCall() {
     }
 
     state.call.status = "connecting";
+    removeCallPrompt();
+    stopTitleAlert();
     updateCallUi("Aceitando chamada...");
 
     try {
@@ -504,12 +508,40 @@ async function declineIncomingCall() {
         return;
     }
 
+    removeCallPrompt();
+    stopTitleAlert();
     await sendCallSignal({
         signal: "reject",
         call_id: state.call.id,
         target_profile_id: state.call.targetProfileId
     });
     await endActiveCall("Chamada recusada.", false);
+}
+
+async function handleMessageCallAction(event) {
+    const action = event.target.closest("[data-call-action]");
+
+    if (!action) {
+        return;
+    }
+
+    event.preventDefault();
+    const card = action.closest("[data-call-card]");
+
+    if (!card || card.dataset.callId !== state.call.id || state.call.status !== "incoming") {
+        return;
+    }
+
+    card.classList.add("is-processing");
+
+    if (action.dataset.callAction === "accept") {
+        await acceptIncomingCall();
+        return;
+    }
+
+    if (action.dataset.callAction === "decline") {
+        await declineIncomingCall();
+    }
 }
 
 async function handleCallSignal(payload) {
@@ -579,6 +611,61 @@ async function receiveCallOffer(payload) {
     state.call.targetProfileId = payload.from_profile_id;
     state.call.pendingCandidates = [];
     updateCallUi(`${payload.from_name || "Alguem"} esta ligando por ${state.call.mode === "video" ? "video" : "voz"}.`);
+    renderIncomingCallPrompt(payload);
+    playStrongNotificationSound();
+    vibrateDevice();
+    flashPageTitle("Chamada recebida");
+}
+
+function renderIncomingCallPrompt(payload) {
+    removeCallPrompt();
+    removeEmptyState();
+
+    const callerName = getMessageAuthorName({
+        profile_id: payload.from_profile_id,
+        profile_name: payload.from_name
+    });
+    const mode = payload.mode === "video" ? "video" : "voice";
+    const modeLabel = mode === "video" ? "video" : "voz";
+    const node = document.createElement("article");
+
+    node.className = "message call-message";
+    node.dataset.callCard = "incoming";
+    node.dataset.callId = payload.call_id || "";
+    node.innerHTML = `
+        <header class="message-head">
+            <span>Chamada recebida</span>
+            <time>${formatTime(payload.created_at)}</time>
+        </header>
+        <div class="call-message-body">
+            <div class="call-message-icon">
+                <i class="ph ${mode === "video" ? "ph-video-camera" : "ph-phone-call"}"></i>
+            </div>
+            <div>
+                <strong>${escapeHtml(callerName)} está ligando</strong>
+                <span>Chamada privada de ${modeLabel}. Aceite para liberar ${mode === "video" ? "câmera e microfone" : "microfone"}.</span>
+            </div>
+        </div>
+        <div class="call-message-actions">
+            <button class="call-message-button accept" type="button" data-call-action="accept">
+                <i class="ph ph-phone-call"></i>
+                Aceitar
+            </button>
+            <button class="call-message-button decline" type="button" data-call-action="decline">
+                <i class="ph ph-x"></i>
+                Recusar
+            </button>
+        </div>
+    `;
+
+    state.callPromptNode = node;
+    elements.messages.appendChild(node);
+    scrollToBottom({ force: true });
+}
+
+function removeCallPrompt() {
+    state.callPromptNode?.remove();
+    state.callPromptNode = null;
 }
 
 async function prepareLocalStream(mode) {
@@ -694,6 +781,8 @@ async function endActiveCall(statusText = "Chamada encerrada.", notifyRemote = t
     const callId = state.call.id;
     const targetProfileId = state.call.targetProfileId;
 
+    removeCallPrompt();
+
     if (notifyRemote && hadCall && callId && targetProfileId) {
         await sendCallSignal({
             signal: "hangup",
@@ -740,6 +829,7 @@ function stopRemoteStream() {
 }
 
 function resetCallState() {
+    removeCallPrompt();
     state.call = {
         peer: null,
         localStream: null,
@@ -756,11 +846,10 @@ function resetCallState() {
 
 function updateCallUi(statusText = "") {
     const isIdle = state.call.status === "idle";
-    const isIncoming = state.call.status === "incoming";
 
     elements.callPanel.hidden = isIdle;
-    elements.incomingCallActions.hidden = !isIncoming;
-    elements.endCall.hidden = isIdle || isIncoming;
+    elements.incomingCallActions.hidden = true;
+    elements.endCall.hidden = isIdle || state.call.status === "incoming";
     elements.startVoiceCall.disabled = !isIdle;
     elements.startVideoCall.disabled = !isIdle;
     elements.callPanel.classList.toggle("voice-only", state.call.mode !== "video");

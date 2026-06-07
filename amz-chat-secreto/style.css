@@ -801,6 +801,98 @@ button {
     color: #ff9aa4;
 }
 
+.call-message {
+    max-width: min(480px, 86%);
+    border: 1px solid rgba(37, 211, 102, 0.2);
+    background:
+        linear-gradient(145deg, rgba(37, 211, 102, 0.16), transparent 58%),
+        var(--bubble);
+}
+
+.call-message::before {
+    background: #26373f;
+}
+
+.call-message.is-processing {
+    opacity: 0.68;
+    pointer-events: none;
+}
+
+.call-message-body {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    margin-top: 8px;
+}
+
+.call-message-icon {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(37, 211, 102, 0.3);
+    border-radius: 999px;
+    background: rgba(37, 211, 102, 0.12);
+    color: var(--accent);
+    font-size: 18px;
+}
+
+.call-message-body strong {
+    display: block;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.25;
+}
+
+.call-message-body span {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.call-message-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.call-message-button {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--text);
+    font-size: 10px;
+    font-weight: 1000;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    transition: transform 0.18s ease, filter 0.18s ease, border-color 0.18s ease;
+}
+
+.call-message-button.accept {
+    border-color: rgba(48, 242, 123, 0.45);
+    background: linear-gradient(145deg, #35f486, var(--accent));
+    color: #071012;
+}
+
+.call-message-button.decline {
+    border-color: rgba(255, 77, 94, 0.45);
+    background: rgba(255, 77, 94, 0.08);
+    color: #ff9aa4;
+}
+
+.call-message-button:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+}
+
 .file-link {
     display: inline-flex;
     align-items: center;
@@ -1201,6 +1293,10 @@ button {
         padding: 9px 11px 7px;
     }
 
+    .call-message {
+        max-width: 94%;
+    }
+
     .message-date-separator {
         top: 8px;
         margin: 8px 0 6px;
@@ -1280,6 +1376,20 @@ button {
 
     .message {
         max-width: 92%;
+    }
+
+    .call-message-body {
+        grid-template-columns: 40px minmax(0, 1fr);
+        gap: 10px;
+    }
+
+    .call-message-icon {
+        width: 40px;
+        height: 40px;
+    }
+
+    .call-message-actions {
+        grid-template-columns: 1fr;
     }
 
     .message-head {
