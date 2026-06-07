@@ -510,6 +510,10 @@ button {
     color: #ff9aa4;
 }
 
+.leave-chat-button {
+    margin-left: 4px;
+}
+
 .connection-state {
     min-height: 40px;
     display: inline-flex;
@@ -1129,15 +1133,7 @@ button {
     }
 
     .chat-sidebar {
-        height: 68px;
-        min-height: 68px;
-        flex-direction: row;
-        align-items: center;
-        gap: 8px;
-        border-right: 0;
-        border-bottom: 1px solid var(--line);
-        padding: 8px 10px;
-        overflow: hidden;
+        display: none;
     }
 
     .brand-mark.compact {
@@ -1197,7 +1193,7 @@ button {
     }
 
     .conversation {
-        height: calc(var(--chat-vh) - 68px);
+        height: var(--chat-vh);
     }
 
     .conversation-header {
@@ -1360,10 +1356,43 @@ button {
     .conversation-header {
         align-items: center;
         min-height: 58px;
+        padding: 8px;
+    }
+
+    .conversation-avatar {
+        width: 36px;
+        height: 36px;
+    }
+
+    .conversation-title {
+        flex: 1 1 auto;
+        min-width: 0;
+        gap: 8px;
     }
 
     .conversation-title > div:last-child {
         min-width: 0;
+    }
+
+    .conversation-title .eyebrow {
+        display: none;
+    }
+
+    .conversation-header h2 {
+        max-width: 120px;
+    }
+
+    .call-actions {
+        gap: 4px;
+    }
+
+    .call-button {
+        width: 36px;
+        min-height: 36px;
+    }
+
+    .leave-chat-button {
+        margin-left: 0;
     }
 
     .call-panel.voice-only .remote-video {

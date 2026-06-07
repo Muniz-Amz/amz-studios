@@ -8,7 +8,7 @@
     <title>AMZ Chat Privado</title>
     <link rel="icon" href="../assets/logo.ico" type="image/x-icon">
     <style>[hidden]{display:none!important}</style>
-    <link rel="stylesheet" href="./style.css?v=call-card-1">
+    <link rel="stylesheet" href="./style.css?v=header-logout-1">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
 <body>
@@ -71,10 +71,6 @@
                     <div id="presence-list" class="presence-list"></div>
                 </div>
 
-                <button class="ghost-button" id="leave-chat" type="button">
-                    <i class="ph ph-sign-out"></i>
-                    Sair da conta
-                </button>
             </aside>
 
             <section class="conversation">
@@ -99,6 +95,10 @@
                             <button class="call-button danger" id="end-call" type="button" hidden>
                                 <i class="ph ph-phone-disconnect"></i>
                                 Encerrar
+                            </button>
+                            <button class="call-button danger leave-chat-button" id="leave-chat" type="button">
+                                <i class="ph ph-sign-out"></i>
+                                Sair
                             </button>
                         </div>
                         <div class="connection-state" id="connection-state">
@@ -155,7 +155,7 @@
         </section>
     </main>
 
-    <script src="./config.js?v=call-card-1"></script>
-    <script type="module" src="./app.js?v=call-card-1"></script>
+    <script src="./config.js?v=header-logout-1"></script>
+    <script type="module" src="./app.js?v=header-logout-1"></script>
 </body>
 </html>
