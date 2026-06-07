@@ -515,23 +515,23 @@ button {
 }
 
 .connection-state {
-    min-height: 40px;
+    min-height: 30px;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     border: 1px solid var(--line);
     border-radius: 999px;
-    padding: 0 12px;
+    padding: 0 9px;
     color: var(--muted-strong);
-    font-size: 10px;
+    font-size: 8px;
     font-weight: 900;
     letter-spacing: 0.1em;
     text-transform: uppercase;
 }
 
 .connection-state span {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
     border-radius: 999px;
     background: #f7b955;
 }
@@ -548,11 +548,15 @@ button {
     background: var(--danger);
 }
 
+.conversation.has-call-panel .connection-state {
+    display: none;
+}
+
 .call-panel {
     grid-area: call;
     border-bottom: 1px solid var(--line);
     background: rgba(11, 17, 19, 0.96);
-    padding: 14px 18px 18px;
+    padding: 10px 18px 14px;
 }
 
 .call-panel-head {
@@ -560,15 +564,28 @@ button {
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    margin-bottom: 14px;
+    margin-bottom: 10px;
+}
+
+.call-panel-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .call-panel-head strong {
     display: block;
-    margin-top: 6px;
+    margin-top: 4px;
     color: var(--muted-strong);
-    font-size: 13px;
+    font-size: 12px;
     letter-spacing: 0.04em;
+}
+
+.switch-camera-button {
+    border-color: rgba(37, 211, 102, 0.35);
+    color: var(--accent);
 }
 
 .call-videos {
@@ -1254,6 +1271,17 @@ button {
         align-items: flex-start;
         flex-direction: column;
         gap: 10px;
+    }
+
+    .call-panel-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .call-panel-actions .switch-camera-button {
+        width: auto;
+        padding: 0 12px;
+        font-size: 10px;
     }
 
     .incoming-call-actions .call-button {

@@ -31,7 +31,8 @@ const state = {
         status: "idle",
         incomingOffer: null,
         targetProfileId: "",
-        pendingCandidates: []
+        pendingCandidates: [],
+        facingMode: "user"
     }
 };
 
@@ -45,6 +46,7 @@ const elements = {
     setupWarning: document.querySelector("#setup-warning"),
     activeProfile: document.querySelector("#active-profile"),
     presenceList: document.querySelector("#presence-list"),
+    conversation: document.querySelector(".conversation"),
     connectionState: document.querySelector("#connection-state"),
     connectionLabel: document.querySelector("#connection-label"),
     conversationAvatar: document.querySelector("#conversation-avatar"),
@@ -60,6 +62,7 @@ const elements = {
     leaveChat: document.querySelector("#leave-chat"),
     startVoiceCall: document.querySelector("#start-voice-call"),
     startVideoCall: document.querySelector("#start-video-call"),
+    switchCamera: document.querySelector("#switch-camera"),
     endCall: document.querySelector("#end-call"),
     acceptCall: document.querySelector("#accept-call"),
     declineCall: document.querySelector("#decline-call"),
@@ -101,6 +104,7 @@ async function boot() {
     elements.messageText.addEventListener("keydown", handleComposerKeydown);
     elements.startVoiceCall.addEventListener("click", () => startOutgoingCall("voice"));
     elements.startVideoCall.addEventListener("click", () => startOutgoingCall("video"));
+    elements.switchCamera.addEventListener("click", switchCamera);
     elements.endCall.addEventListener("click", () => endActiveCall("Encerrando chamada.", true));
     elements.acceptCall.addEventListener("click", acceptIncomingCall);
     elements.declineCall.addEventListener("click", declineIncomingCall);
@@ -292,7 +296,7 @@ async function startChat() {
         await cleanupExpiredMessages();
         await loadMessages();
         subscribeRealtime();
-        setConnectionState("Online", "ready");
+        setConnectionState("Conectado", "ready");
     } catch (error) {
         console.error(error);
         setConnectionState("Erro", "error");
@@ -312,18 +316,17 @@ function renderConversationHeader() {
     if (!state.selectedProfile) {
         elements.conversationAvatar.textContent = "AMZ";
         elements.chatTitle.textContent = "Bate-papo privado";
-        elements.chatSubtitle.textContent = `Pagina de conversa · ${messageRetentionHours}h`;
+        elements.chatSubtitle.textContent = `Mensagens somem em ${messageRetentionHours}h`;
         return;
     }
 
     const target = getRemoteAccount();
-    const targetOnline = target ? state.onlineProfiles.has(target.id) : false;
 
     elements.conversationAvatar.textContent = target ? getInitials(target.name) : "AMZ";
     elements.chatTitle.textContent = target ? target.name : "Bate-papo privado";
     elements.chatSubtitle.textContent = target
-        ? `${targetOnline ? "Online" : "Offline"} · mensagens somem em ${messageRetentionHours}h`
-        : `Pagina de conversa · ${messageRetentionHours}h`;
+        ? `Mensagens somem em ${messageRetentionHours}h`
+        : `Mensagens somem em ${messageRetentionHours}h`;
 }
 
 function updateComposerHint() {
@@ -405,7 +408,7 @@ function subscribeRealtime() {
                     name: state.selectedProfile.name,
                     online_at: new Date().toISOString()
                 });
-                setConnectionState("Online", "ready");
+                setConnectionState("Conectado", "ready");
             }
         });
 }
@@ -442,6 +445,7 @@ async function startOutgoingCall(mode) {
 
     try {
         await prepareLocalStream(mode);
+        updateCallUi(`Chamando ${target.name} por ${mode === "video" ? "video" : "voz"}...`);
         const peer = createPeerConnection();
         addLocalTracks(peer);
         const offer = await peer.createOffer();
@@ -474,6 +478,7 @@ async function acceptIncomingCall() {
 
     try {
         await prepareLocalStream(offer.mode);
+        updateCallUi("Aceitando chamada...");
         const peer = createPeerConnection();
         addLocalTracks(peer);
         await peer.setRemoteDescription(new RTCSessionDescription(offer.description));
@@ -490,7 +495,7 @@ async function acceptIncomingCall() {
         });
 
         state.call.status = "active";
-        updateCallUi("Chamada conectada.");
+        updateCallUi("Conectado");
     } catch (error) {
         console.error(error);
         await sendCallSignal({
@@ -570,7 +575,7 @@ async function handleCallSignal(payload) {
         await state.call.peer.setRemoteDescription(new RTCSessionDescription(payload.description));
         await flushPendingCandidates();
         state.call.status = "active";
-        updateCallUi("Chamada conectada.");
+        updateCallUi("Conectado");
         return;
     }
 
@@ -674,12 +679,67 @@ async function prepareLocalStream(mode) {
     }
 
     stopLocalStream();
-    state.call.localStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: mode === "video"
-    });
+    state.call.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints(mode));
     elements.localVideo.srcObject = state.call.localStream;
     await elements.localVideo.play().catch(() => {});
+}
+
+function getMediaConstraints(mode, audio = true) {
+    return {
+        audio,
+        video: mode === "video"
+            ? {
+                facingMode: {
+                    ideal: state.call.facingMode || "user"
+                }
+            }
+            : false
+    };
+}
+
+async function switchCamera() {
+    if (state.call.mode !== "video" || !state.call.localStream) {
+        return;
+    }
+
+    const previousFacingMode = state.call.facingMode || "user";
+    const nextFacingMode = previousFacingMode === "user" ? "environment" : "user";
+    const oldVideoTrack = state.call.localStream.getVideoTracks()[0];
+
+    elements.switchCamera.disabled = true;
+    state.call.facingMode = nextFacingMode;
+    updateCallUi(nextFacingMode === "environment" ? "Câmera traseira" : "Câmera frontal");
+
+    try {
+        const cameraStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints("video", false));
+        const newVideoTrack = cameraStream.getVideoTracks()[0];
+
+        if (!newVideoTrack) {
+            throw new Error("nenhuma camera encontrada");
+        }
+
+        const sender = state.call.peer?.getSenders?.().find((item) => item.track?.kind === "video");
+
+        if (sender) {
+            await sender.replaceTrack(newVideoTrack);
+        }
+
+        if (oldVideoTrack) {
+            state.call.localStream.removeTrack(oldVideoTrack);
+            oldVideoTrack.stop();
+        }
+
+        state.call.localStream.addTrack(newVideoTrack);
+        elements.localVideo.srcObject = state.call.localStream;
+        await elements.localVideo.play().catch(() => {});
+        updateCallUi(nextFacingMode === "environment" ? "Câmera traseira ativa" : "Câmera frontal ativa");
+    } catch (error) {
+        state.call.facingMode = previousFacingMode;
+        console.warn("Não consegui alternar câmera:", formatError(error));
+        updateCallUi("Não consegui alternar a câmera.");
+    } finally {
+        elements.switchCamera.disabled = false;
+    }
 }
 
 function createPeerConnection() {
@@ -712,7 +772,7 @@ function createPeerConnection() {
     peer.onconnectionstatechange = () => {
         if (peer.connectionState === "connected") {
             state.call.status = "active";
-            updateCallUi("Chamada conectada.");
+            updateCallUi("Conectado");
         }
 
         if (["failed", "disconnected"].includes(peer.connectionState)) {
@@ -839,20 +899,30 @@ function resetCallState() {
         status: "idle",
         incomingOffer: null,
         targetProfileId: "",
-        pendingCandidates: []
+        pendingCandidates: [],
+        facingMode: "user"
     };
     updateCallUi();
 }
 
 function updateCallUi(statusText = "") {
     const isIdle = state.call.status === "idle";
+    const isVideoCall = state.call.mode === "video";
+    const canSwitchCamera = isVideoCall && !["idle", "incoming"].includes(state.call.status);
 
     elements.callPanel.hidden = isIdle;
+    elements.conversation.classList.toggle("has-call-panel", !isIdle);
     elements.incomingCallActions.hidden = true;
     elements.endCall.hidden = isIdle || state.call.status === "incoming";
+    elements.switchCamera.hidden = !canSwitchCamera;
+    elements.switchCamera.disabled = !canSwitchCamera || !state.call.localStream;
+    elements.switchCamera.title = state.call.facingMode === "environment"
+        ? "Alternar para câmera frontal"
+        : "Alternar para câmera traseira";
+    elements.switchCamera.setAttribute("aria-label", elements.switchCamera.title);
     elements.startVoiceCall.disabled = !isIdle;
     elements.startVideoCall.disabled = !isIdle;
-    elements.callPanel.classList.toggle("voice-only", state.call.mode !== "video");
+    elements.callPanel.classList.toggle("voice-only", !isVideoCall);
 
     if (statusText) {
         elements.callStatus.textContent = statusText;

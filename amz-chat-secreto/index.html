@@ -8,7 +8,7 @@
     <title>AMZ Chat Privado</title>
     <link rel="icon" href="../assets/logo.ico" type="image/x-icon">
     <style>[hidden]{display:none!important}</style>
-    <link rel="stylesheet" href="./style.css?v=header-logout-1">
+    <link rel="stylesheet" href="./style.css?v=video-switch-2">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
 <body>
@@ -114,15 +114,21 @@
                             <span class="section-label">Chamada privada</span>
                             <strong id="call-status">Pronto para ligar</strong>
                         </div>
-                        <div class="incoming-call-actions" id="incoming-call-actions" hidden>
-                            <button class="call-button accept" id="accept-call" type="button">
-                                <i class="ph ph-phone-call"></i>
-                                Aceitar
+                        <div class="call-panel-actions">
+                            <button class="call-button switch-camera-button" id="switch-camera" type="button" hidden>
+                                <i class="ph ph-arrows-clockwise"></i>
+                                Câmera
                             </button>
-                            <button class="call-button danger" id="decline-call" type="button">
-                                <i class="ph ph-x"></i>
-                                Recusar
-                            </button>
+                            <div class="incoming-call-actions" id="incoming-call-actions" hidden>
+                                <button class="call-button accept" id="accept-call" type="button">
+                                    <i class="ph ph-phone-call"></i>
+                                    Aceitar
+                                </button>
+                                <button class="call-button danger" id="decline-call" type="button">
+                                    <i class="ph ph-x"></i>
+                                    Recusar
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -155,7 +161,7 @@
         </section>
     </main>
 
-    <script src="./config.js?v=header-logout-1"></script>
-    <script type="module" src="./app.js?v=header-logout-1"></script>
+    <script src="./config.js?v=video-switch-2"></script>
+    <script type="module" src="./app.js?v=video-switch-2"></script>
 </body>
 </html>
