@@ -69,6 +69,7 @@ const elements = {
     callPanel: document.querySelector("#call-panel"),
     callStatus: document.querySelector("#call-status"),
     incomingCallActions: document.querySelector("#incoming-call-actions"),
+    callVideos: document.querySelector(".call-videos"),
     localVideo: document.querySelector("#local-video"),
     remoteVideo: document.querySelector("#remote-video")
 };
@@ -683,6 +684,7 @@ async function prepareLocalStream(mode) {
     stopLocalStream();
     state.call.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints(mode));
     elements.localVideo.srcObject = state.call.localStream;
+    updateCallMediaVisibility();
     await elements.localVideo.play().catch(() => {});
 }
 
@@ -733,6 +735,7 @@ async function switchCamera() {
 
         state.call.localStream.addTrack(newVideoTrack);
         elements.localVideo.srcObject = state.call.localStream;
+        updateCallMediaVisibility();
         await elements.localVideo.play().catch(() => {});
         updateCallUi(nextFacingMode === "environment" ? "Câmera traseira ativa" : "Câmera frontal ativa");
     } catch (error) {
@@ -749,6 +752,7 @@ function createPeerConnection() {
     state.call.peer = peer;
     state.call.remoteStream = new MediaStream();
     elements.remoteVideo.srcObject = state.call.remoteStream;
+    updateCallMediaVisibility();
 
     peer.onicecandidate = (event) => {
         if (event.candidate) {
@@ -768,6 +772,7 @@ function createPeerConnection() {
             }
         }
         elements.remoteVideo.srcObject = state.call.remoteStream;
+        updateCallMediaVisibility();
         elements.remoteVideo.play().catch(() => {});
     };
 
@@ -879,6 +884,7 @@ function stopLocalStream() {
         }
     }
     elements.localVideo.srcObject = null;
+    updateCallMediaVisibility();
 }
 
 function stopRemoteStream() {
@@ -888,6 +894,7 @@ function stopRemoteStream() {
         }
     }
     elements.remoteVideo.srcObject = null;
+    updateCallMediaVisibility();
 }
 
 function resetCallState() {
@@ -925,10 +932,21 @@ function updateCallUi(statusText = "") {
     elements.startVoiceCall.disabled = !isIdle;
     elements.startVideoCall.disabled = !isIdle;
     elements.callPanel.classList.toggle("voice-only", !isVideoCall);
+    updateCallMediaVisibility();
 
     if (statusText) {
         elements.callStatus.textContent = statusText;
     }
+}
+
+function updateCallMediaVisibility() {
+    const hasLocalVideo = Boolean(state.call.localStream?.getVideoTracks().some((track) => track.readyState !== "ended"));
+    const hasRemoteVideo = Boolean(state.call.remoteStream?.getVideoTracks().some((track) => track.readyState !== "ended"));
+    const hasVideoFeed = state.call.mode === "video" && (hasLocalVideo || hasRemoteVideo);
+
+    elements.callPanel.classList.toggle("has-video-feed", hasVideoFeed);
+    elements.callPanel.classList.toggle("has-local-video", hasLocalVideo);
+    elements.callPanel.classList.toggle("has-remote-video", hasRemoteVideo);
 }
 
 function showCallNotice(text) {

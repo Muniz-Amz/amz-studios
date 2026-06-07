@@ -589,20 +589,40 @@ button {
 }
 
 .call-videos {
-    display: grid;
+    display: none;
     grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
     gap: 12px;
 }
 
+.call-panel.has-video-feed .call-videos {
+    display: grid;
+}
+
+.call-panel.has-video-feed:not(.has-local-video),
+.call-panel.has-video-feed:not(.has-remote-video) {
+    --call-video-columns: minmax(0, 1fr);
+}
+
+.call-panel.has-video-feed:not(.has-local-video) .call-videos,
+.call-panel.has-video-feed:not(.has-remote-video) .call-videos {
+    grid-template-columns: var(--call-video-columns);
+}
+
 .remote-video,
 .local-video {
+    display: none;
     width: 100%;
     min-height: 190px;
     max-height: 430px;
     border: 1px solid var(--line);
     border-radius: 18px;
-    background: #000000;
+    background: rgba(3, 10, 12, 0.72);
     object-fit: cover;
+}
+
+.call-panel.has-remote-video .remote-video,
+.call-panel.has-local-video .local-video {
+    display: block;
 }
 
 .local-video {
@@ -610,15 +630,6 @@ button {
 }
 
 .call-panel.voice-only .call-videos {
-    grid-template-columns: 1fr;
-}
-
-.call-panel.voice-only .remote-video {
-    min-height: 90px;
-    object-fit: contain;
-}
-
-.call-panel.voice-only .local-video {
     display: none;
 }
 
@@ -1421,10 +1432,6 @@ button {
 
     .leave-chat-button {
         margin-left: 0;
-    }
-
-    .call-panel.voice-only .remote-video {
-        min-height: 74px;
     }
 
     .message-media {
