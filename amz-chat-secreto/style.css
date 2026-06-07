@@ -11,6 +11,7 @@
     --panel-soft: #202c33;
     --bubble: #202c33;
     --bubble-own: #005c4b;
+    --bubble-own-strong: #007a63;
     --line: rgba(255, 255, 255, 0.1);
     --line-strong: rgba(255, 255, 255, 0.18);
     --text: #eef6f4;
@@ -275,6 +276,7 @@ button {
 .chat-app {
     height: var(--chat-vh);
     min-height: 0;
+    min-width: 0;
     display: grid;
     grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
     background: var(--shell);
@@ -284,8 +286,11 @@ button {
 .chat-sidebar {
     height: var(--chat-vh);
     min-height: 0;
+    min-width: 0;
     border-right: 1px solid var(--line);
-    background: var(--sidebar);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 28%),
+        var(--sidebar);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -296,7 +301,9 @@ button {
     margin: 16px;
     border: 1px solid var(--line);
     border-radius: 22px;
-    background: var(--sidebar-soft);
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.035), transparent 62%),
+        var(--sidebar-soft);
     padding: 16px;
 }
 
@@ -382,6 +389,9 @@ button {
 .conversation {
     height: var(--chat-vh);
     min-height: 0;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
     position: relative;
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr);
@@ -399,13 +409,18 @@ button {
 .conversation-header {
     grid-area: header;
     min-height: 74px;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
     border-bottom: 1px solid var(--line);
     padding: 10px 18px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    background: rgba(17, 27, 33, 0.96);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
+        rgba(17, 27, 33, 0.96);
     backdrop-filter: blur(12px);
 }
 
@@ -439,6 +454,7 @@ button {
 }
 
 .header-actions {
+    min-width: 0;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -469,11 +485,14 @@ button {
     font-weight: 1000;
     letter-spacing: 0.12em;
     text-transform: uppercase;
+    transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease, transform 0.18s ease;
 }
 
 .call-button:hover:not(:disabled) {
     border-color: var(--accent);
+    background: rgba(37, 211, 102, 0.1);
     color: var(--accent);
+    transform: translateY(-1px);
 }
 
 .call-button:disabled {
@@ -586,44 +605,140 @@ button {
     grid-area: messages;
     min-height: 0;
     min-block-size: 0;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
     overflow-y: auto;
     padding: 24px clamp(14px, 3vw, 36px) calc(var(--composer-height) + 28px);
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
     scroll-behavior: smooth;
+    scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
+    scrollbar-width: thin;
+}
+
+.messages::-webkit-scrollbar,
+.composer textarea::-webkit-scrollbar {
+    width: 10px;
+}
+
+.messages::-webkit-scrollbar-thumb,
+.composer textarea::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.24);
+    background-clip: content-box;
+}
+
+.messages::-webkit-scrollbar-track,
+.composer textarea::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 .empty-state {
     margin: auto;
-    max-width: 420px;
+    max-width: 460px;
     border: 1px solid var(--line);
-    border-radius: 999px;
-    background: rgba(17, 27, 33, 0.74);
+    border-radius: 28px;
+    background:
+        linear-gradient(145deg, rgba(37, 211, 102, 0.12), transparent 52%),
+        rgba(17, 27, 33, 0.78);
     color: var(--muted-strong);
-    padding: 12px 18px;
+    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.18);
+    padding: 20px 24px;
     text-align: center;
     line-height: 1.6;
+}
+
+.empty-state::before {
+    content: "AMZ";
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    margin: 0 auto 12px;
+    border: 1px solid rgba(37, 211, 102, 0.3);
+    border-radius: 999px;
+    background: rgba(37, 211, 102, 0.12);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 1000;
+    letter-spacing: 0.12em;
+}
+
+.message-date-separator {
+    position: sticky;
+    top: 12px;
+    z-index: 3;
+    align-self: center;
+    margin: 10px 0 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    background: rgba(13, 19, 22, 0.82);
+    color: var(--muted-strong);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18);
+    padding: 6px 12px;
+    backdrop-filter: blur(14px);
+    font-size: 10px;
+    font-weight: 1000;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
 }
 
 .message {
     position: relative;
     width: fit-content;
     max-width: min(620px, 76%);
+    min-width: 0;
     border: 0;
     border-radius: 6px 18px 18px;
-    background: var(--bubble);
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.16);
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.035), transparent 68%),
+        var(--bubble);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
     color: var(--text);
-    padding: 9px 11px 7px;
+    padding: 10px 12px 8px;
+    animation: message-in 0.2s ease both;
+    transform-origin: left bottom;
+}
+
+.message::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -7px;
+    width: 12px;
+    height: 14px;
+    background: var(--bubble);
+    clip-path: polygon(100% 0, 100% 100%, 0 0);
 }
 
 .message.own {
     margin-left: auto;
     border-radius: 18px 6px 18px 18px;
-    background: var(--bubble-own);
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.07), transparent 64%),
+        linear-gradient(135deg, var(--bubble-own-strong), var(--bubble-own));
+    transform-origin: right bottom;
+}
+
+.message.own::before {
+    right: -7px;
+    left: auto;
+    background: var(--bubble-own-strong);
+    clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+
+.message.grouped {
+    margin-top: -3px;
+    border-radius: 18px;
+}
+
+.message.grouped::before {
+    display: none;
 }
 
 .message-head {
@@ -639,9 +754,20 @@ button {
     text-transform: uppercase;
 }
 
+.message-time-inline {
+    float: right;
+    margin: 5px 0 0 10px;
+    color: rgba(238, 246, 244, 0.5);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+
 .message-body {
     white-space: pre-wrap;
-    line-height: 1.48;
+    color: rgba(238, 246, 244, 0.96);
+    font-size: 14px;
+    line-height: 1.52;
     overflow-wrap: anywhere;
 }
 
@@ -718,6 +844,18 @@ button {
     pointer-events: none;
 }
 
+@keyframes message-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
 .scroll-bottom-button {
     position: absolute;
     right: clamp(18px, 3vw, 36px);
@@ -729,7 +867,9 @@ button {
     place-items: center;
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 999px;
-    background: rgba(17, 27, 33, 0.96);
+    background:
+        linear-gradient(145deg, rgba(37, 211, 102, 0.14), transparent),
+        rgba(17, 27, 33, 0.96);
     color: var(--accent);
     box-shadow: 0 14px 38px rgba(0, 0, 0, 0.36);
     backdrop-filter: blur(12px);
@@ -738,6 +878,7 @@ button {
 .scroll-bottom-button:hover {
     border-color: var(--accent);
     filter: brightness(1.08);
+    transform: translateY(-2px);
 }
 
 .composer {
@@ -749,7 +890,9 @@ button {
     left: 0;
     z-index: 20;
     border-top: 1px solid var(--line);
-    background: rgba(17, 27, 33, 0.98);
+    background:
+        linear-gradient(180deg, rgba(17, 27, 33, 0.9), rgba(13, 20, 23, 0.98)),
+        var(--sidebar);
     box-shadow: 0 -16px 34px rgba(0, 0, 0, 0.22);
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
     display: grid;
@@ -757,18 +900,44 @@ button {
     align-items: end;
     gap: 10px;
     overflow: visible;
+    backdrop-filter: blur(16px);
 }
 
 .composer.is-sending {
-    opacity: 0.74;
     pointer-events: none;
+}
+
+.composer.is-sending::before {
+    content: attr(data-status);
+    position: absolute;
+    right: 18px;
+    bottom: calc(100% + 10px);
+    border: 1px solid rgba(37, 211, 102, 0.28);
+    border-radius: 999px;
+    background: rgba(13, 19, 22, 0.9);
+    color: var(--accent);
+    box-shadow: 0 12px 38px rgba(0, 0, 0, 0.24);
+    padding: 8px 12px;
+    backdrop-filter: blur(14px);
+    font-size: 10px;
+    font-weight: 1000;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.composer.is-sending .attach-button,
+.composer.is-sending textarea,
+.composer.is-sending .send-button {
+    opacity: 0.62;
 }
 
 .attachment-preview {
     grid-column: 1 / -1;
     border: 1px solid var(--line);
-    border-radius: 14px;
-    background: var(--panel-soft);
+    border-radius: 18px;
+    background:
+        linear-gradient(145deg, rgba(37, 211, 102, 0.12), transparent 60%),
+        var(--panel-soft);
     padding: 10px 12px;
     color: var(--muted-strong);
     font-size: 13px;
@@ -792,17 +961,27 @@ button {
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.05);
     color: var(--muted-strong);
+    transition: border-color 0.18s ease, color 0.18s ease, filter 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
 }
 
 .send-button {
-    background: var(--accent);
+    background: linear-gradient(145deg, #35f486, var(--accent));
     color: #071012;
+    box-shadow: 0 10px 24px rgba(37, 211, 102, 0.18);
+}
+
+.send-button:disabled {
+    cursor: not-allowed;
+    filter: grayscale(0.75);
+    opacity: 0.42;
+    box-shadow: none;
 }
 
 .attach-button:hover,
-.send-button:hover {
+.send-button:hover:not(:disabled) {
     border-color: var(--accent);
     filter: brightness(1.08);
+    transform: translateY(-1px);
 }
 
 .composer textarea {
@@ -810,15 +989,22 @@ button {
     max-height: min(132px, 28dvh);
     min-height: 44px;
     resize: none;
-    border: 1px solid transparent;
+    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 22px;
-    background: #202c33;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent),
+        #202c33;
     color: var(--text);
     padding: 12px 16px;
     line-height: 1.38;
     outline: none;
     overflow-y: auto;
     overscroll-behavior: contain;
+    scrollbar-width: thin;
+}
+
+.composer textarea::placeholder {
+    color: rgba(200, 215, 213, 0.44);
 }
 
 .composer textarea:focus {
@@ -981,17 +1167,24 @@ button {
     }
 
     .messages {
-        padding: 12px 10px calc(var(--composer-height) + 16px);
+        padding: 14px 10px calc(var(--composer-height) + 16px);
+        gap: 7px;
     }
 
     .empty-state {
-        border-radius: 16px;
-        padding: 10px 12px;
+        border-radius: 22px;
+        padding: 16px 18px;
         font-size: 13px;
     }
 
     .message {
-        max-width: 86%;
+        max-width: 88%;
+        padding: 9px 11px 7px;
+    }
+
+    .message-date-separator {
+        top: 8px;
+        margin: 8px 0 6px;
     }
 
     .composer {
@@ -1000,6 +1193,12 @@ button {
         grid-template-columns: 40px minmax(0, 1fr) 40px;
         gap: 8px;
         padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    }
+
+    .composer.is-sending::before {
+        right: 10px;
+        bottom: calc(100% + 8px);
+        max-width: calc(100% - 20px);
     }
 
     .scroll-bottom-button {
@@ -1019,6 +1218,7 @@ button {
         min-height: 40px;
         max-height: min(112px, 28dvh);
         padding: 10px 14px;
+        font-size: 14px;
     }
 }
 
@@ -1044,6 +1244,7 @@ button {
 
     .conversation-header {
         align-items: center;
+        min-height: 58px;
     }
 
     .conversation-title > div:last-child {
@@ -1056,5 +1257,32 @@ button {
 
     .message-media {
         max-height: 320px;
+    }
+
+    .message {
+        max-width: 92%;
+    }
+
+    .message-head {
+        gap: 8px;
+        font-size: 9px;
+    }
+
+    .message-body {
+        font-size: 13.5px;
+    }
+
+    .composer {
+        grid-template-columns: 38px minmax(0, 1fr) 42px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.001ms !important;
     }
 }

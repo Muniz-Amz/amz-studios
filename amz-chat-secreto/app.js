@@ -16,6 +16,9 @@ const state = {
     titleAlertTimer: null,
     originalTitle: document.title,
     audioContext: null,
+    lastRenderedDateKey: "",
+    lastRenderedProfileId: "",
+    lastRenderedGroupKey: "",
     call: {
         peer: null,
         localStream: null,
@@ -48,6 +51,7 @@ const elements = {
     scrollBottom: document.querySelector("#scroll-bottom"),
     messageForm: document.querySelector("#message-form"),
     messageText: document.querySelector("#message-text"),
+    sendButton: document.querySelector(".send-button"),
     mediaInput: document.querySelector("#media-input"),
     attachmentPreview: document.querySelector("#attachment-preview"),
     leaveChat: document.querySelector("#leave-chat"),
@@ -107,6 +111,7 @@ async function boot() {
     updateViewportHeight();
     updateComposerHeight();
     updateComposerHint();
+    updateComposerState();
     renderPresence();
     await restoreSession();
     guardConversationRoute();
@@ -330,6 +335,7 @@ async function loadMessages() {
         throw error;
     }
 
+    resetMessageRenderState();
     elements.messages.innerHTML = "";
 
     if (!data.length) {
@@ -367,7 +373,6 @@ function subscribeRealtime() {
             if (payload.payload?.room_id === state.roomId && !isExpiredMessage(payload.payload)) {
                 removeEmptyState();
                 await renderMessage(payload.payload);
-                scrollToBottom();
             }
         })
         .on("broadcast", { event: "call-signal" }, async (payload) => {
@@ -817,6 +822,8 @@ async function sendMessage(event) {
     }
 
     elements.messageForm.classList.add("is-sending");
+    elements.messageForm.dataset.status = state.mediaFile ? "Criptografando e enviando midia..." : "Enviando mensagem...";
+    elements.sendButton.disabled = true;
 
     try {
         const encryptedBody = body ? await encryptText(body) : null;
@@ -858,6 +865,8 @@ async function sendMessage(event) {
         alert(`Não consegui enviar: ${formatError(error)}`);
     } finally {
         elements.messageForm.classList.remove("is-sending");
+        delete elements.messageForm.dataset.status;
+        updateComposerState();
     }
 }
 
@@ -929,6 +938,8 @@ function selectMedia(event) {
         <button type="button" id="clear-media">remover</button>
     `;
     document.querySelector("#clear-media").addEventListener("click", clearMedia);
+    elements.messageText.focus();
+    updateComposerState();
 }
 
 function clearMedia() {
@@ -948,22 +959,30 @@ async function renderMessage(message) {
     const isOwn = message.profile_id === state.selectedProfile.id;
     const body = await decryptMessageBody(message.body);
     const media = renderMedia(message);
+    const grouped = isGroupedWithPreviousMessage(message);
     const node = document.createElement("article");
-    node.className = `message ${isOwn ? "own" : ""}`;
+    node.className = `message ${isOwn ? "own" : ""} ${grouped ? "grouped" : ""}`.trim();
+    node.setAttribute("aria-label", `${message.profile_name || "Perfil"} às ${formatTime(message.created_at)}`);
     node.innerHTML = `
-        <header class="message-head">
-            <span>${escapeHtml(message.profile_name || "Perfil")}</span>
-            <time>${formatTime(message.created_at)}</time>
-        </header>
+        ${grouped
+            ? `<time class="message-time-inline">${formatTime(message.created_at)}</time>`
+            : `<header class="message-head">
+                <span>${escapeHtml(message.profile_name || "Perfil")}</span>
+                <time>${formatTime(message.created_at)}</time>
+            </header>`}
         ${body ? `<div class="message-body">${escapeHtml(body)}</div>` : ""}
         ${media}
     `;
     removeEmptyState();
+    renderDateSeparatorIfNeeded(message.created_at);
     elements.messages.appendChild(node);
+    markMessageAsRendered(message);
     hydrateMessageMedia(node, message);
 
     if (shouldStickToBottom || isOwn) {
         scrollToBottom();
+    } else {
+        updateComposerState();
     }
 }
 
@@ -1107,6 +1126,45 @@ function renderPresence() {
     }).join("");
 }
 
+function resetMessageRenderState() {
+    state.lastRenderedDateKey = "";
+    state.lastRenderedProfileId = "";
+    state.lastRenderedGroupKey = "";
+}
+
+function renderDateSeparatorIfNeeded(value) {
+    const dateKey = getMessageDateKey(value);
+
+    if (!dateKey || dateKey === state.lastRenderedDateKey) {
+        return;
+    }
+
+    const separator = document.createElement("div");
+    separator.className = "message-date-separator";
+    separator.textContent = formatMessageDate(value);
+    elements.messages.appendChild(separator);
+    state.lastRenderedDateKey = dateKey;
+    state.lastRenderedProfileId = "";
+    state.lastRenderedGroupKey = "";
+}
+
+function isGroupedWithPreviousMessage(message) {
+    const profileId = message.profile_id || "";
+    const groupKey = getMessageGroupKey(message.created_at);
+
+    return Boolean(
+        profileId
+        && groupKey
+        && profileId === state.lastRenderedProfileId
+        && groupKey === state.lastRenderedGroupKey
+    );
+}
+
+function markMessageAsRendered(message) {
+    state.lastRenderedProfileId = message.profile_id || "";
+    state.lastRenderedGroupKey = getMessageGroupKey(message.created_at);
+}
+
 async function leaveChat() {
     await endActiveCall("Saindo da chamada.", true);
     stopTitleAlert();
@@ -1132,6 +1190,7 @@ function showLogin() {
     elements.chat.hidden = true;
     elements.login.hidden = false;
     elements.activeProfile.innerHTML = "";
+    resetMessageRenderState();
     elements.messages.innerHTML = "";
 }
 
@@ -1141,6 +1200,7 @@ function showChat() {
 }
 
 function renderEmpty(text) {
+    resetMessageRenderState();
     elements.messages.innerHTML = `<div class="empty-state">${escapeHtml(text)}</div>`;
 }
 
@@ -1182,8 +1242,12 @@ function isNearMessageBottom(threshold = 180) {
 
 function updateComposerState() {
     const awayFromBottom = !isNearMessageBottom(260);
+    const hasText = Boolean(elements.messageText.value.trim());
+    const canSend = (hasText || Boolean(state.mediaFile)) && !elements.messageForm.classList.contains("is-sending");
     elements.messageForm.classList.toggle("has-attachment", Boolean(state.mediaFile));
+    elements.messageForm.classList.toggle("has-text", hasText);
     elements.messageForm.classList.toggle("is-away-from-bottom", awayFromBottom);
+    elements.sendButton.disabled = !canSend;
     elements.scrollBottom.hidden = !awayFromBottom;
     updateComposerHeight();
 }
@@ -1593,6 +1657,59 @@ function formatTime(value) {
         hour: "2-digit",
         minute: "2-digit"
     }).format(new Date(value));
+}
+
+function getMessageDateKey(value) {
+    if (!value) {
+        return "";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function getMessageGroupKey(value) {
+    if (!value) {
+        return "";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+
+    return String(Math.floor(date.getTime() / (5 * 60 * 1000)));
+}
+
+function formatMessageDate(value) {
+    if (!value) {
+        return "";
+    }
+
+    const date = new Date(value);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    if (getMessageDateKey(value) === getMessageDateKey(today)) {
+        return "Hoje";
+    }
+
+    if (getMessageDateKey(value) === getMessageDateKey(yesterday)) {
+        return "Ontem";
+    }
+
+    return new Intl.DateTimeFormat("pt-BR", {
+        weekday: "short",
+        day: "2-digit",
+        month: "2-digit"
+    }).format(date);
 }
 
 function formatError(error) {
