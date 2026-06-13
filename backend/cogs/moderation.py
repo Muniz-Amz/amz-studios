@@ -216,7 +216,7 @@ class ModerationCog(commands.Cog):
 
         worker = self.automation_workers.get(guild_id)
         if not worker or worker.done():
-            self.automation_workers[guild_id] = self.bot.loop.create_task(self.processar_fila_automacoes(guild_id))
+            self.automation_workers[guild_id] = asyncio.create_task(self.processar_fila_automacoes(guild_id))
 
         return True
 

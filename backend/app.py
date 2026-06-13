@@ -56,6 +56,41 @@ ADMIN_PASSWORD = os.getenv("AMZ_ADMIN_PASSWORD", "").strip()
 ADMIN_SESSION_SECONDS = int(os.getenv("AMZ_ADMIN_SESSION_SECONDS", "28800"))
 ADMIN_MEMBERS_LIMIT = int(os.getenv("AMZ_ADMIN_MEMBERS_LIMIT", "500"))
 API_STARTED_AT = datetime.now(timezone.utc)
+BOT_RUNTIME_LOOP = None
+
+
+def registrar_loop_bot(loop):
+    global BOT_RUNTIME_LOOP
+
+    if loop and hasattr(loop, "call_soon_threadsafe") and not loop.is_closed():
+        BOT_RUNTIME_LOOP = loop
+        setattr(bot, "amz_runtime_loop", loop)
+
+
+def obter_loop_bot():
+    candidatos = (
+        getattr(bot, "amz_runtime_loop", None),
+        BOT_RUNTIME_LOOP,
+        getattr(bot, "loop", None),
+    )
+
+    for loop in candidatos:
+        if loop and hasattr(loop, "call_soon_threadsafe") and not loop.is_closed():
+            return loop
+
+    raise RuntimeError("Bot ainda esta inicializando. Tente novamente em alguns segundos.")
+
+
+def executar_corrotina_bot(corrotina, timeout=15):
+    try:
+        loop = obter_loop_bot()
+    except Exception:
+        if hasattr(corrotina, "close"):
+            corrotina.close()
+        raise
+
+    futuro = asyncio.run_coroutine_threadsafe(corrotina, loop)
+    return futuro.result(timeout=timeout)
 
 
 def data_iso(valor):
@@ -287,11 +322,7 @@ async def usuario_tem_permissao_pelo_bot(server_id, user_id):
 
 def confirmar_permissao_pelo_bot(server_id, user_id):
     try:
-        futuro = asyncio.run_coroutine_threadsafe(
-            usuario_tem_permissao_pelo_bot(server_id, user_id),
-            bot.loop,
-        )
-        return futuro.result(timeout=10)
+        return executar_corrotina_bot(usuario_tem_permissao_pelo_bot(server_id, user_id), timeout=10)
     except Exception:
         return None
 
@@ -663,8 +694,7 @@ async def listar_membros_admin_async(server_id, limite):
 
 
 def listar_membros_admin_sync(server_id, limite):
-    futuro = asyncio.run_coroutine_threadsafe(listar_membros_admin_async(server_id, limite), bot.loop)
-    return futuro.result(timeout=25)
+    return executar_corrotina_bot(listar_membros_admin_async(server_id, limite), timeout=25)
 
 
 async def obter_membro_admin_async(server_id, user_id):
@@ -714,8 +744,7 @@ async def banir_membro_admin_async(server_id, user_id, motivo):
 
 
 def banir_membro_admin_sync(server_id, user_id, motivo):
-    futuro = asyncio.run_coroutine_threadsafe(banir_membro_admin_async(server_id, user_id, motivo), bot.loop)
-    return futuro.result(timeout=25)
+    return executar_corrotina_bot(banir_membro_admin_async(server_id, user_id, motivo), timeout=25)
 
 
 async def expulsar_membro_admin_async(server_id, user_id, motivo):
@@ -742,8 +771,7 @@ async def expulsar_membro_admin_async(server_id, user_id, motivo):
 
 
 def expulsar_membro_admin_sync(server_id, user_id, motivo):
-    futuro = asyncio.run_coroutine_threadsafe(expulsar_membro_admin_async(server_id, user_id, motivo), bot.loop)
-    return futuro.result(timeout=25)
+    return executar_corrotina_bot(expulsar_membro_admin_async(server_id, user_id, motivo), timeout=25)
 
 
 async def castigar_membro_admin_async(server_id, user_id, minutos, motivo):
@@ -780,8 +808,7 @@ async def castigar_membro_admin_async(server_id, user_id, minutos, motivo):
 
 
 def castigar_membro_admin_sync(server_id, user_id, minutos, motivo):
-    futuro = asyncio.run_coroutine_threadsafe(castigar_membro_admin_async(server_id, user_id, minutos, motivo), bot.loop)
-    return futuro.result(timeout=25)
+    return executar_corrotina_bot(castigar_membro_admin_async(server_id, user_id, minutos, motivo), timeout=25)
 
 
 async def sair_servidor_admin_async(server_id, motivo):
@@ -803,30 +830,26 @@ async def sair_servidor_admin_async(server_id, motivo):
 
 
 def sair_servidor_admin_sync(server_id, motivo):
-    futuro = asyncio.run_coroutine_threadsafe(sair_servidor_admin_async(server_id, motivo), bot.loop)
-    return futuro.result(timeout=25)
+    return executar_corrotina_bot(sair_servidor_admin_async(server_id, motivo), timeout=25)
 
 
 def buscar_limpezas_sync(server_id):
     try:
-        futuro = asyncio.run_coroutine_threadsafe(buscar_limpezas(str(server_id)), bot.loop)
-        return futuro.result(timeout=10)
+        return executar_corrotina_bot(buscar_limpezas(str(server_id)), timeout=10)
     except Exception:
         return []
 
 
 def buscar_boas_vindas_sync(server_id):
     try:
-        futuro = asyncio.run_coroutine_threadsafe(buscar_boas_vindas(str(server_id)), bot.loop)
-        return futuro.result(timeout=10)
+        return executar_corrotina_bot(buscar_boas_vindas(str(server_id)), timeout=10)
     except Exception:
         return {}
 
 
 def buscar_moderacao_sync(server_id):
     try:
-        futuro = asyncio.run_coroutine_threadsafe(buscar_moderacao(str(server_id)), bot.loop)
-        return futuro.result(timeout=10)
+        return executar_corrotina_bot(buscar_moderacao(str(server_id)), timeout=10)
     except Exception:
         return {}
 
@@ -880,8 +903,7 @@ def validar_canais_boas_vindas(server_id, dados):
 
 def status_banco_sync():
     try:
-        futuro = asyncio.run_coroutine_threadsafe(status_banco_dados(), bot.loop)
-        return futuro.result(timeout=12)
+        return executar_corrotina_bot(status_banco_dados(), timeout=12)
     except Exception as erro:
         return {
             "online": False,
@@ -1587,8 +1609,7 @@ def receber_config():
         return erro
 
     try:
-        futuro = asyncio.run_coroutine_threadsafe(salvar_config(server_id, dados), bot.loop)
-        futuro.result(timeout=15)
+        executar_corrotina_bot(salvar_config(server_id, dados), timeout=15)
         return jsonify({"status": "sucesso", "mensagem": "Configuracoes salvas!"}), 200
     except Exception as e:
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
@@ -1611,8 +1632,7 @@ def salvar_limpeza_canal():
         return erro
 
     try:
-        futuro = asyncio.run_coroutine_threadsafe(salvar_limpeza(server_id, dados), bot.loop)
-        limpezas = futuro.result(timeout=15)
+        limpezas = executar_corrotina_bot(salvar_limpeza(server_id, dados), timeout=15)
         return jsonify({
             "status": "sucesso",
             "mensagem": "Limpeza de canal salva!",
@@ -1640,8 +1660,7 @@ def salvar_config_boas_vindas():
         return jsonify({"status": "erro", "mensagem": erro_canal}), 400
 
     try:
-        futuro = asyncio.run_coroutine_threadsafe(salvar_boas_vindas(server_id, dados_validados), bot.loop)
-        config = futuro.result(timeout=15)
+        config = executar_corrotina_bot(salvar_boas_vindas(server_id, dados_validados), timeout=15)
         return jsonify({
             "status": "sucesso",
             "mensagem": "Avisos de entrada e saida salvos!",
@@ -1664,8 +1683,7 @@ def salvar_config_moderacao():
         return erro
 
     try:
-        futuro = asyncio.run_coroutine_threadsafe(salvar_moderacao(server_id, dados), bot.loop)
-        config = futuro.result(timeout=15)
+        config = executar_corrotina_bot(salvar_moderacao(server_id, dados), timeout=15)
         return jsonify({
             "status": "sucesso",
             "mensagem": "Moderacao salva!",
@@ -1725,8 +1743,7 @@ def listar_config_boas_vindas(server_id):
         return erro
 
     try:
-        futuro = asyncio.run_coroutine_threadsafe(buscar_boas_vindas(server_id), bot.loop)
-        config = futuro.result(timeout=15)
+        config = executar_corrotina_bot(buscar_boas_vindas(server_id), timeout=15)
         return jsonify({"status": "sucesso", "boas_vindas": config}), 200
     except Exception as e:
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
@@ -1742,8 +1759,7 @@ def listar_config_moderacao(server_id):
         return erro
 
     try:
-        futuro = asyncio.run_coroutine_threadsafe(buscar_moderacao(server_id), bot.loop)
-        config = futuro.result(timeout=15)
+        config = executar_corrotina_bot(buscar_moderacao(server_id), timeout=15)
         return jsonify({"status": "sucesso", "moderacao": config}), 200
     except Exception as e:
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
@@ -1759,8 +1775,7 @@ def listar_limpezas(server_id):
         return erro
 
     try:
-        futuro = asyncio.run_coroutine_threadsafe(buscar_limpezas(server_id), bot.loop)
-        limpezas = futuro.result(timeout=15)
+        limpezas = executar_corrotina_bot(buscar_limpezas(server_id), timeout=15)
         return jsonify({"status": "sucesso", "limpezas": limpezas}), 200
     except Exception as e:
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
@@ -1776,8 +1791,7 @@ def excluir_limpeza(server_id, canal_id):
         return erro
 
     try:
-        futuro = asyncio.run_coroutine_threadsafe(remover_limpeza(server_id, canal_id), bot.loop)
-        limpezas = futuro.result(timeout=15)
+        limpezas = executar_corrotina_bot(remover_limpeza(server_id, canal_id), timeout=15)
         return jsonify({
             "status": "sucesso",
             "mensagem": "Limpeza removida!",
@@ -1789,7 +1803,8 @@ def excluir_limpeza(server_id, canal_id):
 
 async def main():
     port = int(os.getenv("PORT", 5000))
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
+    registrar_loop_bot(loop)
 
     loop.run_in_executor(
         None,
