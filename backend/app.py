@@ -62,20 +62,31 @@ BOT_RUNTIME_LOOP = None
 def registrar_loop_bot(loop):
     global BOT_RUNTIME_LOOP
 
-    if loop and hasattr(loop, "call_soon_threadsafe") and not loop.is_closed():
+    if loop and loop_temporizador_disponivel(loop):
         BOT_RUNTIME_LOOP = loop
         setattr(bot, "amz_runtime_loop", loop)
+
+
+def loop_temporizador_disponivel(loop):
+    try:
+        return (
+            loop is not None
+            and callable(getattr(loop, "call_soon_threadsafe", None))
+            and callable(getattr(loop, "is_closed", None))
+            and not loop.is_closed()
+        )
+    except Exception:
+        return False
 
 
 def obter_loop_bot():
     candidatos = (
         getattr(bot, "amz_runtime_loop", None),
         BOT_RUNTIME_LOOP,
-        getattr(bot, "loop", None),
     )
 
     for loop in candidatos:
-        if loop and hasattr(loop, "call_soon_threadsafe") and not loop.is_closed():
+        if loop_temporizador_disponivel(loop):
             return loop
 
     raise RuntimeError("Bot ainda esta inicializando. Tente novamente em alguns segundos.")
