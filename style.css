@@ -183,6 +183,7 @@ html[data-site-theme] body {
 #downloads,
 #aplicativos,
 #solucoes,
+#server-hub,
 #faq,
 #site-principal footer {
     background: var(--site-section-bg) !important;
@@ -339,6 +340,296 @@ html[data-site-theme] body {
 
 .site-faq-list p {
     margin-top: 10px;
+}
+
+.site-server-hub-section {
+    color: var(--site-text);
+}
+
+.site-server-hub-heading {
+    max-width: 860px;
+    margin-bottom: 34px;
+}
+
+.site-server-hub-heading h2 {
+    margin-top: 16px;
+    color: var(--site-text);
+    font-size: clamp(38px, 6vw, 82px);
+    font-weight: 900;
+    letter-spacing: -0.055em;
+    line-height: 0.92;
+    text-transform: uppercase;
+}
+
+.site-server-hub-heading p {
+    max-width: 760px;
+    margin-top: 18px;
+    color: var(--site-muted);
+    font-size: 16px;
+    line-height: 1.75;
+}
+
+.site-server-hub-layout {
+    display: grid;
+    grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.55fr);
+    gap: 18px;
+    align-items: start;
+}
+
+.site-server-profile-card,
+.site-server-feature-grid article {
+    background: var(--site-card-bg);
+    border: 1px solid var(--site-border);
+    box-shadow: 0 18px 60px var(--site-shadow);
+}
+
+.site-server-profile-card {
+    position: sticky;
+    top: 104px;
+    display: grid;
+    gap: 18px;
+    padding: 28px;
+}
+
+.site-server-avatar {
+    width: 82px;
+    height: 82px;
+    border: 1px solid var(--site-border-strong);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--site-text), var(--site-muted));
+    color: var(--site-bg);
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: -0.08em;
+}
+
+.site-server-kicker,
+.site-server-status-list span,
+.site-server-feature-grid span {
+    color: var(--site-soft);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.site-server-profile-card h3 {
+    color: var(--site-text);
+    font-size: 34px;
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+    text-transform: uppercase;
+}
+
+.site-server-profile-card p {
+    color: var(--site-muted);
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.site-server-status-list {
+    display: grid;
+    gap: 10px;
+    padding-top: 18px;
+    border-top: 1px solid var(--site-border);
+}
+
+.site-server-status-list div {
+    display: grid;
+    gap: 4px;
+}
+
+.site-server-status-list strong {
+    color: var(--site-text);
+    font-size: 13px;
+    font-weight: 900;
+    line-height: 1.35;
+}
+
+.site-server-status-list i {
+    width: 8px;
+    height: 8px;
+    display: inline-block;
+    margin-right: 7px;
+    border-radius: 999px;
+    background: #3cff7b;
+    box-shadow: 0 0 18px rgba(60, 255, 123, 0.6);
+}
+
+.site-server-invite-button {
+    min-height: 50px;
+    border: 1px solid var(--site-button-border);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 0 16px;
+    color: var(--site-button-text);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.site-server-invite-button:hover {
+    background: var(--site-button-hover);
+    border-color: var(--site-button-border-strong);
+}
+
+.site-server-hub-main {
+    display: grid;
+    gap: 18px;
+}
+
+.site-server-feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.site-server-feature-grid article {
+    min-height: 150px;
+    padding: 20px;
+    display: grid;
+    align-content: start;
+    gap: 12px;
+}
+
+.site-server-feature-grid i {
+    color: var(--site-text);
+    font-size: 26px;
+}
+
+.site-server-feature-grid strong {
+    color: var(--site-text);
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 1.1;
+    text-transform: uppercase;
+}
+
+.site-server-feature-grid span {
+    letter-spacing: 0;
+    line-height: 1.55;
+    text-transform: none;
+}
+
+.site-discord-message-preview {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #31333a;
+    padding: 28px;
+    color: #f3f4f7;
+    box-shadow: 0 22px 80px rgba(0, 0, 0, 0.28);
+}
+
+.site-discord-message-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 10px;
+}
+
+.site-discord-bot-icon {
+    width: 36px;
+    height: 36px;
+    border: 2px solid #2fd4cf;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #2fd4cf;
+    font-size: 18px;
+}
+
+.site-discord-message-head strong {
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 800;
+}
+
+.site-discord-message-head strong span {
+    border-radius: 4px;
+    background: #5865f2;
+    padding: 2px 5px;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.site-discord-message-head small {
+    margin-left: 4px;
+    color: rgba(255, 255, 255, 0.54);
+    font-size: 12px;
+}
+
+.site-discord-line,
+.site-discord-user,
+.site-discord-quote p,
+.site-discord-footer-text {
+    font-size: clamp(16px, 2.2vw, 20px);
+    line-height: 1.45;
+}
+
+.site-discord-line {
+    margin-left: 50px;
+    color: #f2f3f5;
+}
+
+.site-discord-message-preview mark {
+    border-radius: 3px;
+    background: rgba(88, 101, 242, 0.38);
+    color: #dce1ff;
+    padding: 0 4px;
+    font-weight: 800;
+}
+
+.site-discord-message-preview h3 {
+    margin: 18px 0 12px 50px;
+    color: #ffffff;
+    font-size: clamp(24px, 3.6vw, 34px);
+    font-weight: 900;
+    line-height: 1;
+}
+
+.site-discord-user,
+.site-discord-icons {
+    margin-left: 50px;
+}
+
+.site-discord-icons {
+    margin-top: 8px;
+    font-size: 22px;
+    letter-spacing: 0.06em;
+}
+
+.site-discord-quote {
+    margin: 8px 0 0 50px;
+    border-left: 4px solid rgba(255, 255, 255, 0.28);
+    padding-left: 14px;
+}
+
+.site-discord-quote p {
+    max-width: 780px;
+    color: #ffffff;
+    font-weight: 900;
+}
+
+.site-discord-footer-text {
+    display: block;
+    margin: 18px 0 0 50px;
+    color: #ffffff;
+    font-weight: 900;
+}
+
+.site-discord-divider {
+    width: min(440px, calc(100% - 50px));
+    height: 5px;
+    margin: 30px 0 0 50px;
+    background: #ffffff;
 }
 
 .site-downloads-heading {
@@ -3495,7 +3786,7 @@ section {
     .site-nav-links {
         width: 100%;
         display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 8px;
         margin-left: 0;
     }
@@ -3526,7 +3817,7 @@ section {
 
     #site-principal main,
     #painel-loritta {
-        padding-top: 132px;
+        padding-top: 184px;
     }
 
     #inicio {
@@ -3566,16 +3857,19 @@ section {
     #downloads,
     #aplicativos,
     #solucoes,
+    #server-hub,
     #faq {
         padding: 64px 18px;
     }
 
     .site-seo-heading,
+    .site-server-hub-heading,
     .site-faq-heading {
         margin-bottom: 26px;
     }
 
     .site-seo-heading h2,
+    .site-server-hub-heading h2,
     .site-faq-heading h2 {
         font-size: 34px;
         letter-spacing: -0.02em;
@@ -3583,13 +3877,60 @@ section {
     }
 
     .site-seo-heading p,
+    .site-server-hub-heading p,
     .site-faq-heading p {
         font-size: 14px;
         line-height: 1.7;
     }
 
-    .site-seo-grid {
+    .site-seo-grid,
+    .site-server-hub-layout,
+    .site-server-feature-grid {
         grid-template-columns: 1fr;
+    }
+
+    .site-server-profile-card {
+        position: static;
+        padding: 22px;
+    }
+
+    .site-server-avatar {
+        width: 64px;
+        height: 64px;
+        font-size: 19px;
+    }
+
+    .site-server-profile-card h3 {
+        font-size: 28px;
+    }
+
+    .site-discord-message-preview {
+        padding: 18px;
+    }
+
+    .site-discord-line,
+    .site-discord-message-preview h3,
+    .site-discord-user,
+    .site-discord-icons,
+    .site-discord-quote,
+    .site-discord-footer-text,
+    .site-discord-divider {
+        margin-left: 0;
+    }
+
+    .site-discord-line,
+    .site-discord-user,
+    .site-discord-quote p,
+    .site-discord-footer-text {
+        font-size: 15px;
+    }
+
+    .site-discord-message-preview h3 {
+        font-size: 24px;
+    }
+
+    .site-discord-divider {
+        width: 100%;
     }
 
     .site-seo-card {
@@ -3977,7 +4318,7 @@ section {
 
     #site-principal main,
     #painel-loritta {
-        padding-top: 204px;
+        padding-top: 286px;
     }
 
     #inicio h1,
@@ -4087,6 +4428,9 @@ section {
     margin-top: 44px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     padding-bottom: 28px;
+    display: grid;
+    justify-items: center;
+    text-align: center;
 }
 
 .admin-hero span,
@@ -4111,6 +4455,8 @@ section {
 .admin-hero p {
     max-width: 680px;
     margin-top: 18px;
+    margin-right: auto;
+    margin-left: auto;
     color: rgba(255, 255, 255, 0.52);
     font-size: 15px;
     line-height: 1.7;
@@ -4118,10 +4464,14 @@ section {
 
 .admin-login-panel {
     margin-top: 34px;
+    display: grid;
+    justify-items: center;
 }
 
 .admin-login-card {
+    width: min(100%, 520px);
     max-width: 520px;
+    margin: 0 auto;
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: #050505;
     padding: 24px;
@@ -4270,6 +4620,241 @@ section {
     color: rgba(255, 255, 255, 0.42);
     font-size: 11px;
     font-weight: 700;
+}
+
+.admin-health-card {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: radial-gradient(circle at top right, rgba(85, 255, 136, 0.08), transparent 34%), #050505;
+    padding: 18px;
+    display: grid;
+    gap: 16px;
+}
+
+.admin-area.admin-login-mode {
+    min-height: 100vh;
+    padding-top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.admin-area.admin-login-mode .admin-shell {
+    width: min(720px, calc(100% - 32px));
+    min-height: 100vh;
+    margin: 0 auto;
+    padding: 48px 0;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+}
+
+.admin-area.admin-login-mode .admin-back {
+    justify-self: start;
+    margin-bottom: 28px;
+}
+
+.admin-area.admin-login-mode .admin-hero {
+    width: 100%;
+    margin-top: 0;
+}
+
+.admin-area.admin-login-mode .admin-hero h1 {
+    font-size: clamp(76px, 18vw, 156px);
+}
+
+.admin-area.admin-login-mode .admin-login-panel {
+    width: 100%;
+    background: transparent !important;
+    border: 0 !important;
+}
+
+.admin-area.admin-login-mode .admin-login-card {
+    width: min(100%, 520px);
+}
+
+.admin-health-card.warn {
+    background: radial-gradient(circle at top right, rgba(255, 214, 102, 0.12), transparent 34%), #050505;
+}
+
+.admin-health-card.error {
+    background: radial-gradient(circle at top right, rgba(255, 103, 103, 0.14), transparent 34%), #050505;
+}
+
+.admin-health-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.admin-health-head span,
+.admin-health-column h3,
+.admin-health-metric span,
+.admin-health-row span {
+    color: rgba(255, 255, 255, 0.38);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.admin-health-head strong {
+    display: block;
+    margin-top: 4px;
+    color: #ffffff;
+    font-size: clamp(24px, 4vw, 42px);
+    font-weight: 900;
+    line-height: 1;
+}
+
+.admin-health-head p {
+    max-width: 620px;
+    margin-top: 8px;
+    color: rgba(255, 255, 255, 0.48);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.6;
+}
+
+.admin-health-badge {
+    min-height: 38px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.admin-health-badge.ok {
+    border-color: rgba(91, 255, 138, 0.34);
+    color: #5bff8a;
+}
+
+.admin-health-badge.warn {
+    border-color: rgba(255, 214, 102, 0.34);
+    color: #ffd666;
+}
+
+.admin-health-badge.error {
+    border-color: rgba(255, 103, 103, 0.36);
+    color: #ff6767;
+}
+
+.admin-health-metrics {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.admin-health-metric {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+    padding: 12px;
+    display: grid;
+    gap: 6px;
+}
+
+.admin-health-metric strong {
+    color: #ffffff;
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1;
+    overflow-wrap: anywhere;
+}
+
+.admin-health-metric small,
+.admin-health-empty,
+.admin-health-row small,
+.admin-health-cooldowns span {
+    color: rgba(255, 255, 255, 0.42);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.45;
+}
+
+.admin-health-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.admin-health-column {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 14px;
+    display: grid;
+    align-content: start;
+    gap: 10px;
+}
+
+.admin-health-column h3 {
+    color: #ffffff;
+}
+
+.admin-health-list {
+    display: grid;
+    gap: 7px;
+}
+
+.admin-health-list.compact {
+    max-height: 230px;
+    overflow: auto;
+    scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
+}
+
+.admin-health-row {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #020202;
+    padding: 10px;
+    display: grid;
+    grid-template-columns: minmax(120px, 0.8fr) minmax(120px, 0.8fr) minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+}
+
+.admin-health-row.ok {
+    border-color: rgba(91, 255, 138, 0.22);
+}
+
+.admin-health-row.warn {
+    border-color: rgba(255, 214, 102, 0.24);
+}
+
+.admin-health-row.error {
+    border-color: rgba(255, 103, 103, 0.32);
+}
+
+.admin-health-row strong {
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+}
+
+.admin-health-row small {
+    overflow-wrap: anywhere;
+}
+
+.admin-health-empty {
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    padding: 12px;
+}
+
+.admin-health-cooldowns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-health-cooldowns span {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 7px 9px;
 }
 
 .admin-system-card {
@@ -5004,6 +5589,12 @@ html[data-site-theme] .automation-rule-item,
 html[data-site-theme] .admin-login-card,
 html[data-site-theme] .admin-toolbar,
 html[data-site-theme] .admin-server-search,
+html[data-site-theme] .admin-health-card,
+html[data-site-theme] .admin-health-metric,
+html[data-site-theme] .admin-health-column,
+html[data-site-theme] .admin-health-row,
+html[data-site-theme] .admin-health-empty,
+html[data-site-theme] .admin-health-cooldowns span,
 html[data-site-theme] .admin-summary-card,
 html[data-site-theme] .admin-system-card,
 html[data-site-theme] .admin-log-card,
@@ -5187,8 +5778,22 @@ html[data-site-theme] .admin-action-button.timeout {
 
 html[data-site-theme] .bot-status-dot.online,
 html[data-site-theme] #admin-login-status.success,
+html[data-site-theme] .admin-health-badge.ok,
+html[data-site-theme] .admin-health-row.ok,
 html[data-site-theme] .admin-status-ok {
     color: var(--app-success) !important;
+}
+
+html[data-site-theme] .admin-health-badge.warn,
+html[data-site-theme] .admin-health-row.warn {
+    border-color: var(--app-warning) !important;
+    color: var(--app-warning) !important;
+}
+
+html[data-site-theme] .admin-health-badge.error,
+html[data-site-theme] .admin-health-row.error {
+    border-color: var(--app-danger) !important;
+    color: var(--app-danger) !important;
 }
 
 html[data-site-theme] .vm-sidebar-divider,
@@ -5269,8 +5874,26 @@ html[data-site-theme] #painel-loritta .vm-server-current-icon {
         padding: 32px 0 56px;
     }
 
+    .admin-area.admin-login-mode {
+        padding-top: 0;
+    }
+
+    .admin-area.admin-login-mode .admin-shell {
+        width: calc(100% - 28px);
+        min-height: 100vh;
+        padding: 28px 0;
+    }
+
     .admin-hero {
         margin-top: 32px;
+    }
+
+    .admin-area.admin-login-mode .admin-hero {
+        margin-top: 0;
+    }
+
+    .admin-area.admin-login-mode .admin-hero h1 {
+        font-size: clamp(62px, 24vw, 118px);
     }
 
     .admin-toolbar {
@@ -5295,10 +5918,22 @@ html[data-site-theme] #painel-loritta .vm-server-current-icon {
         width: 100%;
     }
 
+    .admin-health-metrics,
+    .admin-health-grid,
     .admin-summary-grid,
     .admin-system-grid,
     .admin-server-metrics {
         grid-template-columns: 1fr;
+    }
+
+    .admin-health-head {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .admin-health-badge {
+        justify-content: center;
+        width: 100%;
     }
 
     .admin-server-head {
@@ -5306,7 +5941,8 @@ html[data-site-theme] #painel-loritta .vm-server-current-icon {
         flex-direction: column;
     }
 
-    .admin-log-row {
+    .admin-log-row,
+    .admin-health-row {
         grid-template-columns: 1fr;
     }
 

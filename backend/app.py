@@ -996,6 +996,215 @@ def montar_status_sistema():
     }
 
 
+PERMISSOES_ADMIN_RECOMENDADAS = {
+    "gerenciar_servidor": "Gerenciar servidor",
+    "gerenciar_mensagens": "Gerenciar mensagens",
+    "banir_membros": "Banir membros",
+    "expulsar_membros": "Expulsar membros",
+    "castigar_membros": "Castigar membros",
+    "ver_canais": "Ver canais",
+    "enviar_mensagens": "Enviar mensagens",
+    "ler_historico": "Ler historico",
+    "gerenciar_cargos": "Gerenciar cargos",
+    "ver_auditoria": "Ver auditoria",
+}
+
+PERMISSOES_CANAL_RECOMENDADAS = {
+    "ver": "Ver canal",
+    "enviar": "Enviar mensagens",
+    "enviar_embeds": "Enviar embeds",
+    "ler_historico": "Ler historico",
+}
+
+
+def obter_cog_moderacao():
+    for cog in bot.cogs.values():
+        if hasattr(cog, "automation_queues") and hasattr(cog, "automation_workers"):
+            return cog
+
+    return None
+
+
+def montar_fila_automacoes_admin():
+    cog = obter_cog_moderacao()
+
+    if not cog:
+        return {
+            "ativa": False,
+            "pendentes_total": 0,
+            "workers_ativos": 0,
+            "filas": [],
+            "cooldowns": {},
+            "mensagem": "Cog de moderacao ainda nao carregado.",
+        }
+
+    filas = []
+    pendentes_total = 0
+
+    for guild_id, fila in getattr(cog, "automation_queues", {}).items():
+        pendentes = fila.qsize()
+        pendentes_total += pendentes
+        guild = bot.get_guild(int(guild_id)) if str(guild_id).isdigit() else None
+        filas.append({
+            "guild_id": str(guild_id),
+            "guild_nome": guild.name if guild else str(guild_id),
+            "pendentes": pendentes,
+            "limite": getattr(fila, "maxsize", None),
+            "worker_ativo": bool(getattr(cog, "automation_workers", {}).get(guild_id))
+                and not getattr(cog, "automation_workers", {}).get(guild_id).done(),
+        })
+
+    workers_ativos = sum(
+        1
+        for worker in getattr(cog, "automation_workers", {}).values()
+        if worker and not worker.done()
+    )
+
+    return {
+        "ativa": True,
+        "pendentes_total": pendentes_total,
+        "workers_ativos": workers_ativos,
+        "filas": sorted(filas, key=lambda item: item["pendentes"], reverse=True),
+        "cooldowns": {
+            "auto_respostas": len(getattr(cog, "auto_response_cooldowns", {}) or {}),
+            "comandos_bloqueados": len(getattr(cog, "command_block_cooldowns", {}) or {}),
+            "anti_raid_logs": len(getattr(cog, "anti_raid_log_cooldowns", {}) or {}),
+        },
+        "mensagem": "Fila saudavel." if pendentes_total == 0 else "Ha automacoes aguardando processamento.",
+    }
+
+
+def listar_permissoes_faltantes_admin(servidores):
+    faltantes = []
+
+    for servidor in servidores:
+        permissoes = servidor.get("permissoes_bot") or {}
+
+        if permissoes.get("administrador"):
+            continue
+
+        for chave, rotulo in PERMISSOES_ADMIN_RECOMENDADAS.items():
+            if not permissoes.get(chave):
+                faltantes.append({
+                    "escopo": "servidor",
+                    "servidor_id": servidor.get("id"),
+                    "servidor_nome": servidor.get("nome"),
+                    "alvo": servidor.get("nome"),
+                    "permissao": rotulo,
+                    "severidade": "alta" if chave in ("ver_canais", "enviar_mensagens", "ler_historico") else "media",
+                })
+
+        for canal in servidor.get("canais") or []:
+            tipo = str(canal.get("tipo") or "")
+
+            if "text" not in tipo and "news" not in tipo and "forum" not in tipo:
+                continue
+
+            permissoes_canal = canal.get("permissoes_bot") or {}
+
+            for chave, rotulo in PERMISSOES_CANAL_RECOMENDADAS.items():
+                if not permissoes_canal.get(chave):
+                    faltantes.append({
+                        "escopo": "canal",
+                        "servidor_id": servidor.get("id"),
+                        "servidor_nome": servidor.get("nome"),
+                        "canal_id": canal.get("id"),
+                        "alvo": f"#{canal.get('nome')}",
+                        "permissao": rotulo,
+                        "severidade": "alta" if chave in ("ver", "enviar") else "media",
+                    })
+
+    return faltantes
+
+
+def montar_erros_recentes_admin(logs):
+    erros = []
+
+    for log in logs:
+        tipo = str(log.get("tipo") or "").lower()
+        nivel = str(log.get("nivel") or "").lower()
+
+        if nivel == "error" or "error" in tipo or "erro" in tipo:
+            erros.append(log)
+
+    return erros[:8]
+
+
+def montar_saude_admin(servidores, logs, sistema):
+    banco = (sistema or {}).get("banco") or {}
+    erros_recentes = montar_erros_recentes_admin(logs)
+    permissoes_faltantes = listar_permissoes_faltantes_admin(servidores)
+    automacoes = montar_fila_automacoes_admin()
+    online = bot_online()
+    ping_ms = round(bot.latency * 1000) if online and bot.latency is not None else None
+    status = "ok"
+
+    if not online or banco.get("online") is False:
+        status = "erro"
+    elif erros_recentes or permissoes_faltantes or automacoes.get("pendentes_total", 0) > 0:
+        status = "alerta"
+
+    servidores_afetados = {
+        item.get("servidor_id")
+        for item in permissoes_faltantes
+        if item.get("servidor_id")
+    }
+
+    return {
+        "status": status,
+        "rotulo": {
+            "ok": "Saude boa",
+            "alerta": "Atenção",
+            "erro": "Critico",
+        }.get(status, "Atenção"),
+        "descricao": "Leitura geral do bot, banco, erros, permissoes e automacoes.",
+        "bot": {
+            "online": online,
+            "ping_ms": ping_ms,
+            "uptime_segundos": segundos_desde(getattr(bot, "started_at", API_STARTED_AT)) if online else None,
+            "servidores": len(bot.guilds) if online else 0,
+            "ultimo_ready_em": data_iso(getattr(bot, "last_ready_at", None)),
+        },
+        "erros": {
+            "total": len(erros_recentes),
+            "itens": erros_recentes,
+        },
+        "permissoes": {
+            "faltando_total": len(permissoes_faltantes),
+            "servidores_afetados": len(servidores_afetados),
+            "itens": permissoes_faltantes[:14],
+        },
+        "automacoes": automacoes,
+        "checks": [
+            {
+                "nome": "Bot Discord",
+                "status": "ok" if online else "erro",
+                "detalhe": f"Ping {ping_ms} ms" if ping_ms is not None else "Bot offline ou sem websocket.",
+            },
+            {
+                "nome": "MongoDB",
+                "status": "ok" if banco.get("online") else "erro",
+                "detalhe": f"Ping {banco.get('ping_ms')} ms" if banco.get("online") else banco.get("erro") or "Banco indisponivel.",
+            },
+            {
+                "nome": "Erros recentes",
+                "status": "ok" if not erros_recentes else "alerta",
+                "detalhe": f"{len(erros_recentes)} evento(s) de erro nos logs recentes.",
+            },
+            {
+                "nome": "Permissoes",
+                "status": "ok" if not permissoes_faltantes else "alerta",
+            "detalhe": f"{len(permissoes_faltantes)} permissão(ões) faltando em {len(servidores_afetados)} servidor(es).",
+            },
+            {
+                "nome": "Fila de automacoes",
+                "status": "ok" if automacoes.get("pendentes_total", 0) == 0 else "alerta",
+                "detalhe": f"{automacoes.get('pendentes_total', 0)} tarefa(s) pendente(s), {automacoes.get('workers_ativos', 0)} worker(s) ativo(s).",
+            },
+        ],
+    }
+
+
 def montar_info_servidor_admin(guild):
     dono = guild.owner
     canais = sorted(
@@ -1130,13 +1339,16 @@ def admin_status():
         return erro
 
     servidores = [montar_info_servidor_admin(guild) for guild in sorted(bot.guilds, key=lambda item: item.name.lower())]
+    logs = bot.eventos_recentes(50) if hasattr(bot, "eventos_recentes") else []
+    sistema = montar_status_sistema()
 
     return jsonify({
         **status_publico_bot(),
         "admin": True,
         "comandos_slash_sincronizados": len(getattr(bot, "slash_synced_guilds", set())),
-        "sistema": montar_status_sistema(),
-        "logs": bot.eventos_recentes(50) if hasattr(bot, "eventos_recentes") else [],
+        "sistema": sistema,
+        "saude": montar_saude_admin(servidores, logs, sistema),
+        "logs": logs,
         "servidores": servidores,
     }), 200
 

@@ -4477,6 +4477,10 @@ function mostrarStatusLoginAdmin(mensagem, tipo = 'error') {
     status.className = tipo;
 }
 
+function atualizarModoLoginAdmin(ativo) {
+    document.getElementById('admin-area')?.classList.toggle('admin-login-mode', Boolean(ativo));
+}
+
 function abrirAreaAdmin() {
     limparAlteracoesPendentes();
     document.getElementById('site-principal')?.classList.add('hidden');
@@ -4488,9 +4492,11 @@ function abrirAreaAdmin() {
     document.getElementById('admin-area')?.classList.remove('hidden');
 
     if (obterAdminToken()) {
+        atualizarModoLoginAdmin(false);
         carregarStatusAdmin();
         iniciarLogsAdminTempoReal();
     } else {
+        atualizarModoLoginAdmin(true);
         document.getElementById('admin-login-panel')?.classList.remove('hidden');
         document.getElementById('admin-dashboard')?.classList.add('hidden');
     }
@@ -4498,6 +4504,7 @@ function abrirAreaAdmin() {
 
 function fecharAreaAdmin() {
     pararLogsAdminTempoReal();
+    atualizarModoLoginAdmin(false);
     document.getElementById('admin-area')?.classList.add('hidden');
     document.getElementById('site-principal')?.classList.remove('hidden');
     window.history.replaceState({}, document.title, window.location.pathname);
@@ -4508,6 +4515,7 @@ function sairAreaAdmin() {
     limparAdminToken();
     document.getElementById('admin-dashboard')?.classList.add('hidden');
     document.getElementById('admin-login-panel')?.classList.remove('hidden');
+    atualizarModoLoginAdmin(true);
     mostrarStatusLoginAdmin('Sessao ADM encerrada.', 'success');
 }
 
@@ -4554,17 +4562,21 @@ async function carregarStatusAdmin() {
     if (!token) {
         document.getElementById('admin-login-panel')?.classList.remove('hidden');
         document.getElementById('admin-dashboard')?.classList.add('hidden');
+        atualizarModoLoginAdmin(true);
         return;
     }
 
     document.getElementById('admin-login-panel')?.classList.add('hidden');
     document.getElementById('admin-dashboard')?.classList.remove('hidden');
+    atualizarModoLoginAdmin(false);
 
     const lista = document.getElementById('admin-server-list');
     const resumo = document.getElementById('admin-summary-grid');
+    const saude = document.getElementById('admin-health-panel');
 
     if (lista) lista.innerHTML = '<div class="admin-loading">Carregando servidores...</div>';
     if (resumo) resumo.innerHTML = '';
+    if (saude) saude.innerHTML = '';
 
     try {
         const response = await fetch(`${API_URL}/api/admin/status`, {
@@ -4582,17 +4594,33 @@ async function carregarStatusAdmin() {
             limparAdminToken();
             document.getElementById('admin-dashboard')?.classList.add('hidden');
             document.getElementById('admin-login-panel')?.classList.remove('hidden');
+            atualizarModoLoginAdmin(true);
         }
 
         mostrarStatusLoginAdmin(dados.mensagem || dados.erro || 'Nao foi possivel carregar ADM.');
     } catch (erro) {
         console.error('Erro ao carregar status ADM:', erro);
         if (lista) lista.innerHTML = '<div class="admin-loading">Erro ao conectar na API.</div>';
+        if (saude) {
+            saude.innerHTML = renderizarSaudeAdmin({
+                status: 'erro',
+                rotulo: 'Crítico',
+                descricao: 'Não consegui carregar a leitura de saúde do bot agora.',
+                bot: { online: false },
+                erros: { total: 1, itens: [{ tipo: 'api', mensagem: 'Erro ao conectar na API do painel.' }] },
+                permissoes: { faltando_total: 0, servidores_afetados: 0, itens: [] },
+                automacoes: { pendentes_total: 0, workers_ativos: 0, filas: [], cooldowns: {}, mensagem: 'Fila indisponível.' },
+                checks: [
+                    { nome: 'API ADM', status: 'erro', detalhe: 'Sem resposta da API.' }
+                ]
+            }, { online: false });
+        }
     }
 }
 
 function renderizarAdminDashboard(dados) {
     const titulo = document.getElementById('admin-bot-title');
+    const saude = document.getElementById('admin-health-panel');
     const resumo = document.getElementById('admin-summary-grid');
     const sistema = document.getElementById('admin-system-panel');
     const logs = document.getElementById('admin-log-panel');
@@ -4601,6 +4629,10 @@ function renderizarAdminDashboard(dados) {
 
     if (titulo) {
         titulo.innerText = dados.bot?.display || dados.bot?.nome || 'AMZ Bot';
+    }
+
+    if (saude) {
+        saude.innerHTML = renderizarSaudeAdmin(dados.saude || {}, dados);
     }
 
     if (resumo) {
@@ -4640,6 +4672,135 @@ function criarCardResumoAdmin(titulo, valor, detalhe) {
             <strong>${escaparHTML(valor)}</strong>
             <small>${escaparHTML(detalhe)}</small>
         </article>
+    `;
+}
+
+function classeStatusSaudeAdmin(status) {
+    if (status === 'ok') return 'ok';
+    if (status === 'erro') return 'error';
+    return 'warn';
+}
+
+function renderizarSaudeAdmin(saude = {}, dados = {}) {
+    const status = classeStatusSaudeAdmin(saude.status || (dados.online ? 'ok' : 'erro'));
+    const bot = saude.bot || {};
+    const erros = saude.erros || {};
+    const permissoes = saude.permissoes || {};
+    const automacoes = saude.automacoes || {};
+    const checks = Array.isArray(saude.checks) ? saude.checks : [];
+    const errosItens = Array.isArray(erros.itens) ? erros.itens : [];
+    const permissoesItens = Array.isArray(permissoes.itens) ? permissoes.itens : [];
+    const filas = Array.isArray(automacoes.filas) ? automacoes.filas : [];
+
+    return `
+        <article class="admin-health-card ${status}">
+            <div class="admin-health-head">
+                <div>
+                    <span>Opção geral</span>
+                    <strong>Saúde do Bot</strong>
+                    <p>${escaparHTML(saude.descricao || 'Status geral do bot, API, permissões, logs e automações.')}</p>
+                </div>
+                <div class="admin-health-badge ${status}">
+                    <i class="ph ${status === 'ok' ? 'ph-check-circle' : status === 'error' ? 'ph-warning-octagon' : 'ph-warning-circle'}"></i>
+                    ${escaparHTML(saude.rotulo || (status === 'ok' ? 'Saúde boa' : 'Atenção'))}
+                </div>
+            </div>
+
+            <div class="admin-health-metrics">
+                ${renderizarMetricaSaudeAdmin('Bot', bot.online ? 'Online' : 'Offline', bot.online ? 'Discord conectado' : 'Sem conexão')}
+                ${renderizarMetricaSaudeAdmin('Ping', bot.ping_ms !== null && bot.ping_ms !== undefined ? `${bot.ping_ms} ms` : '--', 'Latência websocket')}
+                ${renderizarMetricaSaudeAdmin('Erros', erros.total ?? errosItens.length, 'Logs recentes')}
+                ${renderizarMetricaSaudeAdmin('Permissões', permissoes.faltando_total ?? permissoesItens.length, `${permissoes.servidores_afetados || 0} servidor(es)`)}
+                ${renderizarMetricaSaudeAdmin('Fila', automacoes.pendentes_total ?? 0, `${automacoes.workers_ativos || 0} worker(s)`)}
+            </div>
+
+            <div class="admin-health-grid">
+                <section class="admin-health-column">
+                    <h3>Checks principais</h3>
+                    <div class="admin-health-list">
+                        ${checks.map(renderizarCheckSaudeAdmin).join('') || '<div class="admin-health-empty">Nenhum check retornado pela API.</div>'}
+                    </div>
+                </section>
+
+                <section class="admin-health-column">
+                    <h3>Permissões faltando</h3>
+                    <div class="admin-health-list compact">
+                        ${permissoesItens.map(renderizarPermissaoFaltanteSaudeAdmin).join('') || '<div class="admin-health-empty">Nenhuma permissão faltando nas leituras recentes.</div>'}
+                    </div>
+                </section>
+
+                <section class="admin-health-column">
+                    <h3>Fila de automações</h3>
+                    <div class="admin-health-list compact">
+                        ${filas.map(renderizarFilaAutomacaoSaudeAdmin).join('') || `<div class="admin-health-empty">${escaparHTML(automacoes.mensagem || 'Sem tarefas pendentes.')}</div>`}
+                    </div>
+                    <div class="admin-health-cooldowns">
+                        <span>Auto respostas: ${escaparHTML(automacoes.cooldowns?.auto_respostas ?? 0)}</span>
+                        <span>Comandos bloqueados: ${escaparHTML(automacoes.cooldowns?.comandos_bloqueados ?? 0)}</span>
+                        <span>Anti raid: ${escaparHTML(automacoes.cooldowns?.anti_raid_logs ?? 0)}</span>
+                    </div>
+                </section>
+
+                <section class="admin-health-column">
+                    <h3>Erros recentes</h3>
+                    <div class="admin-health-list compact">
+                        ${errosItens.map(renderizarErroSaudeAdmin).join('') || '<div class="admin-health-empty">Nenhum erro recente nos logs.</div>'}
+                    </div>
+                </section>
+            </div>
+        </article>
+    `;
+}
+
+function renderizarMetricaSaudeAdmin(titulo, valor, detalhe) {
+    return `
+        <div class="admin-health-metric">
+            <span>${escaparHTML(titulo)}</span>
+            <strong>${escaparHTML(valor)}</strong>
+            <small>${escaparHTML(detalhe)}</small>
+        </div>
+    `;
+}
+
+function renderizarCheckSaudeAdmin(check = {}) {
+    const status = classeStatusSaudeAdmin(check.status || 'warn');
+
+    return `
+        <div class="admin-health-row ${status}">
+            <span>${escaparHTML(check.nome || 'Check')}</span>
+            <strong>${escaparHTML(check.status || 'alerta')}</strong>
+            <small>${escaparHTML(check.detalhe || '--')}</small>
+        </div>
+    `;
+}
+
+function renderizarPermissaoFaltanteSaudeAdmin(item = {}) {
+    return `
+        <div class="admin-health-row ${item.severidade === 'alta' ? 'error' : 'warn'}">
+            <span>${escaparHTML(item.servidor_nome || item.servidor_id || 'Servidor')}</span>
+            <strong>${escaparHTML(item.permissao || 'Permissao')}</strong>
+            <small>${escaparHTML(item.escopo === 'canal' ? `${item.alvo || 'Canal'} / ${item.canal_id || '--'}` : item.alvo || 'Servidor')}</small>
+        </div>
+    `;
+}
+
+function renderizarFilaAutomacaoSaudeAdmin(fila = {}) {
+    return `
+        <div class="admin-health-row ${Number(fila.pendentes || 0) > 0 ? 'warn' : 'ok'}">
+            <span>${escaparHTML(fila.guild_nome || fila.guild_id || 'Servidor')}</span>
+            <strong>${escaparHTML(fila.pendentes ?? 0)} / ${escaparHTML(fila.limite || '--')}</strong>
+            <small>${fila.worker_ativo ? 'Worker ativo' : 'Sem worker ativo'}</small>
+        </div>
+    `;
+}
+
+function renderizarErroSaudeAdmin(log = {}) {
+    return `
+        <div class="admin-health-row error">
+            <span>${escaparHTML(formatarDataHora(log.criado_em))}</span>
+            <strong>${escaparHTML(log.tipo || 'erro')}</strong>
+            <small>${escaparHTML(log.mensagem || '--')}</small>
+        </div>
     `;
 }
 
@@ -4914,8 +5075,6 @@ function renderizarServidorAdmin(servidor) {
     const canais = Array.isArray(servidor.canais) ? servidor.canais : [];
     const cargos = Array.isArray(servidor.cargos) ? servidor.cargos : [];
     const limpezas = Array.isArray(servidor.limpezas_configuradas) ? servidor.limpezas_configuradas : [];
-    const boasVindas = servidor.boas_vindas_config || {};
-    const avisosAtivos = Number(Boolean(boasVindas.entrada_ativa)) + Number(Boolean(boasVindas.saida_ativa));
     const features = Array.isArray(servidor.features) && servidor.features.length
         ? servidor.features.join(', ')
         : 'Nenhuma feature especial';
@@ -4943,7 +5102,6 @@ function renderizarServidorAdmin(servidor) {
                 <span>Canais <strong>${escaparHTML(servidor.contagens?.canais ?? canais.length)}</strong></span>
                 <span>Cargos <strong>${escaparHTML(servidor.contagens?.cargos ?? cargos.length)}</strong></span>
                 <span>Limpezas <strong>${escaparHTML(limpezas.length)}</strong></span>
-                <span>Avisos <strong>${escaparHTML(avisosAtivos)}</strong></span>
             </div>
 
             <div class="admin-server-meta">
@@ -4989,13 +5147,6 @@ function renderizarServidorAdmin(servidor) {
                 <summary>Limpezas (${escaparHTML(limpezas.length)})</summary>
                 <div class="admin-detail-list">
                     ${limpezas.map(renderizarLimpezaAdmin).join('') || '<span>Nenhuma limpeza configurada.</span>'}
-                </div>
-            </details>
-
-            <details class="admin-details">
-                <summary>Avisos de entrada e saida</summary>
-                <div class="admin-detail-list">
-                    ${renderizarBoasVindasAdmin(boasVindas)}
                 </div>
             </details>
         </article>
@@ -5275,28 +5426,6 @@ function castigarMembroAdmin(serverId, userId) {
         verbo: 'castigar',
         pedirMinutos: true
     });
-}
-
-function renderizarBoasVindasAdmin(config = {}) {
-    const entrada = config.entrada_ativa
-        ? `Ativo em #${config.canal_entrada_nome || config.canal_entrada_id || 'canal'}`
-        : 'Desativado';
-    const saida = config.saida_ativa
-        ? `Ativo em #${config.canal_saida_nome || config.canal_saida_id || 'canal'}`
-        : 'Desativado';
-
-    return `
-        <div class="admin-detail-row">
-            <strong>Entrada</strong>
-            <span>${escaparHTML(entrada)}</span>
-            <small>Titulo: ${escaparHTML(config.entrada_titulo || '--')}</small>
-        </div>
-        <div class="admin-detail-row">
-            <strong>Saida</strong>
-            <span>${escaparHTML(saida)}</span>
-            <small>Titulo: ${escaparHTML(config.saida_titulo || '--')}</small>
-        </div>
-    `;
 }
 
 function renderizarLimpezaAdmin(limpeza) {
