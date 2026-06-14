@@ -183,7 +183,6 @@ html[data-site-theme] body {
 #downloads,
 #aplicativos,
 #solucoes,
-#server-hub,
 #faq,
 #site-principal footer {
     background: var(--site-section-bg) !important;
@@ -340,296 +339,6 @@ html[data-site-theme] body {
 
 .site-faq-list p {
     margin-top: 10px;
-}
-
-.site-server-hub-section {
-    color: var(--site-text);
-}
-
-.site-server-hub-heading {
-    max-width: 860px;
-    margin-bottom: 34px;
-}
-
-.site-server-hub-heading h2 {
-    margin-top: 16px;
-    color: var(--site-text);
-    font-size: clamp(38px, 6vw, 82px);
-    font-weight: 900;
-    letter-spacing: -0.055em;
-    line-height: 0.92;
-    text-transform: uppercase;
-}
-
-.site-server-hub-heading p {
-    max-width: 760px;
-    margin-top: 18px;
-    color: var(--site-muted);
-    font-size: 16px;
-    line-height: 1.75;
-}
-
-.site-server-hub-layout {
-    display: grid;
-    grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.55fr);
-    gap: 18px;
-    align-items: start;
-}
-
-.site-server-profile-card,
-.site-server-feature-grid article {
-    background: var(--site-card-bg);
-    border: 1px solid var(--site-border);
-    box-shadow: 0 18px 60px var(--site-shadow);
-}
-
-.site-server-profile-card {
-    position: sticky;
-    top: 104px;
-    display: grid;
-    gap: 18px;
-    padding: 28px;
-}
-
-.site-server-avatar {
-    width: 82px;
-    height: 82px;
-    border: 1px solid var(--site-border-strong);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, var(--site-text), var(--site-muted));
-    color: var(--site-bg);
-    font-size: 24px;
-    font-weight: 900;
-    letter-spacing: -0.08em;
-}
-
-.site-server-kicker,
-.site-server-status-list span,
-.site-server-feature-grid span {
-    color: var(--site-soft);
-    font-size: 10px;
-    font-weight: 900;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-}
-
-.site-server-profile-card h3 {
-    color: var(--site-text);
-    font-size: 34px;
-    font-weight: 900;
-    letter-spacing: -0.04em;
-    line-height: 0.95;
-    text-transform: uppercase;
-}
-
-.site-server-profile-card p {
-    color: var(--site-muted);
-    font-size: 14px;
-    line-height: 1.7;
-}
-
-.site-server-status-list {
-    display: grid;
-    gap: 10px;
-    padding-top: 18px;
-    border-top: 1px solid var(--site-border);
-}
-
-.site-server-status-list div {
-    display: grid;
-    gap: 4px;
-}
-
-.site-server-status-list strong {
-    color: var(--site-text);
-    font-size: 13px;
-    font-weight: 900;
-    line-height: 1.35;
-}
-
-.site-server-status-list i {
-    width: 8px;
-    height: 8px;
-    display: inline-block;
-    margin-right: 7px;
-    border-radius: 999px;
-    background: #3cff7b;
-    box-shadow: 0 0 18px rgba(60, 255, 123, 0.6);
-}
-
-.site-server-invite-button {
-    min-height: 50px;
-    border: 1px solid var(--site-button-border);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    padding: 0 16px;
-    color: var(--site-button-text);
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    transition: background 0.2s ease, border-color 0.2s ease;
-}
-
-.site-server-invite-button:hover {
-    background: var(--site-button-hover);
-    border-color: var(--site-button-border-strong);
-}
-
-.site-server-hub-main {
-    display: grid;
-    gap: 18px;
-}
-
-.site-server-feature-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-}
-
-.site-server-feature-grid article {
-    min-height: 150px;
-    padding: 20px;
-    display: grid;
-    align-content: start;
-    gap: 12px;
-}
-
-.site-server-feature-grid i {
-    color: var(--site-text);
-    font-size: 26px;
-}
-
-.site-server-feature-grid strong {
-    color: var(--site-text);
-    font-size: 15px;
-    font-weight: 900;
-    line-height: 1.1;
-    text-transform: uppercase;
-}
-
-.site-server-feature-grid span {
-    letter-spacing: 0;
-    line-height: 1.55;
-    text-transform: none;
-}
-
-.site-discord-message-preview {
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: #31333a;
-    padding: 28px;
-    color: #f3f4f7;
-    box-shadow: 0 22px 80px rgba(0, 0, 0, 0.28);
-}
-
-.site-discord-message-head {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 10px;
-}
-
-.site-discord-bot-icon {
-    width: 36px;
-    height: 36px;
-    border: 2px solid #2fd4cf;
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: #2fd4cf;
-    font-size: 18px;
-}
-
-.site-discord-message-head strong {
-    color: #ffffff;
-    font-size: 16px;
-    font-weight: 800;
-}
-
-.site-discord-message-head strong span {
-    border-radius: 4px;
-    background: #5865f2;
-    padding: 2px 5px;
-    color: #ffffff;
-    font-size: 11px;
-    font-weight: 900;
-}
-
-.site-discord-message-head small {
-    margin-left: 4px;
-    color: rgba(255, 255, 255, 0.54);
-    font-size: 12px;
-}
-
-.site-discord-line,
-.site-discord-user,
-.site-discord-quote p,
-.site-discord-footer-text {
-    font-size: clamp(16px, 2.2vw, 20px);
-    line-height: 1.45;
-}
-
-.site-discord-line {
-    margin-left: 50px;
-    color: #f2f3f5;
-}
-
-.site-discord-message-preview mark {
-    border-radius: 3px;
-    background: rgba(88, 101, 242, 0.38);
-    color: #dce1ff;
-    padding: 0 4px;
-    font-weight: 800;
-}
-
-.site-discord-message-preview h3 {
-    margin: 18px 0 12px 50px;
-    color: #ffffff;
-    font-size: clamp(24px, 3.6vw, 34px);
-    font-weight: 900;
-    line-height: 1;
-}
-
-.site-discord-user,
-.site-discord-icons {
-    margin-left: 50px;
-}
-
-.site-discord-icons {
-    margin-top: 8px;
-    font-size: 22px;
-    letter-spacing: 0.06em;
-}
-
-.site-discord-quote {
-    margin: 8px 0 0 50px;
-    border-left: 4px solid rgba(255, 255, 255, 0.28);
-    padding-left: 14px;
-}
-
-.site-discord-quote p {
-    max-width: 780px;
-    color: #ffffff;
-    font-weight: 900;
-}
-
-.site-discord-footer-text {
-    display: block;
-    margin: 18px 0 0 50px;
-    color: #ffffff;
-    font-weight: 900;
-}
-
-.site-discord-divider {
-    width: min(440px, calc(100% - 50px));
-    height: 5px;
-    margin: 30px 0 0 50px;
-    background: #ffffff;
 }
 
 .site-downloads-heading {
@@ -3857,19 +3566,16 @@ section {
     #downloads,
     #aplicativos,
     #solucoes,
-    #server-hub,
     #faq {
         padding: 64px 18px;
     }
 
     .site-seo-heading,
-    .site-server-hub-heading,
     .site-faq-heading {
         margin-bottom: 26px;
     }
 
     .site-seo-heading h2,
-    .site-server-hub-heading h2,
     .site-faq-heading h2 {
         font-size: 34px;
         letter-spacing: -0.02em;
@@ -3877,60 +3583,13 @@ section {
     }
 
     .site-seo-heading p,
-    .site-server-hub-heading p,
     .site-faq-heading p {
         font-size: 14px;
         line-height: 1.7;
     }
 
-    .site-seo-grid,
-    .site-server-hub-layout,
-    .site-server-feature-grid {
+    .site-seo-grid {
         grid-template-columns: 1fr;
-    }
-
-    .site-server-profile-card {
-        position: static;
-        padding: 22px;
-    }
-
-    .site-server-avatar {
-        width: 64px;
-        height: 64px;
-        font-size: 19px;
-    }
-
-    .site-server-profile-card h3 {
-        font-size: 28px;
-    }
-
-    .site-discord-message-preview {
-        padding: 18px;
-    }
-
-    .site-discord-line,
-    .site-discord-message-preview h3,
-    .site-discord-user,
-    .site-discord-icons,
-    .site-discord-quote,
-    .site-discord-footer-text,
-    .site-discord-divider {
-        margin-left: 0;
-    }
-
-    .site-discord-line,
-    .site-discord-user,
-    .site-discord-quote p,
-    .site-discord-footer-text {
-        font-size: 15px;
-    }
-
-    .site-discord-message-preview h3 {
-        font-size: 24px;
-    }
-
-    .site-discord-divider {
-        width: 100%;
     }
 
     .site-seo-card {

@@ -23,8 +23,10 @@ AUTOMATION_QUEUE_MAX_SIZE = 80
 AUTOMATION_JOB_TIMEOUT_SECONDS = 8
 AUTOMATION_WORKER_IDLE_SECONDS = 45
 COMMAND_BLOCK_NOTICE_COOLDOWN_SECONDS = 8
+INVITE_TRACKER_DEFAULT_MESSAGE = "{mention} foi convidado por {inviter} e agora ele tem {invites} convite(s)."
 AUDIT_RATE_LIMIT_WINDOW_SECONDS = 10
 AUDIT_RATE_LIMIT_DEFAULT = 12
+LOG_CHANNEL_COOLDOWN_ON_RATE_LIMIT_SECONDS = 90
 AUDIT_RATE_LIMITS = {
     "mensagem_apagada": 8,
     "mensagem_editada": 8,
@@ -94,6 +96,15 @@ def texto_curto(valor, limite=900):
     return f"{texto[:limite - 3]}..."
 
 
+def erro_rate_limit_discord(erro):
+    texto = str(erro)
+    return isinstance(erro, discord.HTTPException) and (
+        getattr(erro, "status", None) == 429
+        or "429" in texto
+        or "Too Many Requests" in texto
+    )
+
+
 def ids_lista(valores):
     return {str(valor).strip() for valor in valores or [] if str(valor).strip()}
 
@@ -155,9 +166,12 @@ class ModerationCog(commands.Cog):
         self.join_cache = defaultdict(lambda: deque(maxlen=ANTI_RAID_JOIN_CACHE_MAX))
         self.audit_rate_limits = defaultdict(deque)
         self.anti_raid_log_cooldowns = {}
+        self.log_channel_cooldowns = {}
         self.config_cache = {}
         self.auto_response_cooldowns = {}
         self.command_block_cooldowns = {}
+        self.invite_cache = {}
+        self.invite_locks = defaultdict(asyncio.Lock)
         self.automation_queues = {}
         self.automation_workers = {}
         self.automation_sequence = 0
@@ -281,6 +295,177 @@ class ModerationCog(commands.Cog):
             "timestamp": agora,
         }
         return config
+
+    def dados_convite(self, invite):
+        inviter = getattr(invite, "inviter", None)
+        return {
+            "code": str(getattr(invite, "code", "") or ""),
+            "uses": int(getattr(invite, "uses", 0) or 0),
+            "inviter_id": str(getattr(inviter, "id", "") or ""),
+            "inviter_name": str(inviter) if inviter else "Convite desconhecido",
+            "inviter_mention": inviter.mention if inviter else "Convite desconhecido",
+        }
+
+    async def buscar_convites_servidor(self, guild):
+        try:
+            convites = await guild.invites()
+        except discord.Forbidden:
+            return None, "Bot sem permissao Gerenciar Servidor para ler convites."
+        except discord.HTTPException as erro:
+            return None, f"Falha ao consultar convites no Discord: {erro}"
+
+        return {
+            convite.code: self.dados_convite(convite)
+            for convite in convites
+            if getattr(convite, "code", None)
+        }, None
+
+    async def atualizar_cache_convites(self, guild):
+        if not guild:
+            return
+
+        async with self.invite_locks[guild.id]:
+            convites, erro = await self.buscar_convites_servidor(guild)
+            if convites is None:
+                if hasattr(self.bot, "registrar_evento"):
+                    self.bot.registrar_evento(
+                        "invite_tracker_cache_error",
+                        erro,
+                        nivel="warn",
+                        guild_id=guild.id,
+                    )
+                return
+
+            self.invite_cache[guild.id] = convites
+
+    async def detectar_convite_usado(self, guild):
+        if not guild:
+            return None, "Servidor nao identificado."
+
+        async with self.invite_locks[guild.id]:
+            convites_atuais, erro = await self.buscar_convites_servidor(guild)
+            if convites_atuais is None:
+                return None, erro
+
+            convites_anteriores = self.invite_cache.get(guild.id, {})
+            if not convites_anteriores:
+                self.invite_cache[guild.id] = convites_atuais
+                return None, "Cache de convites iniciado agora; proxima entrada sera rastreada com mais precisao."
+
+            convite_usado = None
+            maior_delta = 0
+
+            for codigo, convite_atual in convites_atuais.items():
+                usos_anteriores = int(convites_anteriores.get(codigo, {}).get("uses", 0) or 0)
+                delta = int(convite_atual.get("uses", 0) or 0) - usos_anteriores
+                if delta > maior_delta:
+                    maior_delta = delta
+                    convite_usado = convite_atual
+
+            self.invite_cache[guild.id] = convites_atuais
+
+        if convite_usado:
+            inviter_id = convite_usado.get("inviter_id")
+            if inviter_id:
+                convite_usado = {
+                    **convite_usado,
+                    "inviter_total_uses": sum(
+                        int(convite.get("uses", 0) or 0)
+                        for convite in self.invite_cache.get(guild.id, {}).values()
+                        if convite.get("inviter_id") == inviter_id
+                    ),
+                }
+            return convite_usado, None
+
+        return None, "Convite usado nao identificado."
+
+    def aplicar_variaveis_convite(self, template, member, convite):
+        convite = convite or {}
+        inviter_id = convite.get("inviter_id") or ""
+        inviter_name = convite.get("inviter_name") or "Convite desconhecido"
+        inviter_mention = convite.get("inviter_mention") or "Convite desconhecido"
+        substituicoes = {
+            "{mention}": member.mention,
+            "{user}": member.name,
+            "{username}": member.name,
+            "{user_tag}": str(member),
+            "{id}": str(member.id),
+            "{server}": member.guild.name,
+            "{server_upper}": member.guild.name.upper(),
+            "{member_count}": str(member.guild.member_count or 0),
+            "{member_number}": str(member.guild.member_count or 0),
+            "{inviter}": inviter_mention if inviter_id else inviter_name,
+            "{inviter_tag}": inviter_name,
+            "{inviter_id}": inviter_id or "--",
+            "{invites}": str(convite.get("inviter_total_uses", convite.get("uses", 0)) or 0),
+            "{invite_code}": convite.get("code") or "--",
+        }
+
+        mensagem = str(template or INVITE_TRACKER_DEFAULT_MESSAGE)
+        for chave, valor in substituicoes.items():
+            mensagem = mensagem.replace(chave, str(valor))
+        return mensagem.strip()
+
+    async def enviar_rastreador_convite(self, member, config):
+        if not self.automacao_ativa(config, "inviteTracker"):
+            return
+
+        valores = self.valores_automacao(config, "inviteTracker")
+        canal = await self.resolver_canal_texto(member.guild, valores.get("channelId"))
+        if not canal:
+            if hasattr(self.bot, "registrar_evento"):
+                self.bot.registrar_evento(
+                    "invite_tracker_channel_missing",
+                    "Rastreador de convites ativo sem canal valido.",
+                    nivel="warn",
+                    guild_id=member.guild.id,
+                    user_id=member.id,
+                )
+            return
+
+        convite, erro = await self.detectar_convite_usado(member.guild)
+        if erro and hasattr(self.bot, "registrar_evento"):
+            self.bot.registrar_evento(
+                "invite_tracker_warn",
+                erro,
+                nivel="warn",
+                guild_id=member.guild.id,
+                user_id=member.id,
+            )
+
+        mensagem = self.aplicar_variaveis_convite(
+            valores.get("message") or INVITE_TRACKER_DEFAULT_MESSAGE,
+            member,
+            convite,
+        )
+        if not mensagem:
+            return
+
+        try:
+            await canal.send(
+                mensagem[:1900],
+                allowed_mentions=discord.AllowedMentions(users=True, roles=False, everyone=False),
+            )
+            if hasattr(self.bot, "registrar_evento"):
+                self.bot.registrar_evento(
+                    "invite_tracker_sent",
+                    f"Convite rastreado para {member}.",
+                    guild_id=member.guild.id,
+                    channel_id=canal.id,
+                    user_id=member.id,
+                    invite_code=(convite or {}).get("code"),
+                    inviter_id=(convite or {}).get("inviter_id"),
+                )
+        except discord.HTTPException as erro:
+            if hasattr(self.bot, "registrar_evento"):
+                self.bot.registrar_evento(
+                    "invite_tracker_send_error",
+                    f"Falha ao enviar aviso de convite: {erro}",
+                    nivel="error",
+                    guild_id=member.guild.id,
+                    channel_id=canal.id,
+                    user_id=member.id,
+                )
 
     def usuario_imune(self, member, config):
         if not isinstance(member, discord.Member):
@@ -572,6 +757,27 @@ class ModerationCog(commands.Cog):
         janela.append(agora)
         return True
 
+    def canal_log_em_cooldown(self, channel_id):
+        if not channel_id:
+            return False
+
+        agora = datetime.now(timezone.utc).timestamp()
+        return self.log_channel_cooldowns.get(channel_id, 0) > agora
+
+    def pausar_logs_canal(self, guild_id, channel_id, erro):
+        agora = datetime.now(timezone.utc).timestamp()
+        self.log_channel_cooldowns[channel_id] = agora + LOG_CHANNEL_COOLDOWN_ON_RATE_LIMIT_SECONDS
+
+        if hasattr(self.bot, "registrar_evento"):
+            self.bot.registrar_evento(
+                "moderation_log_rate_limited",
+                f"Discord limitou logs de moderacao. Canal pausado por {LOG_CHANNEL_COOLDOWN_ON_RATE_LIMIT_SECONDS}s.",
+                nivel="warn",
+                guild_id=guild_id,
+                channel_id=channel_id,
+                erro=str(erro)[:180],
+            )
+
     def regra_auto_resposta_corresponde(self, conteudo, regra):
         palavra = str(regra.get("keyword") or "").strip().lower()
         texto = str(conteudo or "").lower()
@@ -758,6 +964,9 @@ class ModerationCog(commands.Cog):
                 await self.registrar_historico(guild, event_id, titulo, None, responsavel, "falhou")
             return
 
+        if self.canal_log_em_cooldown(canal.id):
+            return
+
         embed = discord.Embed(
             title=titulo,
             description=texto_curto(descricao, 3500),
@@ -775,6 +984,10 @@ class ModerationCog(commands.Cog):
             if usar_auditoria:
                 await self.registrar_historico(guild, event_id, titulo, canal, responsavel, "enviado")
         except discord.HTTPException as erro:
+            if erro_rate_limit_discord(erro):
+                self.pausar_logs_canal(guild.id, canal.id, erro)
+                return
+
             print(f"[MOD] Falha ao enviar log em {guild.id}: {erro}")
             if usar_auditoria:
                 await self.registrar_historico(guild, event_id, titulo, canal, responsavel, "falhou")
@@ -1290,11 +1503,37 @@ class ModerationCog(commands.Cog):
         return False
 
     @commands.Cog.listener()
+    async def on_ready(self):
+        for guild in list(self.bot.guilds):
+            asyncio.create_task(self.atualizar_cache_convites(guild))
+
+    @commands.Cog.listener()
+    async def on_guild_join(self, guild):
+        await self.atualizar_cache_convites(guild)
+
+    @commands.Cog.listener()
+    async def on_invite_create(self, invite):
+        if invite.guild:
+            await self.atualizar_cache_convites(invite.guild)
+
+    @commands.Cog.listener()
+    async def on_invite_delete(self, invite):
+        if invite.guild:
+            await self.atualizar_cache_convites(invite.guild)
+
+    @commands.Cog.listener()
     async def on_member_join(self, member):
         config = await self.obter_config(member.guild)
         anti_raid_bloqueou = await self.processar_anti_raid_entrada(member, config)
         if anti_raid_bloqueou:
             return
+
+        self.agendar_automacao(
+            member.guild,
+            18,
+            f"invite_tracker:{member.id}",
+            lambda member=member, config=config: self.enviar_rastreador_convite(member, config),
+        )
 
         if not self.automacao_ativa(config, "autoRole"):
             return

@@ -148,6 +148,18 @@ const automationSettings = [
         fields: [{ id: 'roleId', label: 'Cargo para novos membros', type: 'role', value: '', hint: 'Cargo que o bot tenta entregar assim que o membro entrar.' }]
     },
     {
+        id: 'inviteTracker',
+        title: 'Rastreador de convites',
+        description: 'Quando alguem entra no servidor, mostra quem convidou essa pessoa e quantos convites o convidador tem.',
+        enabled: false,
+        type: 'invite-tracker',
+        notes: ['Precisa da permissao Gerenciar Servidor para ler convites.', 'Se o convite nao puder ser identificado, o bot nao derruba nada: apenas ignora ou registra como desconhecido.'],
+        fields: [
+            { id: 'channelId', label: 'Canal do aviso', type: 'channel', value: '', hint: 'Canal onde o bot deve mandar o aviso de convite usado.' },
+            { id: 'message', label: 'Mensagem do aviso', type: 'textarea', value: '{mention} foi convidado por {inviter} e agora ele tem {invites} convite(s).', hint: 'Variaveis: {mention}, {user}, {user_tag}, {inviter}, {inviter_tag}, {invites}, {invite_code}, {server}.' }
+        ]
+    },
+    {
         id: 'autoResponse',
         title: 'Auto resposta',
         description: 'Quando uma mensagem bater com uma auto resposta ligada, o bot responde no mesmo canal.',
@@ -4795,13 +4807,34 @@ function renderizarFilaAutomacaoSaudeAdmin(fila = {}) {
 }
 
 function renderizarErroSaudeAdmin(log = {}) {
+    const mensagem = resumirMensagemLogAdmin(log);
+
     return `
         <div class="admin-health-row error">
             <span>${escaparHTML(formatarDataHora(log.criado_em))}</span>
             <strong>${escaparHTML(log.tipo || 'erro')}</strong>
-            <small>${escaparHTML(log.mensagem || '--')}</small>
+            <small title="${escaparHTML(log.mensagem || '--')}">${escaparHTML(mensagem)}</small>
         </div>
     `;
+}
+
+function resumirMensagemLogAdmin(log = {}) {
+    const mensagem = String(log.mensagem || '--').replace(/\s+/g, ' ').trim();
+    const tipo = String(log.tipo || '').toLowerCase();
+
+    if (mensagem.includes('429') || mensagem.includes('Too Many Requests') || tipo.includes('rate_limited')) {
+        return 'Rate limit do Discord. Aguarde alguns segundos antes de repetir o comando.';
+    }
+
+    if (mensagem.includes('Sign in to confirm') || mensagem.includes("not a bot")) {
+        return 'YouTube bloqueou a verificação desse link.';
+    }
+
+    if (mensagem.length <= 180) {
+        return mensagem;
+    }
+
+    return `${mensagem.slice(0, 177)}...`;
 }
 
 function renderizarLogsAdmin(logs = []) {
@@ -4894,7 +4927,7 @@ function renderizarLogAdmin(log = {}) {
                 <span>${escaparHTML(rotuloCategoriaLogAdmin(categoria))}</span>
                 ${escaparHTML(log.tipo || 'evento')}
             </strong>
-            <span>${escaparHTML(log.mensagem || '--')}</span>
+            <span title="${escaparHTML(log.mensagem || '--')}">${escaparHTML(resumirMensagemLogAdmin(log))}</span>
             ${contexto ? `<small>${escaparHTML(contexto)}</small>` : ''}
         </div>
     `;

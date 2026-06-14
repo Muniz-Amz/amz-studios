@@ -1,3 +1,4 @@
+import math
 import os
 import traceback
 from collections import deque
@@ -25,7 +26,14 @@ SINCRONIZAR_SLASH_GLOBAL = os.getenv("AMZ_SYNC_GLOBAL_SLASH", "false").strip().l
     "yes",
     "on",
 )
-LIMPAR_SLASH_GLOBAL = os.getenv("AMZ_CLEAR_GLOBAL_SLASH", "true").strip().lower() in (
+LIMPAR_SLASH_GLOBAL = os.getenv("AMZ_CLEAR_GLOBAL_SLASH", "false").strip().lower() in (
+    "1",
+    "true",
+    "sim",
+    "yes",
+    "on",
+)
+SINCRONIZAR_SLASH_SERVIDORES_AO_INICIAR = os.getenv("AMZ_SYNC_CONNECTED_GUILDS_ON_READY", "false").strip().lower() in (
     "1",
     "true",
     "sim",
@@ -39,12 +47,59 @@ SLASH_GUILD_IDS = [
 ]
 
 
+def erro_original(erro):
+    atual = erro
+
+    while hasattr(atual, "original"):
+        atual = atual.original
+
+    return atual
+
+
+def extrair_espera_rate_limit(erro):
+    original = erro_original(erro)
+    retry_after = getattr(original, "retry_after", None)
+
+    if retry_after is not None:
+        try:
+            return max(float(retry_after), 1)
+        except (TypeError, ValueError):
+            pass
+
+    headers = getattr(getattr(original, "response", None), "headers", {}) or {}
+
+    for chave in ("Retry-After", "retry-after", "X-RateLimit-Reset-After", "x-ratelimit-reset-after"):
+        valor = headers.get(chave)
+        if valor is None:
+            continue
+
+        try:
+            return max(float(valor), 1)
+        except (TypeError, ValueError):
+            continue
+
+    return 30
+
+
+def eh_rate_limit_discord(erro):
+    original = erro_original(erro)
+    texto = str(erro)
+
+    return isinstance(original, discord.HTTPException) and (
+        getattr(original, "status", None) == 429
+        or "429" in texto
+        or "Too Many Requests" in texto
+    )
+
+
 class AMZBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.slash_synced_guilds = set()
         self.started_at = datetime.now(timezone.utc)
         self.last_ready_at = None
+        self.last_disconnect_at = None
+        self.last_resumed_at = None
         self.last_slash_sync_at = None
         self.runtime_events = deque(maxlen=120)
 
@@ -97,15 +152,29 @@ class AMZBot(commands.Bot):
         async def slash_error_handler(interaction, error):
             comando = interaction.command.qualified_name if interaction.command else "desconhecido"
             guild_id = interaction.guild_id
+            rate_limited = eh_rate_limit_discord(error)
+            espera = math.ceil(extrair_espera_rate_limit(error)) if rate_limited else None
+            tipo = "slash_rate_limited" if rate_limited else "slash_error"
+            nivel = "warn" if rate_limited else "error"
+            detalhe = (
+                f"Discord limitou /{comando}. Aguarde {espera}s antes de tentar novamente."
+                if rate_limited
+                else f"Erro no slash /{comando}: {error}"
+            )
             self.registrar_evento(
-                "slash_error",
-                f"Erro no slash /{comando}: {error}",
-                nivel="error",
+                tipo,
+                detalhe,
+                nivel=nivel,
                 guild_id=guild_id,
                 user_id=getattr(interaction.user, "id", None),
+                retry_after=espera,
             )
 
-            mensagem = "Nao consegui executar esse comando agora. Tente novamente em alguns segundos."
+            mensagem = (
+                f"O Discord limitou esse comando. Aguarde {espera}s e tente novamente."
+                if rate_limited
+                else "Nao consegui executar esse comando agora. Tente novamente em alguns segundos."
+            )
             try:
                 if interaction.response.is_done():
                     await interaction.followup.send(mensagem, ephemeral=True)
@@ -158,8 +227,23 @@ bot = AMZBot(command_prefix=os.getenv("AMZ_COMMAND_PREFIX", "!"), intents=intent
 @bot.event
 async def on_ready():
     bot.last_ready_at = datetime.now(timezone.utc)
+    bot.last_disconnect_at = None
     bot.registrar_evento("bot_ready", f"{bot.user.name} esta online e conectado ao Discord.")
-    await bot.sync_slash_connected_guilds()
+    if SINCRONIZAR_SLASH_SERVIDORES_AO_INICIAR:
+        await bot.sync_slash_connected_guilds()
+
+
+@bot.event
+async def on_disconnect():
+    bot.last_disconnect_at = datetime.now(timezone.utc)
+    bot.registrar_evento("bot_disconnect", "Gateway do Discord desconectou. Aguardando reconexao automatica.", nivel="warn")
+
+
+@bot.event
+async def on_resumed():
+    bot.last_resumed_at = datetime.now(timezone.utc)
+    bot.last_disconnect_at = None
+    bot.registrar_evento("bot_resumed", "Gateway do Discord reconectado com sucesso.")
 
 
 @bot.event
@@ -179,14 +263,26 @@ async def on_command_error(ctx, error):
         return
 
     comando = getattr(ctx.command, "qualified_name", "desconhecido")
+    rate_limited = eh_rate_limit_discord(error)
+    espera = math.ceil(extrair_espera_rate_limit(error)) if rate_limited else None
     bot.registrar_evento(
-        "prefix_error",
-        f"Erro no comando !{comando}: {error}",
-        nivel="error",
+        "prefix_rate_limited" if rate_limited else "prefix_error",
+        (
+            f"Discord limitou !{comando}. Aguarde {espera}s antes de tentar novamente."
+            if rate_limited
+            else f"Erro no comando !{comando}: {error}"
+        ),
+        nivel="warn" if rate_limited else "error",
         guild_id=getattr(ctx.guild, "id", None),
         user_id=getattr(ctx.author, "id", None),
+        retry_after=espera,
     )
-    await ctx.reply("Nao consegui executar esse comando agora. Tente novamente em alguns segundos.", mention_author=False)
+    await ctx.reply(
+        f"O Discord limitou esse comando. Aguarde {espera}s e tente novamente."
+        if rate_limited
+        else "Nao consegui executar esse comando agora. Tente novamente em alguns segundos.",
+        mention_author=False,
+    )
 
 
 @bot.event

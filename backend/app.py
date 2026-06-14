@@ -55,6 +55,9 @@ PERMISSAO_GERENCIAR_SERVIDOR = 0x20
 ADMIN_PASSWORD = os.getenv("AMZ_ADMIN_PASSWORD", "").strip()
 ADMIN_SESSION_SECONDS = int(os.getenv("AMZ_ADMIN_SESSION_SECONDS", "28800"))
 ADMIN_MEMBERS_LIMIT = int(os.getenv("AMZ_ADMIN_MEMBERS_LIMIT", "500"))
+BOT_STARTUP_GRACE_SECONDS = max(60, int(os.getenv("AMZ_BOT_STARTUP_GRACE_SECONDS", "240")))
+BOT_OFFLINE_GRACE_SECONDS = max(60, int(os.getenv("AMZ_BOT_OFFLINE_GRACE_SECONDS", "180")))
+BOT_WATCHDOG_INTERVAL_SECONDS = max(15, int(os.getenv("AMZ_BOT_WATCHDOG_INTERVAL_SECONDS", "30")))
 API_STARTED_AT = datetime.now(timezone.utc)
 BOT_RUNTIME_LOOP = None
 
@@ -219,6 +222,17 @@ def status_publico_bot():
         "online_ha_segundos": segundos_desde(started_at) if online else None,
         "ultimo_ready_em": data_iso(last_ready_at),
         "ultima_sincronizacao_em": data_iso(last_sync_at),
+        "erro_inicializacao": getattr(bot, "last_start_error", None),
+        "erro_inicializacao_em": data_iso(getattr(bot, "last_start_error_at", None)),
+        "watchdog": {
+            "ativo": True,
+            "estado": getattr(bot, "watchdog_state", "inicializando"),
+            "ultima_verificacao_em": data_iso(getattr(bot, "watchdog_last_check_at", None)),
+            "ultimo_online_em": data_iso(getattr(bot, "watchdog_last_online_at", None)),
+            "inicio_monitoramento_em": data_iso(getattr(bot, "watchdog_started_at", None)),
+            "startup_grace_segundos": BOT_STARTUP_GRACE_SECONDS,
+            "offline_grace_segundos": BOT_OFFLINE_GRACE_SECONDS,
+        },
         "atualizado_em": agora_iso(),
     }
 
@@ -963,6 +977,9 @@ def montar_status_configuracoes():
         "AMZ_CLEANUP_INTERVAL_MINUTES",
         "AMZ_CLEANUP_MAX_MESSAGES_PER_CHANNEL",
         "AMZ_CLEANUP_DELETE_DELAY_SECONDS",
+        "AMZ_BOT_STARTUP_GRACE_SECONDS",
+        "AMZ_BOT_OFFLINE_GRACE_SECONDS",
+        "AMZ_BOT_WATCHDOG_INTERVAL_SECONDS",
     )
 
     return {nome: variavel_configurada(nome) for nome in variaveis}
@@ -984,6 +1001,15 @@ def montar_status_bot_admin():
             "message_content": bot.intents.message_content,
             "members": bot.intents.members,
             "guilds": bot.intents.guilds,
+        },
+        "watchdog": {
+            "estado": getattr(bot, "watchdog_state", "inicializando"),
+            "ultima_verificacao_em": data_iso(getattr(bot, "watchdog_last_check_at", None)),
+            "ultimo_online_em": data_iso(getattr(bot, "watchdog_last_online_at", None)),
+            "ultimo_restart_motivo": getattr(bot, "watchdog_last_restart_reason", None),
+            "startup_grace_segundos": BOT_STARTUP_GRACE_SECONDS,
+            "offline_grace_segundos": BOT_OFFLINE_GRACE_SECONDS,
+            "intervalo_segundos": BOT_WATCHDOG_INTERVAL_SECONDS,
         },
         "totais": {
             "servidores": len(bot.guilds),
@@ -1287,12 +1313,28 @@ def status_bot():
     return jsonify(status_publico_bot()), 200
 
 
+@app.route("/api/health", methods=["GET", "HEAD"])
+def healthcheck_bot():
+    status = status_publico_bot()
+    codigo = 200 if status.get("online") else 503
+
+    return jsonify({
+        "status": "ok" if status.get("online") else "erro",
+        "api": "online",
+        "bot": "online" if status.get("online") else "offline",
+        "watchdog": status.get("watchdog"),
+        "erro_inicializacao": status.get("erro_inicializacao"),
+        "atualizado_em": agora_iso(),
+    }), codigo
+
+
 @app.route("/", methods=["GET"])
 def root():
     return jsonify({
         "status": "sucesso",
         "servico": "amz-studios-api",
         "online": bot_online(),
+        "health_url": "/api/health",
         "status_url": "/api/status",
         "atualizado_em": agora_iso(),
     }), 200
@@ -1812,6 +1854,98 @@ def excluir_limpeza(server_id, canal_id):
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
 
 
+def reiniciar_processo_por_watchdog(motivo):
+    agora = datetime.now(timezone.utc)
+    setattr(bot, "watchdog_last_restart_reason", motivo)
+    setattr(bot, "watchdog_last_restart_at", agora)
+    setattr(bot, "watchdog_state", "reiniciando")
+
+    if hasattr(bot, "registrar_evento"):
+        bot.registrar_evento("bot_watchdog_restart", motivo, nivel="error")
+
+    print(f"[WATCHDOG] {motivo}")
+    os._exit(1)
+
+
+async def monitorar_bot_watchdog():
+    inicio = datetime.now(timezone.utc)
+    setattr(bot, "watchdog_started_at", inicio)
+    setattr(bot, "watchdog_state", "inicializando")
+    setattr(bot, "watchdog_last_online_at", None)
+    setattr(bot, "watchdog_last_check_at", inicio)
+
+    while True:
+        await asyncio.sleep(BOT_WATCHDOG_INTERVAL_SECONDS)
+        agora = datetime.now(timezone.utc)
+        setattr(bot, "watchdog_last_check_at", agora)
+
+        if bot_online():
+            setattr(bot, "watchdog_state", "online")
+            setattr(bot, "watchdog_last_online_at", agora)
+            continue
+
+        if bot.is_closed():
+            reiniciar_processo_por_watchdog("Bot Discord fechou. Reiniciando processo para o Render reconectar.")
+
+        ultimo_online = getattr(bot, "watchdog_last_online_at", None)
+        ultimo_ready = getattr(bot, "last_ready_at", None)
+
+        if ultimo_online or ultimo_ready:
+            referencia = ultimo_online or ultimo_ready
+            offline_segundos = (agora - referencia.astimezone(timezone.utc)).total_seconds()
+            setattr(bot, "watchdog_state", f"offline_{int(offline_segundos)}s")
+
+            if offline_segundos >= BOT_OFFLINE_GRACE_SECONDS:
+                reiniciar_processo_por_watchdog(
+                    f"Bot Discord ficou offline por {int(offline_segundos)}s. Reiniciando para recuperar conexao."
+                )
+            continue
+
+        inicializando_segundos = (agora - inicio).total_seconds()
+        setattr(bot, "watchdog_state", f"aguardando_ready_{int(inicializando_segundos)}s")
+
+        if inicializando_segundos >= BOT_STARTUP_GRACE_SECONDS:
+            erro = getattr(bot, "last_start_error", None)
+            detalhe = f" Ultimo erro: {erro}" if erro else ""
+            reiniciar_processo_por_watchdog(
+                f"Bot Discord nao chegou ao on_ready em {int(inicializando_segundos)}s.{detalhe}"
+            )
+
+
+async def iniciar_bot_supervisionado():
+    token = os.getenv("DISCORD_TOKEN", "").strip()
+
+    if not token:
+        mensagem = "DISCORD_TOKEN nao configurado. Bot Discord nao pode iniciar."
+        setattr(bot, "last_start_error", mensagem)
+        setattr(bot, "last_start_error_at", datetime.now(timezone.utc))
+        bot.registrar_evento("bot_start_failed", mensagem, nivel="error")
+        await asyncio.sleep(5)
+        os._exit(1)
+
+    try:
+        setattr(bot, "last_start_error", None)
+        setattr(bot, "last_start_error_at", None)
+
+        async with bot:
+            await bot.start(token, reconnect=True)
+
+        mensagem = "bot.start retornou sem excecao, mas o bot nao deveria encerrar sozinho."
+        setattr(bot, "last_start_error", mensagem)
+        setattr(bot, "last_start_error_at", datetime.now(timezone.utc))
+        bot.registrar_evento("bot_start_returned", mensagem, nivel="error")
+        await asyncio.sleep(5)
+        os._exit(1)
+    except Exception as erro:
+        mensagem = f"{type(erro).__name__}: {erro}"
+        setattr(bot, "last_start_error", mensagem[:900])
+        setattr(bot, "last_start_error_at", datetime.now(timezone.utc))
+        bot.registrar_evento("bot_start_failed", mensagem, nivel="error")
+        print(f"[BOT] Falha critica ao iniciar/conectar. Reiniciando processo: {mensagem}")
+        await asyncio.sleep(8)
+        os._exit(1)
+
+
 async def main():
     port = int(os.getenv("PORT", 5000))
     loop = asyncio.get_running_loop()
@@ -1823,8 +1957,8 @@ async def main():
     )
     print(f"[API] Servidor Flask iniciado na porta {port}")
 
-    async with bot:
-        await bot.start(os.getenv("DISCORD_TOKEN"))
+    asyncio.create_task(monitorar_bot_watchdog())
+    await iniciar_bot_supervisionado()
 
 
 if __name__ == "__main__":

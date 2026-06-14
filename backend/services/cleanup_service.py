@@ -1,14 +1,20 @@
 import asyncio
 import os
+import time
 from datetime import datetime, timedelta, timezone
 
 import discord
 
 from database import buscar_todas_limpezas
 
-INTERVALO_LIMPEZA_MINUTOS = int(os.getenv("AMZ_CLEANUP_INTERVAL_MINUTES", "1"))
-MAX_MENSAGENS_POR_CANAL = int(os.getenv("AMZ_CLEANUP_MAX_MESSAGES_PER_CHANNEL", "200"))
-PAUSA_ENTRE_DELECOES = float(os.getenv("AMZ_CLEANUP_DELETE_DELAY_SECONDS", "0.35"))
+INTERVALO_LIMPEZA_MINUTOS = max(10, int(os.getenv("AMZ_CLEANUP_INTERVAL_MINUTES", "15")))
+MAX_MENSAGENS_POR_CANAL = min(max(int(os.getenv("AMZ_CLEANUP_MAX_MESSAGES_PER_CHANNEL", "40")), 1), 50)
+MAX_CANAIS_POR_CICLO = min(max(int(os.getenv("AMZ_CLEANUP_MAX_CHANNELS_PER_RUN", "3")), 1), 10)
+PAUSA_ENTRE_DELECOES = max(float(os.getenv("AMZ_CLEANUP_DELETE_DELAY_SECONDS", "0.9")), 0.5)
+PAUSA_ENTRE_CANAIS = max(float(os.getenv("AMZ_CLEANUP_CHANNEL_DELAY_SECONDS", "2.5")), 1.0)
+RATE_LIMIT_BACKOFF_PADRAO = max(int(os.getenv("AMZ_CLEANUP_RATE_LIMIT_BACKOFF_SECONDS", "300")), 60)
+
+LIMPEZA_PAUSADA_ATE = 0
 
 
 def normalizar_dias(dias):
@@ -59,6 +65,66 @@ def bot_tem_permissoes_limpeza(channel):
     return permissoes.manage_messages and permissoes.read_message_history
 
 
+def eh_rate_limit(erro):
+    texto = str(erro)
+    return isinstance(erro, discord.HTTPException) and (
+        getattr(erro, "status", None) == 429
+        or "429" in texto
+        or "Too Many Requests" in texto
+    )
+
+
+def extrair_espera_rate_limit(erro):
+    retry_after = getattr(erro, "retry_after", None)
+
+    if retry_after is not None:
+        try:
+            return max(float(retry_after), 1)
+        except (TypeError, ValueError):
+            pass
+
+    headers = getattr(getattr(erro, "response", None), "headers", {}) or {}
+
+    for chave in ("Retry-After", "retry-after", "X-RateLimit-Reset-After", "x-ratelimit-reset-after"):
+        valor = headers.get(chave)
+        if valor is None:
+            continue
+
+        try:
+            return max(float(valor), 1)
+        except (TypeError, ValueError):
+            continue
+
+    return RATE_LIMIT_BACKOFF_PADRAO
+
+
+def registrar_backoff_rate_limit(bot, erro, origem, channel=None):
+    global LIMPEZA_PAUSADA_ATE
+
+    espera = max(int(extrair_espera_rate_limit(erro)), RATE_LIMIT_BACKOFF_PADRAO)
+    LIMPEZA_PAUSADA_ATE = max(LIMPEZA_PAUSADA_ATE, time.monotonic() + espera)
+    alvo = f"#{getattr(channel, 'name', 'canal')}" if channel else "limpeza automatica"
+    mensagem = f"Discord bloqueou a limpeza automatica em {alvo}. Pausando por {espera}s."
+
+    if hasattr(bot, "registrar_evento"):
+        bot.registrar_evento(
+            "cleanup_auto_rate_limited",
+            mensagem,
+            nivel="warn",
+            guild_id=getattr(getattr(channel, "guild", None), "id", None),
+            channel_id=getattr(channel, "id", None),
+            retry_after=espera,
+            origem=origem,
+        )
+
+    print(f"[LIMPEZA] {mensagem}")
+    return espera
+
+
+def limpeza_em_backoff():
+    return max(0, LIMPEZA_PAUSADA_ATE - time.monotonic())
+
+
 async def excluir_mensagens_antigas(bot, server_id, limpeza):
     guild = bot.get_guild(int(server_id))
 
@@ -94,11 +160,19 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza):
                 print(f"[LIMPEZA] Permissao negada ao apagar mensagens em #{channel.name}.")
                 break
             except discord.HTTPException as erro:
+                if eh_rate_limit(erro):
+                    registrar_backoff_rate_limit(bot, erro, "delete", channel)
+                    break
+
                 print(f"[LIMPEZA] Discord recusou delete em #{channel.name}: {erro}")
                 await asyncio.sleep(2)
     except discord.Forbidden:
         print(f"[LIMPEZA] Sem acesso ao historico de #{channel.name} em {guild.name}.")
     except discord.HTTPException as erro:
+        if eh_rate_limit(erro):
+            registrar_backoff_rate_limit(bot, erro, "history", channel)
+            return removidas
+
         print(f"[LIMPEZA] Erro ao ler historico de #{channel.name}: {erro}")
 
     if removidas:
@@ -108,8 +182,20 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza):
 
 
 async def executar_limpezas(bot):
+    pausa_restante = limpeza_em_backoff()
+
+    if pausa_restante > 0:
+        if hasattr(bot, "registrar_evento"):
+            bot.registrar_evento(
+                "cleanup_auto_paused",
+                f"Limpeza automatica pausada por rate limit. Restam {int(pausa_restante)}s.",
+                nivel="warn",
+            )
+        return 0
+
     servidores = await buscar_todas_limpezas()
     total_removidas = 0
+    canais_processados = 0
 
     for servidor in servidores:
         server_id = servidor.get("id")
@@ -118,6 +204,15 @@ async def executar_limpezas(bot):
             continue
 
         for limpeza in servidor.get("limpezas", []):
+            if limpeza_em_backoff() > 0:
+                return total_removidas
+
             total_removidas += await excluir_mensagens_antigas(bot, server_id, limpeza)
+            canais_processados += 1
+
+            if canais_processados >= MAX_CANAIS_POR_CICLO:
+                return total_removidas
+
+            await asyncio.sleep(PAUSA_ENTRE_CANAIS)
 
     return total_removidas

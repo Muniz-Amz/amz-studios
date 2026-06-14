@@ -86,6 +86,7 @@ SEGURANCA_ANTI_RAID_PADRAO = [
 ]
 AUTOMACOES_PADRAO = [
     {"id": "autoRole", "title": "Auto cargo", "description": "Quando alguem entra no servidor, o bot adiciona o cargo escolhido automaticamente.", "enabled": False, "type": "role", "values": {"roleId": "", "roleIdName": ""}},
+    {"id": "inviteTracker", "title": "Rastreador de convites", "description": "Quando alguem entra no servidor, mostra quem convidou e quantos convites o convidador possui.", "enabled": False, "type": "invite-tracker", "values": {"channelId": "", "channelIdName": "", "message": "{mention} foi convidado por {inviter} e agora ele tem {invites} convite(s)."}},
     {"id": "autoResponse", "title": "Auto resposta", "description": "Quando uma mensagem bater com uma regra ativa, o bot responde no mesmo canal.", "enabled": False, "type": "auto-response", "values": {}},
     {"id": "scheduledMessage", "title": "Mensagem agendada", "description": "Salva uma mensagem para ser enviada no canal escolhido no dia e horario definidos.", "enabled": False, "type": "scheduled-message", "values": {"channelId": "", "channelIdName": "", "message": "", "schedule": ""}},
     {"id": "autoThread", "title": "Auto thread", "description": "Cria uma thread automaticamente em mensagens novas do canal configurado.", "enabled": False, "type": "thread", "values": {"channelId": "", "channelIdName": "", "threadName": ""}},
