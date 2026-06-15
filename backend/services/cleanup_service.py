@@ -15,6 +15,7 @@ PAUSA_ENTRE_CANAIS = max(float(os.getenv("AMZ_CLEANUP_CHANNEL_DELAY_SECONDS", "2
 RATE_LIMIT_BACKOFF_PADRAO = max(int(os.getenv("AMZ_CLEANUP_RATE_LIMIT_BACKOFF_SECONDS", "300")), 60)
 
 LIMPEZA_PAUSADA_ATE = 0
+PROXIMO_INDICE_LIMPEZA = 0
 
 
 def normalizar_dias(dias):
@@ -182,6 +183,8 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza):
 
 
 async def executar_limpezas(bot):
+    global PROXIMO_INDICE_LIMPEZA
+
     pausa_restante = limpeza_em_backoff()
 
     if pausa_restante > 0:
@@ -194,25 +197,31 @@ async def executar_limpezas(bot):
         return 0
 
     servidores = await buscar_todas_limpezas()
+    trabalhos = [
+        (servidor.get("id"), limpeza)
+        for servidor in servidores
+        if servidor.get("id")
+        for limpeza in servidor.get("limpezas", [])
+    ]
     total_removidas = 0
-    canais_processados = 0
 
-    for servidor in servidores:
-        server_id = servidor.get("id")
+    if not trabalhos:
+        PROXIMO_INDICE_LIMPEZA = 0
+        return 0
 
-        if not server_id:
-            continue
+    inicio = PROXIMO_INDICE_LIMPEZA % len(trabalhos)
+    limite = min(MAX_CANAIS_POR_CICLO, len(trabalhos))
 
-        for limpeza in servidor.get("limpezas", []):
-            if limpeza_em_backoff() > 0:
-                return total_removidas
+    for deslocamento in range(limite):
+        if limpeza_em_backoff() > 0:
+            break
 
-            total_removidas += await excluir_mensagens_antigas(bot, server_id, limpeza)
-            canais_processados += 1
+        indice = (inicio + deslocamento) % len(trabalhos)
+        server_id, limpeza = trabalhos[indice]
+        total_removidas += await excluir_mensagens_antigas(bot, server_id, limpeza)
+        PROXIMO_INDICE_LIMPEZA = (indice + 1) % len(trabalhos)
 
-            if canais_processados >= MAX_CANAIS_POR_CICLO:
-                return total_removidas
-
+        if deslocamento < limite - 1:
             await asyncio.sleep(PAUSA_ENTRE_CANAIS)
 
     return total_removidas

@@ -24,8 +24,11 @@ from database import (
     buscar_boas_vindas,
     buscar_limpezas,
     buscar_moderacao,
+    listar_crachas_privados,
     remover_limpeza,
+    remover_cracha_privado,
     salvar_boas_vindas,
+    salvar_cracha_privado,
     salvar_config,
     salvar_limpeza,
     salvar_moderacao,
@@ -60,6 +63,19 @@ BOT_OFFLINE_GRACE_SECONDS = max(60, int(os.getenv("AMZ_BOT_OFFLINE_GRACE_SECONDS
 BOT_WATCHDOG_INTERVAL_SECONDS = max(15, int(os.getenv("AMZ_BOT_WATCHDOG_INTERVAL_SECONDS", "30")))
 API_STARTED_AT = datetime.now(timezone.utc)
 BOT_RUNTIME_LOOP = None
+
+
+def obter_private_guild_id():
+    for nome in ("PRIVATE_GUILD_ID", "AMZ_PRIVATE_GUILD_ID", "AMZ_OWNER_GUILD_ID"):
+        valor = os.getenv(nome, "").strip()
+        if valor:
+            return valor
+    return ""
+
+
+def guild_privada_habilitada(server_id):
+    private_guild_id = obter_private_guild_id()
+    return bool(private_guild_id and str(server_id) == str(private_guild_id))
 
 
 def registrar_loop_bot(loop):
@@ -879,6 +895,13 @@ def buscar_moderacao_sync(server_id):
         return {}
 
 
+def listar_crachas_privados_sync(server_id):
+    try:
+        return executar_corrotina_bot(listar_crachas_privados(str(server_id)), timeout=10)
+    except Exception:
+        return []
+
+
 def valor_booleano(valor):
     if isinstance(valor, bool):
         return valor
@@ -980,6 +1003,8 @@ def montar_status_configuracoes():
         "AMZ_BOT_STARTUP_GRACE_SECONDS",
         "AMZ_BOT_OFFLINE_GRACE_SECONDS",
         "AMZ_BOT_WATCHDOG_INTERVAL_SECONDS",
+        "PRIVATE_GUILD_ID",
+        "AMZ_PRIVATE_GUILD_ID",
     )
 
     return {nome: variavel_configurada(nome) for nome in variaveis}
@@ -1277,6 +1302,8 @@ def montar_info_servidor_admin(guild):
     limpezas = buscar_limpezas_sync(guild.id)
     boas_vindas = buscar_boas_vindas_sync(guild.id)
     moderacao = buscar_moderacao_sync(guild.id)
+    private_guild = guild_privada_habilitada(guild.id)
+    crachas_privados = listar_crachas_privados_sync(guild.id) if private_guild else []
 
     return {
         "id": str(guild.id),
@@ -1290,6 +1317,11 @@ def montar_info_servidor_admin(guild):
         "premium_tier": guild.premium_tier,
         "boosts": guild.premium_subscription_count,
         "features": sorted(guild.features),
+        "private_guild": {
+            "enabled": private_guild,
+            "badges_total": len(crachas_privados),
+            "module": "guild_badges" if private_guild else None,
+        },
         "limpezas_configuradas": limpezas,
         "boas_vindas_config": boas_vindas,
         "moderacao_config": moderacao,
@@ -1476,6 +1508,98 @@ def admin_listar_membros(server_id):
         }), 200
     except Exception as erro_membros:
         return jsonify({"status": "erro", "mensagem": str(erro_membros)}), 500
+
+
+def validar_guild_privada_admin(server_id):
+    erro = validar_admin_painel()
+
+    if erro:
+        return erro
+
+    if not obter_private_guild_id():
+        return jsonify({
+            "status": "erro",
+            "mensagem": "Área privada não configurada. Defina PRIVATE_GUILD_ID no Render.",
+        }), 503
+
+    if not guild_privada_habilitada(server_id):
+        return jsonify({
+            "status": "erro",
+            "mensagem": "Esta função é exclusiva da guilda privada configurada.",
+        }), 403
+
+    return None
+
+
+@app.route("/api/admin/servidores/<server_id>/privado/crachas", methods=["GET"])
+def admin_listar_crachas_privados(server_id):
+    erro = validar_guild_privada_admin(server_id)
+
+    if erro:
+        return erro
+
+    try:
+        crachas = executar_corrotina_bot(listar_crachas_privados(str(server_id)), timeout=10)
+        return jsonify({
+            "status": "sucesso",
+            "server_id": str(server_id),
+            "crachas": crachas,
+        }), 200
+    except Exception as erro_crachas:
+        return jsonify({"status": "erro", "mensagem": str(erro_crachas)}), 500
+
+
+@app.route("/api/admin/servidores/<server_id>/privado/crachas", methods=["POST"])
+def admin_salvar_cracha_privado(server_id):
+    erro = validar_guild_privada_admin(server_id)
+
+    if erro:
+        return erro
+
+    dados = request.json or {}
+
+    try:
+        cracha, crachas = executar_corrotina_bot(salvar_cracha_privado(str(server_id), dados), timeout=12)
+        if hasattr(bot, "registrar_evento"):
+            bot.registrar_evento(
+                "admin_private_badge_save",
+                f"Crachá privado salvo: {cracha.get('memberName') or cracha.get('memberId') or cracha.get('id')}.",
+                guild_id=server_id,
+            )
+        return jsonify({
+            "status": "sucesso",
+            "mensagem": "Crachá privado salvo.",
+            "cracha": cracha,
+            "crachas": crachas,
+        }), 200
+    except ValueError as erro_validacao:
+        return jsonify({"status": "erro", "mensagem": str(erro_validacao)}), 400
+    except Exception as erro_cracha:
+        return jsonify({"status": "erro", "mensagem": str(erro_cracha)}), 500
+
+
+@app.route("/api/admin/servidores/<server_id>/privado/crachas/<cracha_id>", methods=["DELETE"])
+def admin_remover_cracha_privado(server_id, cracha_id):
+    erro = validar_guild_privada_admin(server_id)
+
+    if erro:
+        return erro
+
+    try:
+        crachas = executar_corrotina_bot(remover_cracha_privado(str(server_id), str(cracha_id)), timeout=12)
+        if hasattr(bot, "registrar_evento"):
+            bot.registrar_evento(
+                "admin_private_badge_delete",
+                f"Crachá privado removido: {cracha_id}.",
+                guild_id=server_id,
+            )
+        return jsonify({
+            "status": "sucesso",
+            "mensagem": "Crachá privado removido.",
+            "crachas": crachas,
+        }), 200
+    except Exception as erro_cracha:
+        return jsonify({"status": "erro", "mensagem": str(erro_cracha)}), 500
 
 
 @app.route("/api/admin/servidores/<server_id>/leave", methods=["POST"])

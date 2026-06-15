@@ -5319,6 +5319,337 @@ section {
     opacity: 0.34;
 }
 
+.admin-private-details {
+    border-top-color: rgba(53, 216, 255, 0.24);
+}
+
+.admin-private-details summary {
+    color: #35d8ff;
+}
+
+.admin-private-panel {
+    margin-top: 14px;
+    border: 1px solid var(--app-border);
+    background:
+        radial-gradient(circle at top right, color-mix(in srgb, #35d8ff 18%, transparent), transparent 32%),
+        var(--app-surface-2);
+    padding: 16px;
+    display: grid;
+    gap: 16px;
+}
+
+.admin-private-heading,
+.admin-private-list-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.admin-private-heading div {
+    display: grid;
+    gap: 5px;
+}
+
+.admin-private-heading span,
+.admin-private-form span,
+.admin-private-list-head strong,
+.admin-private-badge-preview span,
+.admin-private-badge-preview small {
+    color: var(--app-muted);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.admin-private-heading strong {
+    color: var(--app-text);
+    font-size: 22px;
+    font-weight: 900;
+}
+
+.admin-private-heading p,
+.admin-private-badge-preview p {
+    color: var(--app-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.admin-private-heading button,
+.admin-private-list-head button,
+.admin-private-actions button,
+.admin-private-badge-buttons button {
+    min-height: 38px;
+    border: 1px solid var(--app-border-strong);
+    background: var(--app-button-bg);
+    color: var(--app-button-text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 12px;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.admin-private-heading button:hover,
+.admin-private-list-head button:hover,
+.admin-private-actions button:hover,
+.admin-private-badge-buttons button:hover {
+    border-color: var(--app-text);
+    background: var(--app-text);
+    color: var(--app-bg);
+}
+
+.admin-private-badge-buttons button.danger {
+    border-color: rgba(255, 103, 103, 0.5);
+    color: #ff6767;
+}
+
+.admin-private-badge-buttons button.danger:hover {
+    background: #ff6767;
+    color: #000000;
+}
+
+.admin-private-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+    gap: 14px;
+    align-items: start;
+}
+
+.admin-private-form {
+    border: 1px solid var(--app-border);
+    background: var(--app-surface);
+    padding: 14px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.admin-private-form label {
+    min-width: 0;
+    display: grid;
+    gap: 7px;
+}
+
+.admin-private-form input,
+.admin-private-form textarea {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid var(--app-border);
+    background: var(--app-input);
+    color: var(--app-text);
+    outline: none;
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.admin-private-form input[type="color"] {
+    padding: 4px;
+}
+
+.admin-private-form textarea {
+    min-height: 92px;
+    padding: 12px;
+    resize: vertical;
+}
+
+.admin-private-form input:focus,
+.admin-private-form textarea:focus {
+    border-color: #35d8ff;
+}
+
+.admin-private-field-wide,
+.admin-private-actions,
+.admin-private-status {
+    grid-column: 1 / -1;
+}
+
+.admin-private-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.admin-private-status {
+    min-height: 16px;
+    color: #ff6767;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.admin-private-status.success {
+    color: #5bff8a;
+}
+
+.admin-private-preview {
+    position: sticky;
+    top: 92px;
+}
+
+.admin-private-badge-preview,
+.admin-private-badge-item {
+    border: 1px solid color-mix(in srgb, var(--badge-color, #35d8ff) 42%, var(--app-border));
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--badge-color, #35d8ff) 14%, transparent), transparent 42%),
+        var(--app-surface);
+    box-shadow: 0 18px 55px color-mix(in srgb, var(--badge-color, #35d8ff) 9%, transparent);
+}
+
+.admin-private-badge-preview {
+    padding: 16px;
+    display: grid;
+    gap: 14px;
+}
+
+.admin-private-badge-top {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 14px;
+    align-items: center;
+}
+
+.admin-private-badge-photo,
+.admin-private-badge-mini {
+    border: 1px solid color-mix(in srgb, var(--badge-color, #35d8ff) 55%, var(--app-border));
+    background: color-mix(in srgb, var(--badge-color, #35d8ff) 16%, var(--app-surface));
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+}
+
+.admin-private-badge-photo {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+}
+
+.admin-private-badge-photo img,
+.admin-private-badge-mini img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.admin-private-badge-photo span,
+.admin-private-badge-mini span {
+    color: var(--badge-color, #35d8ff);
+    font-size: 16px;
+    font-weight: 900;
+}
+
+.admin-private-badge-top strong {
+    display: block;
+    margin: 5px 0;
+    color: var(--app-text);
+    font-size: 22px;
+    font-weight: 900;
+    overflow-wrap: anywhere;
+}
+
+.admin-private-badge-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.admin-private-badge-stats span,
+.admin-private-badge-meta span,
+.admin-private-badge-tags em {
+    border: 1px solid var(--app-border);
+    background: color-mix(in srgb, var(--app-elevated) 82%, transparent);
+    padding: 8px;
+    color: var(--app-muted);
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.admin-private-badge-stats strong {
+    display: block;
+    margin-top: 5px;
+    color: var(--badge-color, #35d8ff);
+    font-size: 15px;
+}
+
+.admin-private-badge-meta,
+.admin-private-badge-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-private-badge-tags em {
+    color: var(--app-text);
+}
+
+.admin-private-badge-list {
+    display: grid;
+    gap: 10px;
+}
+
+.admin-private-badge-item {
+    padding: 12px;
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+}
+
+.admin-private-badge-mini {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+}
+
+.admin-private-badge-item strong {
+    display: block;
+    color: var(--app-text);
+    font-size: 14px;
+    font-weight: 900;
+}
+
+.admin-private-badge-item span,
+.admin-private-badge-item small {
+    display: block;
+    margin-top: 3px;
+    color: var(--app-muted);
+    font-size: 10px;
+    overflow-wrap: anywhere;
+}
+
+.admin-private-badge-item div:nth-child(2) > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.admin-private-badge-item em {
+    border: 1px solid var(--app-border);
+    padding: 4px 6px;
+    color: var(--app-muted);
+    font-size: 8px;
+    font-style: normal;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.admin-private-badge-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
 /* Tema global do painel e da area admin */
 html[data-site-theme] #painel-loritta,
 html[data-site-theme] .admin-area {
@@ -5655,6 +5986,56 @@ html[data-site-theme] #painel-loritta .vm-server-current-icon {
     color: var(--app-text) !important;
 }
 
+html[data-site-theme] .admin-private-details summary {
+    color: #35d8ff !important;
+}
+
+html[data-site-theme] .admin-private-panel,
+html[data-site-theme] .admin-private-form,
+html[data-site-theme] .admin-private-badge-preview,
+html[data-site-theme] .admin-private-badge-item {
+    background-color: var(--app-surface) !important;
+    border-color: var(--app-border) !important;
+}
+
+html[data-site-theme] .admin-private-heading span,
+html[data-site-theme] .admin-private-form span,
+html[data-site-theme] .admin-private-list-head strong,
+html[data-site-theme] .admin-private-badge-preview span,
+html[data-site-theme] .admin-private-badge-preview small,
+html[data-site-theme] .admin-private-badge-preview p,
+html[data-site-theme] .admin-private-badge-item span,
+html[data-site-theme] .admin-private-badge-item small,
+html[data-site-theme] .admin-private-badge-item em {
+    color: var(--app-muted) !important;
+}
+
+html[data-site-theme] .admin-private-heading strong,
+html[data-site-theme] .admin-private-badge-top strong,
+html[data-site-theme] .admin-private-badge-item strong,
+html[data-site-theme] .admin-private-badge-tags em {
+    color: var(--app-text) !important;
+}
+
+html[data-site-theme] .admin-private-badge-photo span,
+html[data-site-theme] .admin-private-badge-mini span,
+html[data-site-theme] .admin-private-badge-stats strong {
+    color: var(--badge-color, #35d8ff) !important;
+}
+
+html[data-site-theme] .admin-private-status {
+    color: var(--app-danger) !important;
+}
+
+html[data-site-theme] .admin-private-status.success {
+    color: var(--app-success) !important;
+}
+
+html[data-site-theme] .admin-private-badge-buttons button.danger {
+    border-color: var(--app-danger) !important;
+    color: var(--app-danger) !important;
+}
+
 @media (max-width: 820px) {
     .amz-save-tray {
         bottom: 14px;
@@ -5792,5 +6173,32 @@ html[data-site-theme] #painel-loritta .vm-server-current-icon {
     .admin-member-actions,
     .admin-action-button {
         width: 100%;
+    }
+
+    .admin-private-heading,
+    .admin-private-list-head {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .admin-private-layout,
+    .admin-private-form,
+    .admin-private-badge-item {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-private-preview {
+        position: static;
+    }
+
+    .admin-private-actions,
+    .admin-private-actions button,
+    .admin-private-badge-buttons,
+    .admin-private-badge-buttons button {
+        width: 100%;
+    }
+
+    .admin-private-badge-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }

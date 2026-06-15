@@ -2,6 +2,7 @@
 import copy
 import os
 import time
+import uuid
 from datetime import datetime, timezone
 
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -842,6 +843,108 @@ async def registrar_historico_auditoria(server_id, item):
     )
 
     return registro
+
+
+def _normalizar_cracha_privado(dados, existente=None):
+    dados = dados if isinstance(dados, dict) else {}
+    existente = existente if isinstance(existente, dict) else {}
+    agora = _agora_iso()
+    cracha_id = _limitar_texto(dados.get("id") or existente.get("id") or f"cracha-{uuid.uuid4().hex[:10]}", 80)
+
+    return {
+        "id": cracha_id,
+        "memberId": _limitar_texto(dados.get("memberId") or dados.get("member_id") or existente.get("memberId"), 32),
+        "memberName": _limitar_texto(dados.get("memberName") or dados.get("member_name") or existente.get("memberName"), 120),
+        "badgeTitle": _limitar_texto(dados.get("badgeTitle") or dados.get("badge_title") or existente.get("badgeTitle"), 120, "Crachá AMZ"),
+        "rank": _limitar_texto(dados.get("rank") or existente.get("rank"), 80),
+        "division": _limitar_texto(dados.get("division") or dados.get("divisao") or existente.get("division"), 80),
+        "role": _limitar_texto(dados.get("role") or dados.get("funcao") or existente.get("role"), 100),
+        "status": _limitar_texto(dados.get("status") or existente.get("status"), 80, "Ativo"),
+        "level": _normalizar_int(dados.get("level", existente.get("level", 0)), 0, 0, 10000000),
+        "points": _normalizar_int(dados.get("points", existente.get("points", 0)), 0, 0, 10000000),
+        "photoUrl": _normalizar_url(dados.get("photoUrl") or dados.get("photo_url") or existente.get("photoUrl")),
+        "color": _normalizar_cor(dados.get("color") or existente.get("color"), "#35d8ff"),
+        "tags": _normalizar_lista_texto(dados.get("tags", existente.get("tags", [])), 12, 40),
+        "notes": _limitar_texto(dados.get("notes") or dados.get("observacoes") or existente.get("notes"), 900),
+        "createdAt": existente.get("createdAt") or agora,
+        "updatedAt": agora,
+    }
+
+
+def _normalizar_crachas_privados(valores):
+    if not isinstance(valores, list):
+        return []
+
+    crachas = []
+    vistos = set()
+
+    for item in valores[:200]:
+        if not isinstance(item, dict):
+            continue
+
+        cracha = _normalizar_cracha_privado(item)
+        if not cracha["id"] or cracha["id"] in vistos:
+            continue
+
+        vistos.add(cracha["id"])
+        crachas.append(cracha)
+
+    return crachas
+
+
+async def listar_crachas_privados(server_id):
+    documento = await collection.find_one(
+        {"id": str(server_id)},
+        {"_id": 0, "private_guild.badges": 1},
+    )
+    return _normalizar_crachas_privados(((documento or {}).get("private_guild") or {}).get("badges"))
+
+
+async def salvar_cracha_privado(server_id, dados):
+    server_id = str(server_id)
+    crachas = await listar_crachas_privados(server_id)
+    por_id = {cracha["id"]: cracha for cracha in crachas}
+    cracha = _normalizar_cracha_privado(dados, por_id.get(str((dados or {}).get("id") or "")))
+
+    if not cracha["memberName"] and not cracha["memberId"]:
+        raise ValueError("Informe pelo menos o nome ou ID Discord do membro.")
+
+    atualizados = [cracha] + [item for item in crachas if item["id"] != cracha["id"]]
+    atualizados = atualizados[:200]
+
+    await collection.update_one(
+        {"id": server_id},
+        {
+            "$set": {
+                "id": server_id,
+                "private_guild.badges": atualizados,
+                "private_guild.updatedAt": _agora_iso(),
+                "atualizado_em": _agora_iso(),
+            }
+        },
+        upsert=True,
+    )
+
+    return cracha, atualizados
+
+
+async def remover_cracha_privado(server_id, cracha_id):
+    server_id = str(server_id)
+    cracha_id = str(cracha_id or "").strip()
+
+    await collection.update_one(
+        {"id": server_id},
+        {
+            "$pull": {"private_guild.badges": {"id": cracha_id}},
+            "$set": {
+                "private_guild.updatedAt": _agora_iso(),
+                "atualizado_em": _agora_iso(),
+            },
+        },
+        upsert=True,
+    )
+
+    return await listar_crachas_privados(server_id)
 
 
 async def buscar_todas_limpezas():
