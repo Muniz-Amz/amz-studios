@@ -65,19 +65,6 @@ API_STARTED_AT = datetime.now(timezone.utc)
 BOT_RUNTIME_LOOP = None
 
 
-def obter_private_guild_id():
-    for nome in ("PRIVATE_GUILD_ID", "AMZ_PRIVATE_GUILD_ID", "AMZ_OWNER_GUILD_ID"):
-        valor = os.getenv(nome, "").strip()
-        if valor:
-            return valor
-    return ""
-
-
-def guild_privada_habilitada(server_id):
-    private_guild_id = obter_private_guild_id()
-    return bool(private_guild_id and str(server_id) == str(private_guild_id))
-
-
 def registrar_loop_bot(loop):
     global BOT_RUNTIME_LOOP
 
@@ -1003,8 +990,6 @@ def montar_status_configuracoes():
         "AMZ_BOT_STARTUP_GRACE_SECONDS",
         "AMZ_BOT_OFFLINE_GRACE_SECONDS",
         "AMZ_BOT_WATCHDOG_INTERVAL_SECONDS",
-        "PRIVATE_GUILD_ID",
-        "AMZ_PRIVATE_GUILD_ID",
     )
 
     return {nome: variavel_configurada(nome) for nome in variaveis}
@@ -1302,8 +1287,7 @@ def montar_info_servidor_admin(guild):
     limpezas = buscar_limpezas_sync(guild.id)
     boas_vindas = buscar_boas_vindas_sync(guild.id)
     moderacao = buscar_moderacao_sync(guild.id)
-    private_guild = guild_privada_habilitada(guild.id)
-    crachas_privados = listar_crachas_privados_sync(guild.id) if private_guild else []
+    crachas_privados = listar_crachas_privados_sync(guild.id)
 
     return {
         "id": str(guild.id),
@@ -1318,9 +1302,9 @@ def montar_info_servidor_admin(guild):
         "boosts": guild.premium_subscription_count,
         "features": sorted(guild.features),
         "private_guild": {
-            "enabled": private_guild,
+            "enabled": True,
             "badges_total": len(crachas_privados),
-            "module": "guild_badges" if private_guild else None,
+            "module": "guild_badges",
         },
         "limpezas_configuradas": limpezas,
         "boas_vindas_config": boas_vindas,
@@ -1511,24 +1495,7 @@ def admin_listar_membros(server_id):
 
 
 def validar_guild_privada_admin(server_id):
-    erro = validar_admin_painel()
-
-    if erro:
-        return erro
-
-    if not obter_private_guild_id():
-        return jsonify({
-            "status": "erro",
-            "mensagem": "Área privada não configurada. Defina PRIVATE_GUILD_ID no Render.",
-        }), 503
-
-    if not guild_privada_habilitada(server_id):
-        return jsonify({
-            "status": "erro",
-            "mensagem": "Esta função é exclusiva da guilda privada configurada.",
-        }), 403
-
-    return None
+    return validar_admin_painel()
 
 
 @app.route("/api/admin/servidores/<server_id>/privado/crachas", methods=["GET"])

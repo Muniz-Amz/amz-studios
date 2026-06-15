@@ -4760,12 +4760,10 @@ function renderizarAdminDashboard(dados) {
 
     lista.innerHTML = servidores.map(renderizarServidorAdmin).join('');
     filtrarServidoresAdmin();
-    servidores
-        .filter((servidor) => servidor.private_guild?.enabled)
-        .forEach((servidor) => {
-            atualizarPreviewCrachaPrivadoAdmin(servidor.id);
-            carregarCrachasPrivadosAdmin(servidor.id, { silencioso: true });
-        });
+    servidores.forEach((servidor) => {
+        atualizarPreviewCrachaPrivadoAdmin(servidor.id);
+        carregarCrachasPrivadosAdmin(servidor.id, { silencioso: true });
+    });
 }
 
 function criarCardResumoAdmin(titulo, valor, detalhe) {
@@ -5202,7 +5200,7 @@ function renderizarServidorAdmin(servidor) {
     const features = Array.isArray(servidor.features) && servidor.features.length
         ? servidor.features.join(', ')
         : 'Nenhuma feature especial';
-    const painelPrivado = servidor.private_guild?.enabled ? renderizarPainelPrivadoGuildAdmin(servidor) : '';
+    const painelPrivado = renderizarPainelPrivadoGuildAdmin(servidor);
 
     return `
         <article class="admin-server-card" data-admin-server-id="${escaparHTML(servidor.id)}" data-admin-server-name="${escaparHTML(servidor.nome)}">
