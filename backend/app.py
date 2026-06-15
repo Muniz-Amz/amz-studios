@@ -6,6 +6,7 @@ import io
 import json
 import os
 import platform
+import re
 import shutil
 import sys
 import tempfile
@@ -545,6 +546,7 @@ def permissoes_bot_canal(canal):
         "ver": permissoes.view_channel,
         "enviar": permissoes.send_messages,
         "enviar_embeds": permissoes.embed_links,
+        "adicionar_reacoes": permissoes.add_reactions,
         "gerenciar_mensagens": permissoes.manage_messages,
         "ler_historico": permissoes.read_message_history,
     }
@@ -576,6 +578,150 @@ def montar_info_cargo(cargo):
         "mencionavel": cargo.mentionable,
         "permissoes": str(cargo.permissions.value),
     }
+
+
+CUSTOM_EMOJI_RE = re.compile(r"^<a?:([^:>]+):(\d{15,25})>$")
+SHORTCODE_EMOJI_RE = re.compile(r"^:([^:\s]+):$")
+
+
+def limpar_texto_reaction_role(valor, limite=900):
+    texto = str(valor or "").strip()
+    if len(texto) <= limite:
+        return texto
+    return texto[:limite].rstrip()
+
+
+def resolver_emoji_reaction_role(guild, valor):
+    emoji = str(valor or "").strip()
+    if not emoji:
+        return None, "Informe o emoji da reação."
+
+    match_custom = CUSTOM_EMOJI_RE.match(emoji)
+    if match_custom:
+        emoji_id = int(match_custom.group(2))
+        return guild.get_emoji(emoji_id) or discord.PartialEmoji.from_str(emoji), None
+
+    if emoji.isdigit():
+        emoji_custom = guild.get_emoji(int(emoji))
+        if emoji_custom:
+            return emoji_custom, None
+        return None, "Emoji custom não encontrado neste servidor."
+
+    match_shortcode = SHORTCODE_EMOJI_RE.match(emoji)
+    if match_shortcode:
+        nome = match_shortcode.group(1)
+        emoji_custom = discord.utils.get(guild.emojis, name=nome)
+        if emoji_custom:
+            return emoji_custom, None
+        return None, f"Emoji :{nome}: não encontrado neste servidor."
+
+    return emoji, None
+
+
+def pode_publicar_reaction_role(guild, canal, role):
+    membro_bot = guild.me
+    if not membro_bot:
+        return False, "Bot não encontrado no servidor."
+
+    if not role:
+        return False, "Cargo não encontrado."
+
+    if role.managed:
+        return False, "Esse cargo é gerenciado por integração e não pode ser entregue."
+
+    if role >= membro_bot.top_role:
+        return False, "Esse cargo está igual ou acima do cargo do bot."
+
+    permissoes_servidor = membro_bot.guild_permissions
+    if not permissoes_servidor.manage_roles:
+        return False, "Bot sem permissão Gerenciar Cargos."
+
+    permissoes_canal = canal.permissions_for(membro_bot)
+    if not permissoes_canal.view_channel or not permissoes_canal.send_messages:
+        return False, "Bot sem permissão para ver/enviar mensagem nesse canal."
+
+    if not permissoes_canal.add_reactions:
+        return False, "Bot sem permissão para adicionar reações nesse canal."
+
+    return True, "Pode publicar."
+
+
+async def publicar_reaction_role_async(server_id, dados):
+    guild = bot.get_guild(int(server_id))
+    if not guild:
+        return None, "Servidor não encontrado pelo bot."
+
+    try:
+        channel_id = int(dados.get("channelId") or 0)
+        role_id = int(dados.get("roleId") or 0)
+    except (TypeError, ValueError):
+        return None, "Canal ou cargo inválido."
+
+    canal = guild.get_channel(channel_id)
+    if not isinstance(canal, discord.TextChannel):
+        return None, "Canal de texto não encontrado."
+
+    role = guild.get_role(role_id)
+    permitido, motivo = pode_publicar_reaction_role(guild, canal, role)
+    if not permitido:
+        return None, motivo
+
+    emoji_reacao, erro_emoji = resolver_emoji_reaction_role(guild, dados.get("emoji"))
+    if erro_emoji:
+        return None, erro_emoji
+
+    emoji_texto = str(emoji_reacao)
+    titulo = limpar_texto_reaction_role(dados.get("label"), 80) or f"Receba o cargo {role.name}"
+    texto_padrao = f"Reaja com {emoji_texto} para receber o cargo **{role.name}**."
+    texto = limpar_texto_reaction_role(dados.get("messageText"), 1100) or texto_padrao
+    texto = (
+        texto
+        .replace("{emoji}", emoji_texto)
+        .replace("{role}", role.name)
+        .replace("{role_mention}", role.mention)
+        .replace("{server}", guild.name)
+    )
+
+    embed = discord.Embed(
+        title=titulo,
+        description=texto,
+        color=discord.Color.from_rgb(53, 216, 255),
+        timestamp=datetime.now(timezone.utc),
+    )
+    embed.add_field(name="Cargo", value=role.mention, inline=True)
+    embed.add_field(name="Reação", value=emoji_texto, inline=True)
+    if dados.get("removeOnUnreact", True):
+        embed.add_field(name="Remoção", value="Ao tirar a reação, o cargo também sai.", inline=False)
+    embed.set_footer(text=f"AMZ Bot • {guild.name}")
+
+    permissoes_canal = canal.permissions_for(guild.me)
+    if permissoes_canal.embed_links:
+        mensagem = await canal.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+    else:
+        conteudo = f"**{titulo}**\n{texto}\n\nReação: {emoji_texto} | Cargo: {role.name}"
+        mensagem = await canal.send(conteudo[:1900], allowed_mentions=discord.AllowedMentions.none())
+
+    await mensagem.add_reaction(emoji_reacao)
+
+    if hasattr(bot, "registrar_evento"):
+        bot.registrar_evento(
+            "reaction_role_published",
+            f"Mensagem de reaction role publicada em #{canal.name}.",
+            guild_id=guild.id,
+            channel_id=canal.id,
+            role_id=role.id,
+            message_id=mensagem.id,
+        )
+
+    return {
+        "messageId": str(mensagem.id),
+        "channelId": str(canal.id),
+        "channelName": canal.name,
+        "roleId": str(role.id),
+        "roleName": role.name,
+        "emoji": emoji_texto,
+        "jumpUrl": mensagem.jump_url,
+    }, None
 
 
 def bot_pode_moderar_membro(guild, member):
@@ -1741,6 +1887,35 @@ def salvar_config_moderacao():
             "status": "sucesso",
             "mensagem": "Moderacao salva!",
             "moderacao": config,
+        }), 200
+    except Exception as e:
+        return jsonify({"status": "erro", "mensagem": str(e)}), 500
+
+
+@app.route("/api/servidores/<server_id>/reaction-role/publicar", methods=["POST"])
+def publicar_reaction_role(server_id):
+    if not server_id:
+        return jsonify({"status": "erro", "mensagem": "ID do servidor invalido."}), 400
+
+    erro = validar_admin_requisicao(server_id)
+    if erro:
+        return erro
+
+    dados = request.json or {}
+
+    try:
+        publicacao, mensagem_erro = executar_corrotina_bot(
+            publicar_reaction_role_async(server_id, dados),
+            timeout=20,
+        )
+
+        if mensagem_erro:
+            return jsonify({"status": "erro", "mensagem": mensagem_erro}), 400
+
+        return jsonify({
+            "status": "sucesso",
+            "mensagem": "Mensagem de reaction role publicada.",
+            "publicacao": publicacao,
         }), 200
     except Exception as e:
         return jsonify({"status": "erro", "mensagem": str(e)}), 500

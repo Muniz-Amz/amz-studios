@@ -1968,6 +1968,7 @@ function normalizarAutomacoesLocal(automacoes = {}) {
                 roleName: regra.roleName || regra.role_name || '',
                 emoji: String(regra.emoji || '').trim(),
                 label: String(regra.label || regra.nome || '').trim(),
+                messageText: String(regra.messageText || regra.message_text || '').trim(),
                 removeOnUnreact: Boolean(regra.removeOnUnreact ?? regra.remove_on_unreact ?? true)
             })).filter((regra) => regra.messageId && regra.channelId && regra.roleId && regra.emoji)
             : []
@@ -2448,7 +2449,7 @@ function ReactionRoleEditor() {
                 <label class="advanced-field">
                     <span>ID da mensagem</span>
                     <input id="reaction_role_message_id" type="text" inputmode="numeric" placeholder="123456789012345678">
-                    <small>Ative modo desenvolvedor no Discord e copie o ID da mensagem.</small>
+                    <small>Opcional: use só se já tiver uma mensagem pronta. O botão publicar preenche isso sozinho.</small>
                 </label>
                 <label class="advanced-field">
                     <span>Cargo entregue</span>
@@ -2465,10 +2466,19 @@ function ReactionRoleEditor() {
                     <input id="reaction_role_label" type="text" maxlength="80" placeholder="Jogador Roblox">
                     <small>Nome interno para você reconhecer essa automação no painel.</small>
                 </label>
+                <label class="advanced-field advanced-field-wide">
+                    <span>Mensagem bonita que o bot vai publicar</span>
+                    <textarea id="reaction_role_message_text" rows="4" placeholder="Reaja com {emoji} para receber o cargo {role}."></textarea>
+                    <small>Variáveis: {emoji}, {role}, {role_mention}, {server}. Depois de publicar, o bot já coloca a reação.</small>
+                </label>
                 <div class="automation-rule-actions">
+                    <button type="button" onclick="publicarReactionRoleDiscord()" id="reaction_role_publish_rule" class="reaction-role-publish-button">
+                        <i class="ph ph-paper-plane-tilt"></i>
+                        Publicar mensagem bonita
+                    </button>
                     <button type="button" onclick="adicionarOuAtualizarReactionRole()" id="reaction_role_save_rule">
                         <i class="ph ph-plus-circle"></i>
-                        Adicionar reaction role
+                        Usar mensagem existente
                     </button>
                     <button type="button" onclick="limparEditorReactionRole()">
                         <i class="ph ph-eraser"></i>
@@ -3125,8 +3135,81 @@ function obterDadosEditorReactionRole() {
         roleName: obterNomeSelecionado(cargo, 'roleName'),
         emoji: document.getElementById('reaction_role_emoji')?.value.trim() || '',
         label: document.getElementById('reaction_role_label')?.value.trim() || '',
+        messageText: document.getElementById('reaction_role_message_text')?.value.trim() || '',
         removeOnUnreact: Boolean(document.getElementById('reaction_role_remove_on_unreact')?.checked)
     };
+}
+
+async function publicarReactionRoleDiscord() {
+    const painelSecao = document.getElementById('dashboard-section-panel');
+    const serverId = painelSecao?.dataset.serverId || '';
+    const token = localStorage.getItem('discord_token');
+    const botao = document.getElementById('reaction_role_publish_rule');
+    const botaoHtml = botao?.innerHTML || '';
+    const regra = obterDadosEditorReactionRole();
+
+    if (!regra.channelId || !regra.roleId || !regra.emoji) {
+        mostrarStatusModeracao('Escolha canal, cargo e emoji antes de publicar a mensagem.');
+        return false;
+    }
+
+    if (token === 'demo-token') {
+        mostrarStatusModeracao('No modo teste local eu nao consigo publicar no Discord real.');
+        return false;
+    }
+
+    if (!token) {
+        mostrarStatusModeracao('Sessao expirada. Entre novamente com o Discord.');
+        return false;
+    }
+
+    try {
+        if (botao) {
+            botao.disabled = true;
+            botao.innerHTML = '<i class="ph ph-spinner-gap animate-spin"></i> Publicando...';
+        }
+
+        mostrarStatusModeracao('Publicando mensagem no Discord...', 'success');
+        const response = await fetch(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/reaction-role/publicar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(regra)
+        });
+        const resultado = await lerJsonResposta(response);
+
+        if (!response.ok || resultado.status !== 'sucesso') {
+            mostrarStatusModeracao(resultado.mensagem || resultado.erro || 'Nao consegui publicar a mensagem de reaction role.');
+            return false;
+        }
+
+        const publicacao = resultado.publicacao || {};
+        const campoMensagem = document.getElementById('reaction_role_message_id');
+        const campoEmoji = document.getElementById('reaction_role_emoji');
+        if (campoMensagem) campoMensagem.value = publicacao.messageId || regra.messageId || '';
+        if (campoEmoji && publicacao.emoji) campoEmoji.value = publicacao.emoji;
+
+        const adicionou = adicionarOuAtualizarReactionRole();
+        if (!adicionou) return false;
+
+        const salvou = await salvarAutomacoesServidor();
+        if (salvou) {
+            mostrarStatusModeracao('Mensagem publicada, reação adicionada e automação salva.', 'success');
+        }
+
+        return Boolean(salvou);
+    } catch (erro) {
+        console.error('Erro ao publicar reaction role:', erro);
+        mostrarStatusModeracao('Erro ao conectar na API para publicar a reaction role.');
+        return false;
+    } finally {
+        if (botao) {
+            botao.disabled = false;
+            botao.innerHTML = botaoHtml;
+        }
+    }
 }
 
 function adicionarOuAtualizarReactionRole() {
@@ -3135,12 +3218,12 @@ function adicionarOuAtualizarReactionRole() {
 
     if (!regra.channelId || !regra.messageId || !regra.roleId || !regra.emoji) {
         mostrarStatusModeracao('Informe canal, ID da mensagem, cargo e emoji para criar a regra.');
-        return;
+        return false;
     }
 
     if (!/^\d{15,25}$/.test(regra.messageId)) {
         mostrarStatusModeracao('ID da mensagem parece inválido. Copie o ID da mensagem pelo Discord.');
-        return;
+        return false;
     }
 
     const indice = moderacaoAtual.automacoes.reactionRoleRules.findIndex((item) => item.id === regra.id);
@@ -3158,6 +3241,7 @@ function adicionarOuAtualizarReactionRole() {
     if (resumo) resumo.innerHTML = AutomationSummary();
     mostrarStatusModeracao('Reaction role pronta. Salve as automações para sincronizar.', 'success');
     marcarConfiguracaoAlterada('automations');
+    return true;
 }
 
 function editarReactionRole(id) {
@@ -3172,6 +3256,7 @@ function editarReactionRole(id) {
     document.getElementById('reaction_role_message_id').value = regra.messageId;
     document.getElementById('reaction_role_emoji').value = regra.emoji;
     document.getElementById('reaction_role_label').value = regra.label || '';
+    document.getElementById('reaction_role_message_text').value = regra.messageText || '';
     atualizarPreviewReactionRole();
 
     const botao = document.getElementById('reaction_role_save_rule');
@@ -3200,14 +3285,14 @@ function limparEditorReactionRole(limparStatus = true) {
     preencherChannelSelect(document.getElementById('reaction_role_channel'), moderacaoRecursosAtual.canais, '');
     preencherRoleSelect(document.getElementById('reaction_role_role'), moderacaoRecursosAtual.cargos, '');
 
-    ['reaction_role_message_id', 'reaction_role_emoji', 'reaction_role_label'].forEach((id) => {
+    ['reaction_role_message_id', 'reaction_role_emoji', 'reaction_role_label', 'reaction_role_message_text'].forEach((id) => {
         const elemento = document.getElementById(id);
         if (elemento) elemento.value = '';
     });
 
     atualizarPreviewReactionRole();
     const botao = document.getElementById('reaction_role_save_rule');
-    if (botao) botao.innerHTML = '<i class="ph ph-plus-circle"></i> Adicionar reaction role';
+    if (botao) botao.innerHTML = '<i class="ph ph-plus-circle"></i> Usar mensagem existente';
     if (limparStatus) mostrarStatusModeracao('Editor limpo.', 'success');
 }
 

@@ -14,6 +14,8 @@ from database import buscar_moderacao, registrar_historico_auditoria
 URL_RE = re.compile(r"https?://|www\.", re.IGNORECASE)
 URL_EXTRACT_RE = re.compile(r"(https?://[^\s<>()]+|www\.[^\s<>()]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s<>()]*)?)", re.IGNORECASE)
 INVITE_RE = re.compile(r"(discord\.gg/|discord(?:app)?\.com/invite/)", re.IGNORECASE)
+CUSTOM_EMOJI_RE = re.compile(r"^<a?:([^:>]+):(\d{15,25})>$")
+SHORTCODE_EMOJI_RE = re.compile(r"^:([^:\s]+):$")
 SPAM_WINDOW_SECONDS = 8
 SPAM_LIMIT = 5
 CONFIG_CACHE_TTL_SECONDS = 8
@@ -501,21 +503,48 @@ class ModerationCog(commands.Cog):
                 return opcao.get("values") or {}
         return {}
 
-    def reaction_role_corresponde(self, payload, regra):
-        emoji_configurado = str(regra.get("emoji") or "").strip()
-        if not emoji_configurado:
-            return False
+    def formas_emoji_reaction_role(self, valor):
+        emoji = str(valor or "").strip()
+        if not emoji:
+            return set()
 
-        emoji_payload = payload.emoji
-        opcoes = {
+        formas = {emoji}
+        match_custom = CUSTOM_EMOJI_RE.match(emoji)
+        if match_custom:
+            nome, emoji_id = match_custom.groups()
+            formas.update({nome, f":{nome}:", emoji_id})
+            return formas
+
+        match_shortcode = SHORTCODE_EMOJI_RE.match(emoji)
+        if match_shortcode:
+            nome = match_shortcode.group(1)
+            formas.add(nome)
+
+        return {forma for forma in formas if forma}
+
+    def formas_emoji_payload_reaction_role(self, emoji_payload):
+        formas = {
             str(emoji_payload),
             str(getattr(emoji_payload, "name", "") or ""),
         }
-        emoji_id = getattr(emoji_payload, "id", None)
-        if emoji_id:
-            opcoes.add(str(emoji_id))
 
-        return emoji_configurado in opcoes
+        emoji_id = getattr(emoji_payload, "id", None)
+        emoji_nome = str(getattr(emoji_payload, "name", "") or "")
+        if emoji_id:
+            formas.add(str(emoji_id))
+            if emoji_nome:
+                formas.add(f":{emoji_nome}:")
+                prefixo = "a" if getattr(emoji_payload, "animated", False) else ""
+                formas.add(f"<{prefixo}:{emoji_nome}:{emoji_id}>")
+
+        return {forma for forma in formas if forma}
+
+    def reaction_role_corresponde(self, payload, regra):
+        formas_config = self.formas_emoji_reaction_role(regra.get("emoji"))
+        if not formas_config:
+            return False
+
+        return bool(formas_config & self.formas_emoji_payload_reaction_role(payload.emoji))
 
     def obter_regra_reaction_role(self, config, payload):
         if not self.automacao_ativa(config, "reactionRole"):

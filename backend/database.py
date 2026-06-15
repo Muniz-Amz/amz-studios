@@ -589,6 +589,7 @@ def _normalizar_reaction_roles(valores):
             "roleName": _limitar_texto(regra.get("roleName") or regra.get("role_name"), 120),
             "emoji": emoji,
             "label": _limitar_texto(regra.get("label") or regra.get("nome"), 80),
+            "messageText": _limitar_texto(regra.get("messageText") or regra.get("message_text"), 1100),
             "removeOnUnreact": _normalizar_bool(regra.get("removeOnUnreact", regra.get("remove_on_unreact", True))),
         })
 

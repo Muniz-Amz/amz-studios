@@ -3593,6 +3593,17 @@ section {
     color: #ffffff;
 }
 
+.automation-rule-actions .reaction-role-publish-button {
+    border-color: rgba(113, 255, 150, 0.42);
+    background: #71ff96;
+    color: #031008;
+}
+
+.automation-rule-actions .reaction-role-publish-button:hover {
+    background: #050505;
+    color: #71ff96;
+}
+
 @media (max-width: 900px) {
     .vm-form-grid {
         grid-template-columns: 1fr;
