@@ -501,6 +501,147 @@ class ModerationCog(commands.Cog):
                 return opcao.get("values") or {}
         return {}
 
+    def reaction_role_corresponde(self, payload, regra):
+        emoji_configurado = str(regra.get("emoji") or "").strip()
+        if not emoji_configurado:
+            return False
+
+        emoji_payload = payload.emoji
+        opcoes = {
+            str(emoji_payload),
+            str(getattr(emoji_payload, "name", "") or ""),
+        }
+        emoji_id = getattr(emoji_payload, "id", None)
+        if emoji_id:
+            opcoes.add(str(emoji_id))
+
+        return emoji_configurado in opcoes
+
+    def obter_regra_reaction_role(self, config, payload):
+        if not self.automacao_ativa(config, "reactionRole"):
+            return None
+
+        automacoes = config.get("automacoes", {})
+        for regra in automacoes.get("reactionRoleRules", []):
+            if not regra.get("enabled"):
+                continue
+
+            if str(regra.get("messageId") or "") != str(payload.message_id):
+                continue
+
+            if str(regra.get("channelId") or "") != str(payload.channel_id):
+                continue
+
+            if self.reaction_role_corresponde(payload, regra):
+                return regra
+
+        return None
+
+    async def buscar_membro_reaction_role(self, guild, user_id):
+        member = guild.get_member(user_id)
+        if member:
+            return member
+
+        try:
+            return await guild.fetch_member(user_id)
+        except (discord.Forbidden, discord.HTTPException, discord.NotFound):
+            return None
+
+    def pode_gerenciar_cargo_reaction_role(self, guild, role):
+        bot_member = guild.me
+        if not bot_member or not role:
+            return False, "Bot ou cargo nao encontrado."
+
+        if not bot_member.guild_permissions.manage_roles:
+            return False, "Bot sem permissao Gerenciar Cargos."
+
+        if role.managed:
+            return False, "Cargo gerenciado por integracao nao pode ser alterado."
+
+        if role >= bot_member.top_role:
+            return False, "Cargo igual ou acima do cargo do bot."
+
+        return True, "Permitido."
+
+    async def aplicar_reaction_role(self, payload, remover=False):
+        if not payload.guild_id or self.bot.user and payload.user_id == self.bot.user.id:
+            return
+
+        guild = self.bot.get_guild(payload.guild_id)
+        if not guild:
+            return
+
+        config = await self.obter_config(guild)
+        regra = self.obter_regra_reaction_role(config, payload)
+        if not regra:
+            return
+
+        if remover and not regra.get("removeOnUnreact", True):
+            return
+
+        role_id = regra.get("roleId")
+        try:
+            role = guild.get_role(int(role_id)) if role_id else None
+        except (TypeError, ValueError):
+            role = None
+
+        permitido, motivo = self.pode_gerenciar_cargo_reaction_role(guild, role)
+        if not permitido:
+            if hasattr(self.bot, "registrar_evento"):
+                self.bot.registrar_evento(
+                    "reaction_role_blocked",
+                    f"Reaction role bloqueada: {motivo}",
+                    nivel="warn",
+                    guild_id=guild.id,
+                    channel_id=payload.channel_id,
+                    role_id=role_id,
+                    regra_id=regra.get("id"),
+                )
+            return
+
+        member = await self.buscar_membro_reaction_role(guild, payload.user_id)
+        if not member or member.bot:
+            return
+
+        try:
+            if remover:
+                if role in member.roles:
+                    await member.remove_roles(role, reason="AMZ Automacoes: reaction role removida")
+                    evento = "reaction_role_removed"
+                    mensagem = f"Cargo {role.name} removido de {member} por remover reacao."
+                else:
+                    return
+            else:
+                if role not in member.roles:
+                    await member.add_roles(role, reason="AMZ Automacoes: reaction role")
+                    evento = "reaction_role_added"
+                    mensagem = f"Cargo {role.name} entregue para {member} por reacao."
+                else:
+                    return
+
+            if hasattr(self.bot, "registrar_evento"):
+                self.bot.registrar_evento(
+                    evento,
+                    mensagem,
+                    guild_id=guild.id,
+                    channel_id=payload.channel_id,
+                    user_id=member.id,
+                    role_id=role.id,
+                    regra_id=regra.get("id"),
+                )
+        except (discord.Forbidden, discord.HTTPException) as erro:
+            if hasattr(self.bot, "registrar_evento"):
+                self.bot.registrar_evento(
+                    "reaction_role_error",
+                    f"Falha no reaction role: {erro}",
+                    nivel="error",
+                    guild_id=guild.id,
+                    channel_id=payload.channel_id,
+                    user_id=member.id,
+                    role_id=role.id,
+                    regra_id=regra.get("id"),
+                )
+
     def setting_seguranca(self, config, setting_id):
         settings = config.get("seguranca", {}).get("antiRaid", {}).get("settings", [])
         for setting in settings:
@@ -1520,6 +1661,32 @@ class ModerationCog(commands.Cog):
     async def on_invite_delete(self, invite):
         if invite.guild:
             await self.atualizar_cache_convites(invite.guild)
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload):
+        guild = self.bot.get_guild(payload.guild_id) if payload.guild_id else None
+        if not guild:
+            return
+
+        self.agendar_automacao(
+            guild,
+            12,
+            f"reaction_role_add:{payload.message_id}:{payload.user_id}",
+            lambda payload=payload: self.aplicar_reaction_role(payload, remover=False),
+        )
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_remove(self, payload):
+        guild = self.bot.get_guild(payload.guild_id) if payload.guild_id else None
+        if not guild:
+            return
+
+        self.agendar_automacao(
+            guild,
+            12,
+            f"reaction_role_remove:{payload.message_id}:{payload.user_id}",
+            lambda payload=payload: self.aplicar_reaction_role(payload, remover=True),
+        )
 
     @commands.Cog.listener()
     async def on_member_join(self, member):

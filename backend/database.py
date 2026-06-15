@@ -86,6 +86,7 @@ SEGURANCA_ANTI_RAID_PADRAO = [
 ]
 AUTOMACOES_PADRAO = [
     {"id": "autoRole", "title": "Auto cargo", "description": "Quando alguem entra no servidor, o bot adiciona o cargo escolhido automaticamente.", "enabled": False, "type": "role", "values": {"roleId": "", "roleIdName": ""}},
+    {"id": "reactionRole", "title": "Auto cargo por reacao", "description": "Entrega ou remove cargos quando alguem reage em uma mensagem configurada.", "enabled": False, "type": "reaction-role", "values": {}},
     {"id": "inviteTracker", "title": "Rastreador de convites", "description": "Quando alguem entra no servidor, mostra quem convidou e quantos convites o convidador possui.", "enabled": False, "type": "invite-tracker", "values": {"channelId": "", "channelIdName": "", "message": "{mention} foi convidado por {inviter} e agora ele tem {invites} convite(s)."}},
     {"id": "autoResponse", "title": "Auto resposta", "description": "Quando uma mensagem bater com uma regra ativa, o bot responde no mesmo canal.", "enabled": False, "type": "auto-response", "values": {}},
     {"id": "scheduledMessage", "title": "Mensagem agendada", "description": "Salva uma mensagem para ser enviada no canal escolhido no dia e horario definidos.", "enabled": False, "type": "scheduled-message", "values": {"channelId": "", "channelIdName": "", "message": "", "schedule": ""}},
@@ -203,6 +204,7 @@ PADRAO_MODERACAO = {
         "options": copy.deepcopy(AUTOMACOES_PADRAO),
         "autoResponses": [],
         "commandBlockRules": [],
+        "reactionRoleRules": [],
     },
 }
 
@@ -560,6 +562,39 @@ def _normalizar_bloqueios_comandos(valores):
     return regras
 
 
+def _normalizar_reaction_roles(valores):
+    if not isinstance(valores, list):
+        return []
+
+    regras = []
+    for indice, regra in enumerate(valores[:30]):
+        if not isinstance(regra, dict):
+            continue
+
+        message_id = _limitar_texto(regra.get("messageId") or regra.get("message_id"), 32)
+        channel_id = _limitar_texto(regra.get("channelId") or regra.get("channel_id"), 32)
+        role_id = _limitar_texto(regra.get("roleId") or regra.get("role_id"), 32)
+        emoji = _limitar_texto(regra.get("emoji"), 80)
+
+        if not message_id or not channel_id or not role_id or not emoji:
+            continue
+
+        regras.append({
+            "id": _limitar_texto(regra.get("id"), 80, f"reaction-role-{indice + 1}"),
+            "enabled": _normalizar_bool(regra.get("enabled", regra.get("ativo", True))),
+            "messageId": message_id,
+            "channelId": channel_id,
+            "channelName": _limitar_texto(regra.get("channelName") or regra.get("channel_name"), 120),
+            "roleId": role_id,
+            "roleName": _limitar_texto(regra.get("roleName") or regra.get("role_name"), 120),
+            "emoji": emoji,
+            "label": _limitar_texto(regra.get("label") or regra.get("nome"), 80),
+            "removeOnUnreact": _normalizar_bool(regra.get("removeOnUnreact", regra.get("remove_on_unreact", True))),
+        })
+
+    return regras
+
+
 def _normalizar_automacoes(dados):
     automacoes = dados if isinstance(dados, dict) else {}
 
@@ -568,6 +603,7 @@ def _normalizar_automacoes(dados):
         "options": _normalizar_opcoes_configuraveis(AUTOMACOES_PADRAO, automacoes.get("options")),
         "autoResponses": _normalizar_auto_respostas(automacoes.get("autoResponses") or automacoes.get("auto_responses")),
         "commandBlockRules": _normalizar_bloqueios_comandos(automacoes.get("commandBlockRules") or automacoes.get("command_block_rules")),
+        "reactionRoleRules": _normalizar_reaction_roles(automacoes.get("reactionRoleRules") or automacoes.get("reaction_role_rules")),
     }
 
 
