@@ -24,11 +24,8 @@ from database import (
     buscar_boas_vindas,
     buscar_limpezas,
     buscar_moderacao,
-    listar_crachas_privados,
     remover_limpeza,
-    remover_cracha_privado,
     salvar_boas_vindas,
-    salvar_cracha_privado,
     salvar_config,
     salvar_limpeza,
     salvar_moderacao,
@@ -882,13 +879,6 @@ def buscar_moderacao_sync(server_id):
         return {}
 
 
-def listar_crachas_privados_sync(server_id):
-    try:
-        return executar_corrotina_bot(listar_crachas_privados(str(server_id)), timeout=10)
-    except Exception:
-        return []
-
-
 def valor_booleano(valor):
     if isinstance(valor, bool):
         return valor
@@ -1287,7 +1277,6 @@ def montar_info_servidor_admin(guild):
     limpezas = buscar_limpezas_sync(guild.id)
     boas_vindas = buscar_boas_vindas_sync(guild.id)
     moderacao = buscar_moderacao_sync(guild.id)
-    crachas_privados = listar_crachas_privados_sync(guild.id)
 
     return {
         "id": str(guild.id),
@@ -1301,11 +1290,6 @@ def montar_info_servidor_admin(guild):
         "premium_tier": guild.premium_tier,
         "boosts": guild.premium_subscription_count,
         "features": sorted(guild.features),
-        "private_guild": {
-            "enabled": True,
-            "badges_total": len(crachas_privados),
-            "module": "guild_badges",
-        },
         "limpezas_configuradas": limpezas,
         "boas_vindas_config": boas_vindas,
         "moderacao_config": moderacao,
@@ -1492,81 +1476,6 @@ def admin_listar_membros(server_id):
         }), 200
     except Exception as erro_membros:
         return jsonify({"status": "erro", "mensagem": str(erro_membros)}), 500
-
-
-def validar_guild_privada_admin(server_id):
-    return validar_admin_painel()
-
-
-@app.route("/api/admin/servidores/<server_id>/privado/crachas", methods=["GET"])
-def admin_listar_crachas_privados(server_id):
-    erro = validar_guild_privada_admin(server_id)
-
-    if erro:
-        return erro
-
-    try:
-        crachas = executar_corrotina_bot(listar_crachas_privados(str(server_id)), timeout=10)
-        return jsonify({
-            "status": "sucesso",
-            "server_id": str(server_id),
-            "crachas": crachas,
-        }), 200
-    except Exception as erro_crachas:
-        return jsonify({"status": "erro", "mensagem": str(erro_crachas)}), 500
-
-
-@app.route("/api/admin/servidores/<server_id>/privado/crachas", methods=["POST"])
-def admin_salvar_cracha_privado(server_id):
-    erro = validar_guild_privada_admin(server_id)
-
-    if erro:
-        return erro
-
-    dados = request.json or {}
-
-    try:
-        cracha, crachas = executar_corrotina_bot(salvar_cracha_privado(str(server_id), dados), timeout=12)
-        if hasattr(bot, "registrar_evento"):
-            bot.registrar_evento(
-                "admin_private_badge_save",
-                f"Crachá privado salvo: {cracha.get('memberName') or cracha.get('memberId') or cracha.get('id')}.",
-                guild_id=server_id,
-            )
-        return jsonify({
-            "status": "sucesso",
-            "mensagem": "Crachá privado salvo.",
-            "cracha": cracha,
-            "crachas": crachas,
-        }), 200
-    except ValueError as erro_validacao:
-        return jsonify({"status": "erro", "mensagem": str(erro_validacao)}), 400
-    except Exception as erro_cracha:
-        return jsonify({"status": "erro", "mensagem": str(erro_cracha)}), 500
-
-
-@app.route("/api/admin/servidores/<server_id>/privado/crachas/<cracha_id>", methods=["DELETE"])
-def admin_remover_cracha_privado(server_id, cracha_id):
-    erro = validar_guild_privada_admin(server_id)
-
-    if erro:
-        return erro
-
-    try:
-        crachas = executar_corrotina_bot(remover_cracha_privado(str(server_id), str(cracha_id)), timeout=12)
-        if hasattr(bot, "registrar_evento"):
-            bot.registrar_evento(
-                "admin_private_badge_delete",
-                f"Crachá privado removido: {cracha_id}.",
-                guild_id=server_id,
-            )
-        return jsonify({
-            "status": "sucesso",
-            "mensagem": "Crachá privado removido.",
-            "crachas": crachas,
-        }), 200
-    except Exception as erro_cracha:
-        return jsonify({"status": "erro", "mensagem": str(erro_cracha)}), 500
 
 
 @app.route("/api/admin/servidores/<server_id>/leave", methods=["POST"])
