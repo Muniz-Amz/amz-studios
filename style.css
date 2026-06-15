@@ -3193,6 +3193,141 @@ section {
     min-height: 118px;
 }
 
+.automation-option-card-invite-tracker {
+    position: relative;
+    overflow: hidden;
+}
+
+.automation-option-card-invite-tracker::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 18% 0%, rgba(47, 212, 207, 0.16), transparent 32%),
+        radial-gradient(circle at 92% 10%, rgba(88, 101, 242, 0.14), transparent 28%);
+    opacity: 0.9;
+}
+
+.automation-option-card-invite-tracker > * {
+    position: relative;
+    z-index: 1;
+}
+
+.invite-tracker-panel {
+    display: grid;
+    gap: 12px;
+    margin-top: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: linear-gradient(145deg, rgba(18, 20, 26, 0.96), rgba(5, 5, 5, 0.96));
+    padding: 14px;
+}
+
+.invite-tracker-panel-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.invite-tracker-panel-head span,
+.invite-tracker-vars code {
+    color: #35d8ff;
+    font-size: 9px;
+    font-weight: 950;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.invite-tracker-panel-head strong {
+    display: block;
+    margin-top: 4px;
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 950;
+    letter-spacing: -0.02em;
+}
+
+.invite-tracker-panel-head em {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.72);
+    padding: 7px 9px;
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.invite-tracker-discord-preview {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 10px;
+    border: 1px solid rgba(88, 101, 242, 0.32);
+    background: #313338;
+    padding: 13px;
+    color: #f2f3f5;
+}
+
+.invite-tracker-bot-avatar {
+    width: 38px;
+    height: 38px;
+    border: 2px solid #23d3cf;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    color: #23d3cf;
+    font-size: 18px;
+}
+
+.invite-tracker-message {
+    min-width: 0;
+}
+
+.invite-tracker-message strong {
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.invite-tracker-message strong span {
+    border-radius: 4px;
+    background: #5865f2;
+    padding: 2px 5px;
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 950;
+}
+
+.invite-tracker-message small {
+    margin-left: 5px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 10px;
+}
+
+.invite-tracker-message p {
+    margin-top: 6px;
+    color: #dbdee1;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.invite-tracker-vars {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.invite-tracker-vars code {
+    border: 1px solid rgba(53, 216, 255, 0.24);
+    background: rgba(53, 216, 255, 0.08);
+    padding: 6px 8px;
+    letter-spacing: 0.04em;
+    text-transform: none;
+}
+
 .advanced-field input:focus,
 .advanced-field select:focus,
 .advanced-field textarea:focus,
@@ -3397,6 +3532,15 @@ section {
     .automation-option-card-wide,
     .automation-rule-actions {
         grid-column: auto;
+    }
+
+    .invite-tracker-panel-head,
+    .invite-tracker-discord-preview {
+        grid-template-columns: 1fr;
+    }
+
+    .invite-tracker-panel-head {
+        display: grid;
     }
 
     .welcome-vars {
@@ -5245,6 +5389,9 @@ html[data-site-theme] .automation-option-card,
 html[data-site-theme] .automation-option-notes,
 html[data-site-theme] .automation-rule-editor,
 html[data-site-theme] .automation-rule-item,
+html[data-site-theme] .invite-tracker-panel,
+html[data-site-theme] .invite-tracker-panel-head em,
+html[data-site-theme] .invite-tracker-vars code,
 html[data-site-theme] .admin-login-card,
 html[data-site-theme] .admin-toolbar,
 html[data-site-theme] .admin-server-search,
@@ -5292,6 +5439,28 @@ html[data-site-theme] .advanced-section-heading i {
 
 html[data-site-theme] .audit-group-note {
     color: var(--app-muted) !important;
+}
+
+html[data-site-theme] .invite-tracker-panel {
+    background: linear-gradient(145deg, var(--app-surface), var(--app-elevated)) !important;
+}
+
+html[data-site-theme] .invite-tracker-panel-head span,
+html[data-site-theme] .invite-tracker-vars code {
+    color: var(--app-accent, #178cff) !important;
+}
+
+html[data-site-theme] .invite-tracker-panel-head strong {
+    color: var(--app-text) !important;
+}
+
+html[data-site-theme] .invite-tracker-discord-preview,
+html[data-site-theme] .invite-tracker-discord-preview * {
+    color: #f2f3f5 !important;
+}
+
+html[data-site-theme] .invite-tracker-message p {
+    color: #dbdee1 !important;
 }
 
 html[data-site-theme] .vm-server-option:hover,

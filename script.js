@@ -2496,16 +2496,98 @@ function CommandBlockRuleEditor() {
     `;
 }
 
+function InviteTrackerPanel() {
+    return `
+        <div class="invite-tracker-panel">
+            <div class="invite-tracker-panel-head">
+                <div>
+                    <span>Preview do aviso</span>
+                    <strong>Quem convidou quem</strong>
+                </div>
+                <em id="invite-tracker-channel-preview">Canal nao definido</em>
+            </div>
+            <div class="invite-tracker-discord-preview" aria-label="Preview do rastreador de convites">
+                <div class="invite-tracker-bot-avatar">
+                    <i class="ph ph-plus"></i>
+                </div>
+                <div class="invite-tracker-message">
+                    <div>
+                        <strong>AMZ Bot <span>APP</span></strong>
+                        <small>agora</small>
+                    </div>
+                    <p id="invite-tracker-preview-message">@Will_X foi convidado por @gabi_nekoo e agora ele tem 91 convite(s).</p>
+                </div>
+            </div>
+            <div class="invite-tracker-vars">
+                <code>{mention}</code>
+                <code>{inviter}</code>
+                <code>{invites}</code>
+                <code>{invite_code}</code>
+                <code>{server}</code>
+            </div>
+        </div>
+    `;
+}
+
+function textoPreviewRastreadorConvites() {
+    const estado = obterSetting(moderacaoAtual.automacoes?.options, 'inviteTracker');
+    const inputMensagem = document.getElementById('automation_inviteTracker_message');
+    const padrao = automationSettings.find((opcao) => opcao.id === 'inviteTracker')?.fields?.find((campo) => campo.id === 'message')?.value || '';
+    let mensagem = inputMensagem?.value || estado.values?.message || padrao;
+    const substituicoes = {
+        '{mention}': '@Will_X',
+        '{user}': 'Will_X',
+        '{username}': 'Will_X',
+        '{user_tag}': 'Will_X#0001',
+        '{id}': '123456789',
+        '{server}': 'Silent Ocean',
+        '{server_upper}': 'SILENT OCEAN',
+        '{member_count}': '121',
+        '{member_number}': '121',
+        '{inviter}': '@gabi_nekoo',
+        '{inviter_tag}': 'gabi_nekoo#0',
+        '{inviter_id}': '987654321',
+        '{invites}': '91',
+        '{invite_code}': 'silent-ocean'
+    };
+
+    Object.entries(substituicoes).forEach(([chave, valor]) => {
+        mensagem = mensagem.replaceAll(chave, valor);
+    });
+
+    return mensagem.trim() || '@Will_X foi convidado por @gabi_nekoo e agora ele tem 91 convite(s).';
+}
+
+function atualizarPreviewRastreadorConvites() {
+    const mensagem = document.getElementById('invite-tracker-preview-message');
+    if (mensagem) mensagem.textContent = textoPreviewRastreadorConvites();
+
+    const canal = document.getElementById('automation_inviteTracker_channelId');
+    const canalPreview = document.getElementById('invite-tracker-channel-preview');
+    if (canalPreview) {
+        canalPreview.textContent = canal?.value ? `#${obterNomeSelecionado(canal, 'channelName') || canal.value}` : 'Canal nao definido';
+    }
+}
+
+function configurarPreviewRastreadorConvites() {
+    const mensagem = document.getElementById('automation_inviteTracker_message');
+    const canal = document.getElementById('automation_inviteTracker_channelId');
+
+    mensagem?.addEventListener('input', atualizarPreviewRastreadorConvites);
+    canal?.addEventListener('change', atualizarPreviewRastreadorConvites);
+    atualizarPreviewRastreadorConvites();
+}
+
 function AutomationOptionCard(opcao) {
     const estado = obterSetting(moderacaoAtual.automacoes?.options, opcao.id);
     const campos = (opcao.fields || []).map((campo) => renderizarCampoConfiguravel('automation', opcao.id, campo)).join('');
-    const cardAberto = ['auto-response', 'command-block'].includes(opcao.type);
+    const cardAberto = ['auto-response', 'command-block', 'invite-tracker'].includes(opcao.type);
     const notas = Array.isArray(opcao.notes) && opcao.notes.length
         ? `<ul class="automation-option-notes">${opcao.notes.map((nota) => `<li>${escaparHTML(nota)}</li>`).join('')}</ul>`
         : '';
 
     return `
-        <article class="automation-option-card ${cardAberto ? 'automation-option-card-wide' : ''}">
+        <article class="automation-option-card automation-option-card-${escaparHTML(opcao.type)} ${cardAberto ? 'automation-option-card-wide' : ''}">
             <div class="advanced-card-heading">
                 <div>
                     <strong>${escaparHTML(opcao.title)}</strong>
@@ -2517,6 +2599,7 @@ function AutomationOptionCard(opcao) {
             ${opcao.type === 'auto-response' ? AutomationRuleEditor() : ''}
             ${opcao.type === 'command-block' ? CommandBlockRuleEditor() : ''}
             ${campos ? `<div class="advanced-field-grid">${campos}</div>` : ''}
+            ${opcao.type === 'invite-tracker' ? InviteTrackerPanel() : ''}
         </article>
     `;
 }
@@ -2649,6 +2732,7 @@ function preencherCamposAutomacoes(canais = [], cargos = []) {
 
     preencherChannelSelect(document.getElementById('auto_response_channel'), canais, '');
     preencherChannelSelect(document.getElementById('command_block_channels'), canais, [], false);
+    configurarPreviewRastreadorConvites();
     renderizarListaAutoRespostas();
     renderizarListaBloqueiosComando();
 }
