@@ -211,6 +211,7 @@ async def executar_limpezas(bot):
 
     inicio = PROXIMO_INDICE_LIMPEZA % len(trabalhos)
     limite = min(MAX_CANAIS_POR_CICLO, len(trabalhos))
+    canais_processados = 0
 
     for deslocamento in range(limite):
         if limpeza_em_backoff() > 0:
@@ -219,9 +220,27 @@ async def executar_limpezas(bot):
         indice = (inicio + deslocamento) % len(trabalhos)
         server_id, limpeza = trabalhos[indice]
         total_removidas += await excluir_mensagens_antigas(bot, server_id, limpeza)
+        canais_processados += 1
         PROXIMO_INDICE_LIMPEZA = (indice + 1) % len(trabalhos)
 
         if deslocamento < limite - 1:
             await asyncio.sleep(PAUSA_ENTRE_CANAIS)
 
+    mensagem = (
+        f"Ciclo de limpeza concluido: {canais_processados}/{len(trabalhos)} canal(is) verificado(s), "
+        f"{total_removidas} mensagem(ns) removida(s)."
+    )
+
+    if hasattr(bot, "registrar_evento"):
+        bot.registrar_evento(
+            "cleanup_auto_cycle",
+            mensagem,
+            nivel="info",
+            canais_processados=canais_processados,
+            canais_configurados=len(trabalhos),
+            mensagens_removidas=total_removidas,
+            proximo_indice=PROXIMO_INDICE_LIMPEZA,
+        )
+
+    print(f"[LIMPEZA] {mensagem}")
     return total_removidas
