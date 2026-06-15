@@ -5298,18 +5298,21 @@ function renderizarPainelPrivadoGuildAdmin(servidor) {
     const total = servidor.private_guild?.badges_total ?? 0;
 
     return `
-        <details class="admin-details admin-private-details" open>
-            <summary>Área secreta da guilda (${escaparHTML(total)} crachá(s))</summary>
+        <details class="admin-details admin-private-details">
+            <summary>
+                <span>Opcao especial</span>
+                <small>${escaparHTML(total)} cracha(s)</small>
+            </summary>
             <div class="admin-private-panel" data-private-server-id="${escaparHTML(serverId)}">
                 <div class="admin-private-heading">
                     <div>
-                        <span>Ferramenta privada</span>
-                        <strong>Crachás da guilda</strong>
-                        <p>Crie fichas internas com rank, divisão, foto, função, nível, conquistas e observações.</p>
+                        <span>Opcoes de guilda privada</span>
+                        <strong>Crachas da guilda</strong>
+                        <p>Crie fichas internas com rank, divisao, foto, funcao, nivel, conquistas e observacoes.</p>
                     </div>
                     <button type="button" onclick="limparFormularioCrachaPrivadoAdmin('${escaparHTML(serverId)}')">
                         <i class="ph ph-plus-circle"></i>
-                        Novo crachá
+                        Novo cracha
                     </button>
                 </div>
 

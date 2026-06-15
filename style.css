@@ -5325,6 +5325,30 @@ section {
 
 .admin-private-details summary {
     color: #35d8ff;
+    border: 1px solid rgba(53, 216, 255, 0.24);
+    background: rgba(53, 216, 255, 0.04);
+    padding: 11px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.admin-private-details summary span {
+    color: #35d8ff;
+}
+
+.admin-private-details summary small {
+    color: var(--app-muted);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.admin-private-details[open] summary {
+    border-color: rgba(53, 216, 255, 0.6);
+    background: rgba(53, 216, 255, 0.08);
 }
 
 .admin-private-panel {
@@ -5986,8 +6010,13 @@ html[data-site-theme] #painel-loritta .vm-server-current-icon {
     color: var(--app-text) !important;
 }
 
-html[data-site-theme] .admin-private-details summary {
+html[data-site-theme] .admin-private-details summary,
+html[data-site-theme] .admin-private-details summary span {
     color: #35d8ff !important;
+}
+
+html[data-site-theme] .admin-private-details summary small {
+    color: var(--app-muted) !important;
 }
 
 html[data-site-theme] .admin-private-panel,
