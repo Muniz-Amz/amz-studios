@@ -1998,6 +1998,10 @@ section {
     display: none !important;
 }
 
+.is-hidden {
+    display: none !important;
+}
+
 @media (max-width: 980px) {
     .vm-dashboard {
         grid-template-columns: 1fr;
@@ -3277,7 +3281,9 @@ section {
     display: grid;
     place-items: center;
     color: #23d3cf;
-    font-size: 18px;
+    font-size: 9px;
+    font-weight: 950;
+    letter-spacing: 0.12em;
 }
 
 .invite-tracker-message {

@@ -989,6 +989,57 @@ class ModerationCog(commands.Cog):
             return texto.strip().endswith(palavra)
         return palavra in texto
 
+    def formatar_auto_resposta(self, texto, message):
+        guild = message.guild
+        author = message.author
+        channel = message.channel
+        valores = {
+            "{user}": getattr(author, "display_name", str(author)),
+            "{username}": getattr(author, "name", str(author)),
+            "{user_tag}": str(author),
+            "{mention}": getattr(author, "mention", ""),
+            "{server}": getattr(guild, "name", ""),
+            "{channel}": getattr(channel, "mention", ""),
+            "{channel_name}": getattr(channel, "name", ""),
+        }
+
+        resultado = str(texto or "")
+        for chave, valor in valores.items():
+            resultado = resultado.replace(chave, str(valor))
+        return resultado
+
+    def cor_auto_resposta_embed(self, valor):
+        texto = str(valor or "#35d8ff").strip().lstrip("#")
+        try:
+            return discord.Color(int(texto[:6], 16))
+        except (TypeError, ValueError):
+            return discord.Color.from_rgb(53, 216, 255)
+
+    def criar_embed_auto_resposta(self, regra, message, resposta):
+        embed_config = regra.get("embed") or {}
+        if not isinstance(embed_config, dict):
+            embed_config = {}
+
+        embed = discord.Embed(
+            title=self.formatar_auto_resposta(embed_config.get("title"), message)[:256] or None,
+            description=resposta[:4096],
+            color=self.cor_auto_resposta_embed(embed_config.get("color")),
+            timestamp=datetime.now(timezone.utc),
+        )
+
+        image_url = self.formatar_auto_resposta(embed_config.get("imageUrl"), message)
+        thumbnail_url = self.formatar_auto_resposta(embed_config.get("thumbnailUrl"), message)
+        footer = self.formatar_auto_resposta(embed_config.get("footer"), message)
+
+        if image_url.startswith(("http://", "https://")):
+            embed.set_image(url=image_url)
+        if thumbnail_url.startswith(("http://", "https://")):
+            embed.set_thumbnail(url=thumbnail_url)
+        if footer:
+            embed.set_footer(text=footer[:2048])
+
+        return embed
+
     async def aplicar_auto_respostas(self, message, config):
         automacoes = config.get("automacoes", {})
         if not self.automacao_ativa(config, "autoResponse"):
@@ -1026,17 +1077,23 @@ class ModerationCog(commands.Cog):
                 }
 
             delete_after = int(regra.get("deleteAfterSeconds") or 0) or None
-            resposta = str(regra.get("response", "") or "")
+            resposta = self.formatar_auto_resposta(regra.get("response", "") or "", message)
             if not resposta:
                 continue
 
             channel = message.channel
             guild = message.guild
             regra_id = regra.get("id") or "auto-response"
+            embed = self.criar_embed_auto_resposta(regra, message, resposta) if regra.get("responseMode") == "embed" else None
+            conteudo = None if embed else resposta
+            if embed and guild.me and not channel.permissions_for(guild.me).embed_links:
+                embed = None
+                conteudo = resposta
 
-            async def enviar_auto_resposta(channel=channel, resposta=resposta, delete_after=delete_after):
+            async def enviar_auto_resposta(channel=channel, conteudo=conteudo, embed=embed, delete_after=delete_after):
                 await channel.send(
-                    resposta,
+                    content=conteudo,
+                    embed=embed,
                     delete_after=delete_after,
                     allowed_mentions=discord.AllowedMentions.none(),
                 )

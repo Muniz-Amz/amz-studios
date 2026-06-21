@@ -506,6 +506,20 @@ def _normalizar_seguranca(dados):
     }
 
 
+def _normalizar_embed_auto_resposta(regra):
+    embed = regra.get("embed") or regra.get("embed_config") or {}
+    if not isinstance(embed, dict):
+        embed = {}
+
+    return {
+        "title": _limitar_texto(embed.get("title") or regra.get("embedTitle") or regra.get("embed_title"), 240),
+        "color": _normalizar_cor(embed.get("color") or regra.get("embedColor") or regra.get("embed_color"), "#35d8ff"),
+        "imageUrl": _normalizar_url(embed.get("imageUrl") or embed.get("image_url") or regra.get("embedImageUrl") or regra.get("embed_image_url")),
+        "thumbnailUrl": _normalizar_url(embed.get("thumbnailUrl") or embed.get("thumbnail_url") or regra.get("embedThumbnailUrl") or regra.get("embed_thumbnail_url")),
+        "footer": _limitar_texto(embed.get("footer") or regra.get("embedFooter") or regra.get("embed_footer"), 240),
+    }
+
+
 def _normalizar_auto_respostas(valores):
     if not isinstance(valores, list):
         return []
@@ -519,11 +533,17 @@ def _normalizar_auto_respostas(valores):
         if deteccao not in DETECCOES_AUTO_RESPOSTA:
             deteccao = "contains"
 
+        modo_resposta = regra.get("responseMode") or regra.get("response_mode")
+        if modo_resposta not in ("text", "embed"):
+            modo_resposta = "embed" if _normalizar_bool(regra.get("embedEnabled") or regra.get("embed_enabled") or regra.get("useEmbed") or regra.get("use_embed")) else "text"
+
         regras.append({
             "id": _limitar_texto(regra.get("id"), 80, f"auto-response-{indice + 1}"),
             "enabled": _normalizar_bool(regra.get("enabled", regra.get("ativo", True))),
             "keyword": _limitar_texto(regra.get("keyword") or regra.get("palavra_chave"), 120),
             "response": _limitar_texto(regra.get("response") or regra.get("resposta"), 1900),
+            "responseMode": modo_resposta,
+            "embed": _normalizar_embed_auto_resposta(regra),
             "channelId": _limitar_texto(regra.get("channelId") or regra.get("channel_id"), 32),
             "channelName": _limitar_texto(regra.get("channelName") or regra.get("channel_name"), 120),
             "detectionType": deteccao,

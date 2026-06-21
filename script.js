@@ -1959,6 +1959,17 @@ function resumirMapeamentosReactionRole(mapeamentos = []) {
         .join(' · ');
 }
 
+function normalizarEmbedAutoResposta(regra = {}) {
+    const embed = regra.embed || regra.embed_config || {};
+    return {
+        title: String(embed.title || regra.embedTitle || regra.embed_title || '').trim(),
+        color: String(embed.color || regra.embedColor || regra.embed_color || '#35d8ff').trim() || '#35d8ff',
+        imageUrl: String(embed.imageUrl || embed.image_url || regra.embedImageUrl || regra.embed_image_url || '').trim(),
+        thumbnailUrl: String(embed.thumbnailUrl || embed.thumbnail_url || regra.embedThumbnailUrl || regra.embed_thumbnail_url || '').trim(),
+        footer: String(embed.footer || regra.embedFooter || regra.embed_footer || '').trim()
+    };
+}
+
 function normalizarAutomacoesLocal(automacoes = {}) {
     return {
         lastExecution: automacoes.lastExecution || automacoes.last_execution || '',
@@ -1969,6 +1980,10 @@ function normalizarAutomacoesLocal(automacoes = {}) {
                 enabled: Boolean(regra.enabled ?? regra.ativo),
                 keyword: regra.keyword || regra.palavra_chave || '',
                 response: regra.response || regra.resposta || '',
+                responseMode: ['text', 'embed'].includes(regra.responseMode || regra.response_mode)
+                    ? (regra.responseMode || regra.response_mode)
+                    : ((regra.embedEnabled || regra.embed_enabled || regra.useEmbed || regra.use_embed) ? 'embed' : 'text'),
+                embed: normalizarEmbedAutoResposta(regra),
                 channelId: regra.channelId || regra.channel_id || '',
                 channelName: regra.channelName || regra.channel_name || '',
                 detectionType: regra.detectionType || regra.detection_type || 'contains',
@@ -2562,7 +2577,40 @@ function AutomationRuleEditor() {
                 <label class="advanced-field advanced-field-wide">
                     <span>Resposta automática</span>
                     <textarea id="auto_response_response" rows="4" placeholder="A arena abre todos os dias às 20h! Use /arena para participar."></textarea>
-                    <small>Mensagem que o bot envia quando a regra for acionada.</small>
+                    <small>No modo bonito, este texto vira a descricao do embed.</small>
+                </label>
+                <label class="advanced-field">
+                    <span>Estilo da resposta</span>
+                    <select id="auto_response_mode" onchange="atualizarCamposAutoRespostaEmbed()">
+                        <option value="text">Resposta simples</option>
+                        <option value="embed">Mensagem bonita</option>
+                    </select>
+                    <small>Escolha embed para enviar uma caixinha bonita no Discord.</small>
+                </label>
+                <label class="advanced-field auto-response-embed-field" data-auto-response-embed-field>
+                    <span>Titulo do embed</span>
+                    <input id="auto_response_embed_title" type="text" maxlength="120" placeholder="Central AMZ">
+                    <small>Opcional. Fica no topo da mensagem bonita.</small>
+                </label>
+                <label class="advanced-field auto-response-embed-field" data-auto-response-embed-field>
+                    <span>Cor do embed</span>
+                    <input id="auto_response_embed_color" type="text" maxlength="7" placeholder="#35d8ff" value="#35d8ff">
+                    <small>Use formato hexadecimal, exemplo #35d8ff.</small>
+                </label>
+                <label class="advanced-field auto-response-embed-field" data-auto-response-embed-field>
+                    <span>Imagem/banner</span>
+                    <input id="auto_response_embed_image" type="url" placeholder="https://...">
+                    <small>Opcional. Imagem grande dentro da resposta.</small>
+                </label>
+                <label class="advanced-field auto-response-embed-field" data-auto-response-embed-field>
+                    <span>Miniatura</span>
+                    <input id="auto_response_embed_thumbnail" type="url" placeholder="https://...">
+                    <small>Opcional. Imagem pequena no canto.</small>
+                </label>
+                <label class="advanced-field advanced-field-wide auto-response-embed-field" data-auto-response-embed-field>
+                    <span>Rodape</span>
+                    <input id="auto_response_embed_footer" type="text" maxlength="120" placeholder="AMZ Bot">
+                    <small>Variaveis aceitas: {user}, {mention}, {server}, {channel}.</small>
                 </label>
                 <label class="advanced-field">
                     <span>Canal da regra</span>
@@ -2665,14 +2713,14 @@ function InviteTrackerPanel() {
             </div>
             <div class="invite-tracker-discord-preview" aria-label="Preview do rastreador de convites">
                 <div class="invite-tracker-bot-avatar">
-                    <i class="ph ph-plus"></i>
+                    <span>BOT</span>
                 </div>
                 <div class="invite-tracker-message">
                     <div>
-                        <strong>AMZ Bot <span>APP</span></strong>
+                        <strong>Bot de exemplo <span>APP</span></strong>
                         <small>agora</small>
                     </div>
-                    <p id="invite-tracker-preview-message">@Will_X foi convidado por @gabi_nekoo e agora ele tem 91 convite(s).</p>
+                    <p id="invite-tracker-preview-message">@Usuario1 foi convidado por @Usuario2 e agora ele tem 12 convite(s).</p>
                 </div>
             </div>
             <div class="invite-tracker-vars">
@@ -2692,19 +2740,19 @@ function textoPreviewRastreadorConvites() {
     const padrao = automationSettings.find((opcao) => opcao.id === 'inviteTracker')?.fields?.find((campo) => campo.id === 'message')?.value || '';
     let mensagem = inputMensagem?.value || estado.values?.message || padrao;
     const substituicoes = {
-        '{mention}': '@Will_X',
-        '{user}': 'Will_X',
-        '{username}': 'Will_X',
-        '{user_tag}': 'Will_X#0001',
+        '{mention}': '@Usuario1',
+        '{user}': 'Usuario1',
+        '{username}': 'Usuario1',
+        '{user_tag}': 'Usuario1#0001',
         '{id}': '123456789',
         '{server}': 'Silent Ocean',
         '{server_upper}': 'SILENT OCEAN',
         '{member_count}': '121',
         '{member_number}': '121',
-        '{inviter}': '@gabi_nekoo',
-        '{inviter_tag}': 'gabi_nekoo#0',
+        '{inviter}': '@Usuario2',
+        '{inviter_tag}': 'Usuario2#0002',
         '{inviter_id}': '987654321',
-        '{invites}': '91',
+        '{invites}': '12',
         '{invite_code}': 'silent-ocean'
     };
 
@@ -2712,7 +2760,7 @@ function textoPreviewRastreadorConvites() {
         mensagem = mensagem.replaceAll(chave, valor);
     });
 
-    return mensagem.trim() || '@Will_X foi convidado por @gabi_nekoo e agora ele tem 91 convite(s).';
+    return mensagem.trim() || '@Usuario1 foi convidado por @Usuario2 e agora ele tem 12 convite(s).';
 }
 
 function atualizarPreviewRastreadorConvites() {
@@ -2895,6 +2943,7 @@ function preencherCamposAutomacoes(canais = [], cargos = []) {
     renderizarMapeamentosReactionRole([{ emoji: '', roleId: '', roleName: '' }]);
     configurarPreviewRastreadorConvites();
     configurarPreviewReactionRole();
+    atualizarCamposAutoRespostaEmbed();
     renderizarListaAutoRespostas();
     renderizarListaBloqueiosComando();
     renderizarListaReactionRoles();
@@ -2970,6 +3019,13 @@ function coletarCamposAutomacoes() {
     });
 }
 
+function atualizarCamposAutoRespostaEmbed() {
+    const modo = document.getElementById('auto_response_mode')?.value || 'text';
+    document.querySelectorAll('[data-auto-response-embed-field]').forEach((campo) => {
+        campo.classList.toggle('is-hidden', modo !== 'embed');
+    });
+}
+
 function renderizarListaAutoRespostas() {
     const lista = document.getElementById('auto-response-rules');
     if (!lista) return;
@@ -2988,8 +3044,8 @@ function renderizarListaAutoRespostas() {
             <article class="automation-rule-item">
                 <div>
                     <strong>${escaparHTML(regra.keyword || 'Sem palavra-chave')}</strong>
-                    <span>${escaparHTML(tipo)} · ${escaparHTML(regra.channelName || regra.channelId || 'Todos os canais')}</span>
-                    <p>${escaparHTML(regra.response || 'Sem resposta configurada')}</p>
+                    <span>${escaparHTML(tipo)} · ${escaparHTML(regra.channelName || regra.channelId || 'Todos os canais')} · ${regra.responseMode === 'embed' ? 'Mensagem bonita' : 'Resposta simples'}</span>
+                    <p>${escaparHTML(regra.response || regra.embed?.title || 'Sem resposta configurada')}</p>
                 </div>
                 <em class="${regra.enabled ? 'sent' : 'failed'}">${regra.enabled ? 'ON' : 'OFF'}</em>
                 <button type="button" onclick="editarRegraAutoResposta('${escaparHTML(regra.id)}')">
@@ -3007,11 +3063,20 @@ function renderizarListaAutoRespostas() {
 
 function obterDadosEditorAutoResposta() {
     const canal = document.getElementById('auto_response_channel');
+    const responseMode = document.getElementById('auto_response_mode')?.value || 'text';
     return {
         id: automacaoRegraEditandoId || `auto-response-${Date.now()}`,
         enabled: Boolean(document.getElementById('auto_response_rule_enabled')?.checked),
         keyword: document.getElementById('auto_response_keyword')?.value.trim() || '',
         response: document.getElementById('auto_response_response')?.value.trim() || '',
+        responseMode,
+        embed: {
+            title: document.getElementById('auto_response_embed_title')?.value.trim() || '',
+            color: document.getElementById('auto_response_embed_color')?.value.trim() || '#35d8ff',
+            imageUrl: document.getElementById('auto_response_embed_image')?.value.trim() || '',
+            thumbnailUrl: document.getElementById('auto_response_embed_thumbnail')?.value.trim() || '',
+            footer: document.getElementById('auto_response_embed_footer')?.value.trim() || ''
+        },
         channelId: canal?.value || '',
         channelName: obterNomeSelecionado(canal, 'channelName'),
         detectionType: document.getElementById('auto_response_detection_type')?.value || 'contains',
@@ -3057,11 +3122,18 @@ function editarRegraAutoResposta(id) {
     document.getElementById('auto_response_rule_enabled').checked = regra.enabled;
     document.getElementById('auto_response_keyword').value = regra.keyword;
     document.getElementById('auto_response_response').value = regra.response;
+    document.getElementById('auto_response_mode').value = regra.responseMode || 'text';
+    document.getElementById('auto_response_embed_title').value = regra.embed?.title || '';
+    document.getElementById('auto_response_embed_color').value = regra.embed?.color || '#35d8ff';
+    document.getElementById('auto_response_embed_image').value = regra.embed?.imageUrl || '';
+    document.getElementById('auto_response_embed_thumbnail').value = regra.embed?.thumbnailUrl || '';
+    document.getElementById('auto_response_embed_footer').value = regra.embed?.footer || '';
     if (canal) canal.value = regra.channelId || '';
     document.getElementById('auto_response_detection_type').value = regra.detectionType || 'contains';
     document.getElementById('auto_response_cooldown').value = regra.cooldownSeconds ?? 0;
     document.getElementById('auto_response_ignore_staff').checked = regra.ignoreStaff;
     document.getElementById('auto_response_delete_after').value = regra.deleteAfterSeconds ?? 0;
+    atualizarCamposAutoRespostaEmbed();
     const botao = document.getElementById('auto_response_save_rule');
     if (botao) botao.innerHTML = '<i class="ph ph-check-circle"></i> Salvar edição';
 }
@@ -3084,6 +3156,12 @@ function limparEditorAutoResposta(limparStatus = true) {
         auto_response_rule_enabled: true,
         auto_response_keyword: '',
         auto_response_response: '',
+        auto_response_mode: 'text',
+        auto_response_embed_title: '',
+        auto_response_embed_color: '#35d8ff',
+        auto_response_embed_image: '',
+        auto_response_embed_thumbnail: '',
+        auto_response_embed_footer: '',
         auto_response_detection_type: 'contains',
         auto_response_cooldown: 30,
         auto_response_ignore_staff: false,
@@ -3102,6 +3180,7 @@ function limparEditorAutoResposta(limparStatus = true) {
 
     const botao = document.getElementById('auto_response_save_rule');
     if (botao) botao.innerHTML = '<i class="ph ph-plus-circle"></i> Adicionar nova regra';
+    atualizarCamposAutoRespostaEmbed();
     if (limparStatus) mostrarStatusModeracao('Editor limpo.', 'success');
 }
 
