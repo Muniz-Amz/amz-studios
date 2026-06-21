@@ -247,7 +247,11 @@ const ROLE_ANNOUNCEMENT_DEFAULTS = {
     sendChannel: true,
     sendDm: true,
     includeBots: false,
-    maxRecipients: 50
+    maxRecipients: 50,
+    safeMode: true,
+    batchSize: 5,
+    batchPauseSeconds: 15,
+    dmDelaySeconds: 2
 };
 const ROLE_ANNOUNCEMENT_VARS = ['{user}', '{mention}', '{server}', '{role}', '{role_mention}', '{member_count}'];
 const autoResponseDetectionTypes = [
@@ -2877,6 +2881,21 @@ function RoleAnnouncementPanel() {
                         <input id="role_announcement_max_recipients" type="number" min="1" max="200" value="50">
                         <small>Proteção contra spam e rate limit do Discord.</small>
                     </label>
+                    <label class="advanced-field">
+                        <span>Membros por lote</span>
+                        <input id="role_announcement_batch_size" type="number" min="1" max="20" value="5">
+                        <small>O bot pausa depois de cada lote para andar pouco a pouco.</small>
+                    </label>
+                    <label class="advanced-field">
+                        <span>Pausa entre lotes</span>
+                        <input id="role_announcement_batch_pause" type="number" min="3" max="300" value="15">
+                        <small>Segundos de descanso após cada lote.</small>
+                    </label>
+                    <label class="advanced-field">
+                        <span>Pausa entre DMs</span>
+                        <input id="role_announcement_dm_delay" type="number" min="1" max="30" value="2">
+                        <small>Intervalo entre uma mensagem privada e outra.</small>
+                    </label>
                     <label class="advanced-toggle-inline">
                         <span>
                             Incluir bots
@@ -2916,8 +2935,8 @@ function RoleAnnouncementPanel() {
                     </div>
                     <div class="role-announcement-stats">
                         <span><i class="ph ph-user-list"></i> Filtra por cargo</span>
-                        <span><i class="ph ph-envelope-simple"></i> DM com limite</span>
-                        <span><i class="ph ph-shield-check"></i> Sem ping em massa</span>
+                        <span><i class="ph ph-timer"></i> Envio em lotes</span>
+                        <span><i class="ph ph-shield-check"></i> Trava duplicada</span>
                     </div>
                 </div>
             </div>
@@ -2939,6 +2958,24 @@ function normalizarLimiteAnuncioCargo(valor) {
     return Math.min(Math.max(numero, 1), 200);
 }
 
+function normalizarLoteAnuncioCargo(valor) {
+    const numero = Number.parseInt(valor, 10);
+    if (!Number.isFinite(numero)) return ROLE_ANNOUNCEMENT_DEFAULTS.batchSize;
+    return Math.min(Math.max(numero, 1), 20);
+}
+
+function normalizarPausaAnuncioCargo(valor) {
+    const numero = Number.parseInt(valor, 10);
+    if (!Number.isFinite(numero)) return ROLE_ANNOUNCEMENT_DEFAULTS.batchPauseSeconds;
+    return Math.min(Math.max(numero, 3), 300);
+}
+
+function normalizarDelayDmAnuncioCargo(valor) {
+    const numero = Number.parseInt(valor, 10);
+    if (!Number.isFinite(numero)) return ROLE_ANNOUNCEMENT_DEFAULTS.dmDelaySeconds;
+    return Math.min(Math.max(numero, 1), 30);
+}
+
 function obterConfigAnuncioCargoDoPainel() {
     const cargo = document.getElementById('role_announcement_role');
     const canal = document.getElementById('role_announcement_channel');
@@ -2957,7 +2994,11 @@ function obterConfigAnuncioCargoDoPainel() {
         sendChannel: Boolean(document.getElementById('role_announcement_send_channel')?.checked),
         sendDm: Boolean(document.getElementById('role_announcement_send_dm')?.checked),
         includeBots: Boolean(document.getElementById('role_announcement_include_bots')?.checked),
-        maxRecipients: normalizarLimiteAnuncioCargo(document.getElementById('role_announcement_max_recipients')?.value)
+        maxRecipients: normalizarLimiteAnuncioCargo(document.getElementById('role_announcement_max_recipients')?.value),
+        safeMode: true,
+        batchSize: normalizarLoteAnuncioCargo(document.getElementById('role_announcement_batch_size')?.value),
+        batchPauseSeconds: normalizarPausaAnuncioCargo(document.getElementById('role_announcement_batch_pause')?.value),
+        dmDelaySeconds: normalizarDelayDmAnuncioCargo(document.getElementById('role_announcement_dm_delay')?.value)
     };
 }
 
@@ -2981,7 +3022,10 @@ function preencherAnuncioCargoDoPainel(canais = [], cargos = []) {
         role_announcement_color: config.color,
         role_announcement_image: config.imageUrl,
         role_announcement_footer: config.footer,
-        role_announcement_max_recipients: config.maxRecipients
+        role_announcement_max_recipients: config.maxRecipients,
+        role_announcement_batch_size: config.batchSize,
+        role_announcement_batch_pause: config.batchPauseSeconds,
+        role_announcement_dm_delay: config.dmDelaySeconds
     };
     Object.entries(campos).forEach(([id, valor]) => {
         const elemento = document.getElementById(id);
@@ -3034,7 +3078,8 @@ function atualizarPreviewAnuncioCargo() {
     const embed = document.getElementById('role_announcement_embed_preview');
     const destinos = [
         config.sendChannel && config.channelId ? `#${config.channelIdName || config.channelId}` : '',
-        config.sendDm ? `DM para @${config.roleIdName || config.roleId || 'cargo'}` : ''
+        config.sendDm ? `DM para @${config.roleIdName || config.roleId || 'cargo'}` : '',
+        config.sendDm ? `${config.batchSize} por lote / pausa ${config.batchPauseSeconds}s` : ''
     ].filter(Boolean);
 
     if (titulo) titulo.textContent = config.title || ROLE_ANNOUNCEMENT_DEFAULTS.title;
@@ -3056,7 +3101,10 @@ function configurarPreviewAnuncioCargo() {
         'role_announcement_send_channel',
         'role_announcement_send_dm',
         'role_announcement_include_bots',
-        'role_announcement_max_recipients'
+        'role_announcement_max_recipients',
+        'role_announcement_batch_size',
+        'role_announcement_batch_pause',
+        'role_announcement_dm_delay'
     ].forEach((id) => {
         const elemento = document.getElementById(id);
         if (!elemento) return;
@@ -3709,7 +3757,7 @@ async function publicarAnuncioCargoDiscord() {
         const salvou = await salvarAutomacoesServidor();
         if (!salvou) return false;
 
-        mostrarStatusModeracao('Enviando anuncio para o Discord...', 'success');
+        mostrarStatusModeracao('Iniciando envio seguro. O bot vai mandar em lotes, sem atropelar o Discord...', 'success');
         const response = await fetch(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/role-announcement/enviar`, {
             method: 'POST',
             headers: {
@@ -3726,10 +3774,11 @@ async function publicarAnuncioCargoDiscord() {
         }
 
         const envio = resultado.resultado || {};
-        const partes = [];
-        if (envio.channelSent) partes.push(`canal #${envio.channelName || envio.channelId}`);
-        if (config.sendDm) partes.push(`${envio.dmSent || 0} DM(s) enviadas, ${envio.dmFailed || 0} falharam`);
-        mostrarStatusModeracao(`Anuncio enviado: ${partes.join(' + ') || 'processado'}.`, 'success');
+        if (envio.status === 'queued') {
+            mostrarStatusModeracao(`Envio seguro iniciado. Lote de ${envio.batchSize || config.batchSize}, pausa de ${envio.batchPauseSeconds || config.batchPauseSeconds}s. Acompanhe o progresso nos logs do painel ADM.`, 'success');
+        } else {
+            mostrarStatusModeracao(resultado.mensagem || 'Envio seguro iniciado.', 'success');
+        }
         return true;
     } catch (erro) {
         console.error('Erro ao enviar anuncio por cargo:', erro);

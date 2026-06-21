@@ -11,6 +11,7 @@ import shutil
 import sys
 import tempfile
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import discord
@@ -62,8 +63,12 @@ BOT_OFFLINE_GRACE_SECONDS = max(60, int(os.getenv("AMZ_BOT_OFFLINE_GRACE_SECONDS
 BOT_WATCHDOG_INTERVAL_SECONDS = max(15, int(os.getenv("AMZ_BOT_WATCHDOG_INTERVAL_SECONDS", "30")))
 ROLE_ANNOUNCEMENT_MAX_RECIPIENTS = max(1, int(os.getenv("AMZ_ROLE_ANNOUNCEMENT_MAX_RECIPIENTS", "200")))
 ROLE_ANNOUNCEMENT_SEND_DELAY = max(0.2, float(os.getenv("AMZ_ROLE_ANNOUNCEMENT_SEND_DELAY", "0.7")))
+ROLE_ANNOUNCEMENT_DEFAULT_BATCH_SIZE = max(1, int(os.getenv("AMZ_ROLE_ANNOUNCEMENT_BATCH_SIZE", "5")))
+ROLE_ANNOUNCEMENT_MAX_BATCH_SIZE = max(1, int(os.getenv("AMZ_ROLE_ANNOUNCEMENT_MAX_BATCH_SIZE", "20")))
+ROLE_ANNOUNCEMENT_BATCH_PAUSE_SECONDS = max(3, int(os.getenv("AMZ_ROLE_ANNOUNCEMENT_BATCH_PAUSE_SECONDS", "15")))
 API_STARTED_AT = datetime.now(timezone.utc)
 BOT_RUNTIME_LOOP = None
+ROLE_ANNOUNCEMENT_ACTIVE_JOBS = {}
 
 
 def registrar_loop_bot(loop):
@@ -866,6 +871,30 @@ def normalizar_limite_anuncio(valor):
     return min(max(numero, 1), ROLE_ANNOUNCEMENT_MAX_RECIPIENTS)
 
 
+def normalizar_lote_anuncio(valor):
+    try:
+        numero = int(valor)
+    except (TypeError, ValueError):
+        numero = ROLE_ANNOUNCEMENT_DEFAULT_BATCH_SIZE
+    return min(max(numero, 1), ROLE_ANNOUNCEMENT_MAX_BATCH_SIZE)
+
+
+def normalizar_pausa_lote_anuncio(valor):
+    try:
+        numero = int(valor)
+    except (TypeError, ValueError):
+        numero = ROLE_ANNOUNCEMENT_BATCH_PAUSE_SECONDS
+    return min(max(numero, 3), 300)
+
+
+def normalizar_delay_dm_anuncio(valor):
+    try:
+        numero = float(valor)
+    except (TypeError, ValueError):
+        numero = ROLE_ANNOUNCEMENT_SEND_DELAY
+    return min(max(numero, 0.7), 30.0)
+
+
 def substituir_variaveis_anuncio(texto, guild, role, member=None):
     usuario_nome = getattr(member, "display_name", "membro do cargo")
     usuario_tag = str(member) if member else "usuario#0000"
@@ -940,6 +969,10 @@ def preparar_config_anuncio_cargo(guild, dados):
         "sendDm": enviar_dm,
         "includeBots": incluir_bots,
         "maxRecipients": normalizar_limite_anuncio(dados.get("maxRecipients")),
+        "safeMode": True,
+        "batchSize": normalizar_lote_anuncio(dados.get("batchSize")),
+        "batchPauseSeconds": normalizar_pausa_lote_anuncio(dados.get("batchPauseSeconds")),
+        "dmDelaySeconds": normalizar_delay_dm_anuncio(dados.get("dmDelaySeconds")),
         "title": titulo,
         "message": mensagem,
         "colorInt": cor_int,
@@ -1003,7 +1036,124 @@ async def coletar_membros_anuncio_cargo(guild, role, incluir_bots, limite):
     return membros
 
 
-async def enviar_anuncio_cargo_async(server_id, dados):
+async def executar_envio_anuncio_cargo_seguro(server_id, config, job_id, job_key):
+    guild = obter_guild_bot(server_id)
+    if not guild:
+        ROLE_ANNOUNCEMENT_ACTIVE_JOBS.pop(job_key, None)
+        return
+
+    canal_enviado = False
+    mensagem_canal_id = ""
+    jump_url = ""
+    canal = config["canal"]
+    dms_enviadas = 0
+    dms_falharam = 0
+    membros = []
+
+    try:
+        if hasattr(bot, "registrar_evento"):
+            bot.registrar_evento(
+                "role_announcement_started",
+                f"Envio seguro de anuncio iniciado para @{config['role'].name}.",
+                guild_id=guild.id,
+                channel_id=getattr(canal, "id", None),
+                role_id=config["role"].id,
+                job_id=job_id,
+                batch_size=config["batchSize"],
+                batch_pause_seconds=config["batchPauseSeconds"],
+                dm_delay_seconds=config["dmDelaySeconds"],
+            )
+
+        if config["sendChannel"] and canal:
+            permissoes = canal.permissions_for(guild.me)
+            if permissoes.embed_links:
+                mensagem_canal = await canal.send(
+                    embed=construir_embed_anuncio_cargo(guild, config),
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            else:
+                mensagem_canal = await canal.send(
+                    conteudo_texto_anuncio_cargo(guild, config),
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            canal_enviado = True
+            mensagem_canal_id = str(mensagem_canal.id)
+            jump_url = mensagem_canal.jump_url
+
+        if config["sendDm"]:
+            membros = await coletar_membros_anuncio_cargo(
+                guild,
+                config["role"],
+                config["includeBots"],
+                config["maxRecipients"],
+            )
+
+            total_membros = len(membros)
+            for indice, member in enumerate(membros, start=1):
+                try:
+                    await member.send(embed=construir_embed_anuncio_cargo(guild, config, member))
+                    dms_enviadas += 1
+                except discord.Forbidden:
+                    dms_falharam += 1
+                except discord.HTTPException:
+                    dms_falharam += 1
+
+                terminou = indice >= total_membros
+                fechou_lote = indice % config["batchSize"] == 0
+
+                if hasattr(bot, "registrar_evento") and (fechou_lote or terminou):
+                    bot.registrar_evento(
+                        "role_announcement_progress",
+                        f"Anuncio por cargo em progresso: {indice}/{total_membros} membro(s) processado(s).",
+                        guild_id=guild.id,
+                        channel_id=getattr(canal, "id", None),
+                        role_id=config["role"].id,
+                        job_id=job_id,
+                        processed=indice,
+                        total=total_membros,
+                        dm_sent=dms_enviadas,
+                        dm_failed=dms_falharam,
+                    )
+
+                if terminou:
+                    break
+
+                if fechou_lote:
+                    await asyncio.sleep(config["batchPauseSeconds"])
+                else:
+                    await asyncio.sleep(config["dmDelaySeconds"])
+
+        if hasattr(bot, "registrar_evento"):
+            bot.registrar_evento(
+                "role_announcement_sent",
+                f"Anuncio por cargo concluido para @{config['role'].name}.",
+                guild_id=guild.id,
+                channel_id=getattr(canal, "id", None),
+                role_id=config["role"].id,
+                job_id=job_id,
+                channel_sent=canal_enviado,
+                message_id=mensagem_canal_id,
+                jump_url=jump_url,
+                dm_sent=dms_enviadas,
+                dm_failed=dms_falharam,
+                members_matched=len(membros),
+            )
+    except Exception as erro:
+        if hasattr(bot, "registrar_evento"):
+            bot.registrar_evento(
+                "role_announcement_error",
+                f"Erro no envio seguro de anuncio: {erro}",
+                nivel="error",
+                guild_id=getattr(guild, "id", server_id),
+                channel_id=getattr(canal, "id", None),
+                role_id=getattr(config.get("role"), "id", None),
+                job_id=job_id,
+            )
+    finally:
+        ROLE_ANNOUNCEMENT_ACTIVE_JOBS.pop(job_key, None)
+
+
+async def iniciar_anuncio_cargo_async(server_id, dados):
     guild = obter_guild_bot(server_id)
     if not guild:
         return None, "Servidor nao encontrado pelo bot."
@@ -1012,73 +1162,32 @@ async def enviar_anuncio_cargo_async(server_id, dados):
     if erro:
         return None, erro
 
-    canal_enviado = False
-    mensagem_canal_id = ""
-    jump_url = ""
-    canal = config["canal"]
+    job_key = f"{guild.id}:{config['role'].id}"
+    if job_key in ROLE_ANNOUNCEMENT_ACTIVE_JOBS:
+        return None, "Ja existe um anuncio em envio para esse cargo. Aguarde terminar antes de iniciar outro."
 
-    if config["sendChannel"] and canal:
-        permissoes = canal.permissions_for(guild.me)
-        if permissoes.embed_links:
-            mensagem_canal = await canal.send(
-                embed=construir_embed_anuncio_cargo(guild, config),
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
-        else:
-            mensagem_canal = await canal.send(
-                conteudo_texto_anuncio_cargo(guild, config),
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
-        canal_enviado = True
-        mensagem_canal_id = str(mensagem_canal.id)
-        jump_url = mensagem_canal.jump_url
-
-    membros = []
-    dms_enviadas = 0
-    dms_falharam = 0
-
-    if config["sendDm"]:
-        membros = await coletar_membros_anuncio_cargo(
-            guild,
-            config["role"],
-            config["includeBots"],
-            config["maxRecipients"],
-        )
-
-        for member in membros:
-            try:
-                await member.send(embed=construir_embed_anuncio_cargo(guild, config, member))
-                dms_enviadas += 1
-            except discord.Forbidden:
-                dms_falharam += 1
-            except discord.HTTPException:
-                dms_falharam += 1
-            await asyncio.sleep(ROLE_ANNOUNCEMENT_SEND_DELAY)
-
-    if hasattr(bot, "registrar_evento"):
-        bot.registrar_evento(
-            "role_announcement_sent",
-            f"Anuncio por cargo enviado para @{config['role'].name}.",
-            guild_id=guild.id,
-            channel_id=getattr(canal, "id", None),
-            role_id=config["role"].id,
-            channel_sent=canal_enviado,
-            dm_sent=dms_enviadas,
-            dm_failed=dms_falharam,
-        )
+    job_id = uuid.uuid4().hex[:12]
+    ROLE_ANNOUNCEMENT_ACTIVE_JOBS[job_key] = {
+        "jobId": job_id,
+        "guildId": str(guild.id),
+        "roleId": str(config["role"].id),
+        "startedAt": agora_iso(),
+    }
+    asyncio.create_task(executar_envio_anuncio_cargo_seguro(server_id, config, job_id, job_key))
 
     return {
+        "jobId": job_id,
+        "status": "queued",
         "roleId": str(config["role"].id),
         "roleName": config["role"].name,
-        "channelSent": canal_enviado,
-        "channelId": str(canal.id) if canal else "",
-        "channelName": canal.name if canal else "",
-        "messageId": mensagem_canal_id,
-        "jumpUrl": jump_url,
-        "dmSent": dms_enviadas,
-        "dmFailed": dms_falharam,
-        "membersMatched": len(membros),
+        "channelId": str(config["canal"].id) if config["canal"] else "",
+        "channelName": config["canal"].name if config["canal"] else "",
+        "sendChannel": config["sendChannel"],
+        "sendDm": config["sendDm"],
         "maxRecipients": config["maxRecipients"],
+        "batchSize": config["batchSize"],
+        "batchPauseSeconds": config["batchPauseSeconds"],
+        "dmDelaySeconds": config["dmDelaySeconds"],
     }, None
 
 
@@ -2340,8 +2449,8 @@ def enviar_anuncio_cargo(server_id):
 
     try:
         resultado, mensagem_erro = executar_corrotina_bot(
-            enviar_anuncio_cargo_async(server_id, dados),
-            timeout=150,
+            iniciar_anuncio_cargo_async(server_id, dados),
+            timeout=15,
         )
 
         if mensagem_erro:
@@ -2349,7 +2458,7 @@ def enviar_anuncio_cargo(server_id):
 
         return jsonify({
             "status": "sucesso",
-            "mensagem": "Anuncio enviado com seguranca.",
+            "mensagem": "Envio seguro iniciado. O bot vai mandar aos poucos.",
             "resultado": resultado,
         }), 200
     except Exception as e:
