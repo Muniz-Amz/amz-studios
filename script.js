@@ -169,6 +169,15 @@ const automationSettings = [
         ]
     },
     {
+        id: 'roleAnnouncement',
+        title: 'Mensagem de anúncio',
+        description: 'Filtra membros por cargo e envia um anúncio bonito no privado e/ou em um canal escolhido.',
+        enabled: false,
+        type: 'role-announcement',
+        notes: ['Use para avisos importantes, eventos e comunicados por cargo.', 'O envio por privado tem limite por disparo e alguns membros podem bloquear DMs.'],
+        fields: []
+    },
+    {
         id: 'autoResponse',
         title: 'Auto resposta',
         description: 'Quando uma mensagem bater com uma auto resposta ligada, o bot responde no mesmo canal.',
@@ -225,6 +234,22 @@ const automationSettings = [
         ]
     }
 ];
+const ROLE_ANNOUNCEMENT_DEFAULTS = {
+    roleId: '',
+    roleIdName: '',
+    channelId: '',
+    channelIdName: '',
+    title: 'Comunicado importante',
+    message: 'Olá {user}, temos um novo aviso para quem possui o cargo {role}.',
+    color: '#35d8ff',
+    imageUrl: '',
+    footer: 'AMZ Studios',
+    sendChannel: true,
+    sendDm: true,
+    includeBots: false,
+    maxRecipients: 50
+};
+const ROLE_ANNOUNCEMENT_VARS = ['{user}', '{mention}', '{server}', '{role}', '{role_mention}', '{member_count}'];
 const autoResponseDetectionTypes = [
     { value: 'contains', label: 'Contem a palavra' },
     { value: 'exact', label: 'Palavra exata' },
@@ -2790,10 +2815,265 @@ function configurarPreviewRastreadorConvites() {
     atualizarPreviewRastreadorConvites();
 }
 
+function RoleAnnouncementPanel() {
+    return `
+        <div class="automation-rule-editor role-announcement-panel" id="role_announcement_panel">
+            <div class="advanced-section-heading">
+                <i class="ph ph-megaphone-simple"></i>
+                <div>
+                    <strong>Anúncio filtrado por cargo</strong>
+                    <p>Escolha um cargo, monte uma mensagem bonita e envie no canal de anúncio e no privado de quem tem esse cargo.</p>
+                </div>
+            </div>
+            <div class="role-announcement-layout">
+                <div class="automation-rule-form">
+                    <label class="advanced-toggle-inline">
+                        <span>
+                            Enviar no canal
+                            <small>Publica um embed no canal selecionado.</small>
+                        </span>
+                        ${ToggleSwitch('role_announcement_send_channel', true)}
+                    </label>
+                    <label class="advanced-toggle-inline">
+                        <span>
+                            Enviar no privado
+                            <small>Tenta mandar uma DM individual para cada membro do cargo.</small>
+                        </span>
+                        ${ToggleSwitch('role_announcement_send_dm', true)}
+                    </label>
+                    <label class="advanced-field">
+                        <span>Cargo filtrado</span>
+                        ${RoleSelect({ id: 'role_announcement_role' })}
+                        <small>Somente membros com este cargo entram no envio privado.</small>
+                    </label>
+                    <label class="advanced-field">
+                        <span>Canal de anúncio</span>
+                        ${ChannelSelect({ id: 'role_announcement_channel' })}
+                        <small>Necessário se "enviar no canal" estiver ligado.</small>
+                    </label>
+                    <label class="advanced-field">
+                        <span>Título</span>
+                        <input id="role_announcement_title" type="text" maxlength="240" placeholder="Comunicado importante">
+                    </label>
+                    <label class="advanced-field">
+                        <span>Cor</span>
+                        <input id="role_announcement_color" type="color" value="#35d8ff">
+                    </label>
+                    <label class="advanced-field advanced-field-wide">
+                        <span>Mensagem</span>
+                        <textarea id="role_announcement_message" rows="5" placeholder="Olá {user}, temos um aviso para você."></textarea>
+                        <small>Variáveis aceitas: ${ROLE_ANNOUNCEMENT_VARS.map((item) => `<code>${escaparHTML(item)}</code>`).join(' ')}</small>
+                    </label>
+                    <label class="advanced-field">
+                        <span>Imagem opcional</span>
+                        <input id="role_announcement_image" type="url" placeholder="https://...">
+                    </label>
+                    <label class="advanced-field">
+                        <span>Rodapé</span>
+                        <input id="role_announcement_footer" type="text" maxlength="200" placeholder="AMZ Studios">
+                    </label>
+                    <label class="advanced-field">
+                        <span>Limite por disparo</span>
+                        <input id="role_announcement_max_recipients" type="number" min="1" max="200" value="50">
+                        <small>Proteção contra spam e rate limit do Discord.</small>
+                    </label>
+                    <label class="advanced-toggle-inline">
+                        <span>
+                            Incluir bots
+                            <small>Normalmente deixe desligado.</small>
+                        </span>
+                        ${ToggleSwitch('role_announcement_include_bots', false)}
+                    </label>
+                    <div class="automation-rule-actions">
+                        <button type="button" onclick="salvarAutomacoesServidor()">
+                            <i class="ph ph-floppy-disk"></i>
+                            Salvar configuração
+                        </button>
+                        <button type="button" onclick="publicarAnuncioCargoDiscord()" id="role_announcement_send_now" class="role-announcement-send-button">
+                            <i class="ph ph-paper-plane-tilt"></i>
+                            Enviar anúncio agora
+                        </button>
+                    </div>
+                </div>
+                <div class="role-announcement-preview">
+                    <div class="role-announcement-preview-head">
+                        <span>Preview Discord</span>
+                        <em id="role_announcement_target_preview">Cargo e canal não definidos</em>
+                    </div>
+                    <div class="role-announcement-discord-card">
+                        <div class="invite-tracker-bot-avatar">
+                            <span>BOT</span>
+                        </div>
+                        <div class="role-announcement-discord-message">
+                            <strong>AMZ Bot <span>APP</span></strong>
+                            <small>agora</small>
+                            <article id="role_announcement_embed_preview">
+                                <b id="role_announcement_preview_title">Comunicado importante</b>
+                                <p id="role_announcement_preview_message">Olá Usuario1, temos um novo aviso para quem possui o cargo Membro.</p>
+                                <small id="role_announcement_preview_footer">AMZ Studios</small>
+                            </article>
+                        </div>
+                    </div>
+                    <div class="role-announcement-stats">
+                        <span><i class="ph ph-user-list"></i> Filtra por cargo</span>
+                        <span><i class="ph ph-envelope-simple"></i> DM com limite</span>
+                        <span><i class="ph ph-shield-check"></i> Sem ping em massa</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function obterConfigAnuncioCargoSalva() {
+    const estado = obterSetting(moderacaoAtual.automacoes?.options, 'roleAnnouncement');
+    return {
+        ...ROLE_ANNOUNCEMENT_DEFAULTS,
+        ...(estado.values || {})
+    };
+}
+
+function normalizarLimiteAnuncioCargo(valor) {
+    const numero = Number.parseInt(valor, 10);
+    if (!Number.isFinite(numero)) return ROLE_ANNOUNCEMENT_DEFAULTS.maxRecipients;
+    return Math.min(Math.max(numero, 1), 200);
+}
+
+function obterConfigAnuncioCargoDoPainel() {
+    const cargo = document.getElementById('role_announcement_role');
+    const canal = document.getElementById('role_announcement_channel');
+    const salva = obterConfigAnuncioCargoSalva();
+    return {
+        ...salva,
+        roleId: cargo?.value || '',
+        roleIdName: obterNomeSelecionado(cargo, 'roleName'),
+        channelId: canal?.value || '',
+        channelIdName: obterNomeSelecionado(canal, 'channelName'),
+        title: document.getElementById('role_announcement_title')?.value.trim() || ROLE_ANNOUNCEMENT_DEFAULTS.title,
+        message: document.getElementById('role_announcement_message')?.value.trim() || '',
+        color: document.getElementById('role_announcement_color')?.value || ROLE_ANNOUNCEMENT_DEFAULTS.color,
+        imageUrl: document.getElementById('role_announcement_image')?.value.trim() || '',
+        footer: document.getElementById('role_announcement_footer')?.value.trim() || ROLE_ANNOUNCEMENT_DEFAULTS.footer,
+        sendChannel: Boolean(document.getElementById('role_announcement_send_channel')?.checked),
+        sendDm: Boolean(document.getElementById('role_announcement_send_dm')?.checked),
+        includeBots: Boolean(document.getElementById('role_announcement_include_bots')?.checked),
+        maxRecipients: normalizarLimiteAnuncioCargo(document.getElementById('role_announcement_max_recipients')?.value)
+    };
+}
+
+function aplicarConfigAnuncioCargoNaAutomacao(config) {
+    moderacaoAtual.automacoes = normalizarAutomacoesLocal(moderacaoAtual.automacoes);
+    moderacaoAtual.automacoes.options = moderacaoAtual.automacoes.options.map((opcao) => (
+        opcao.id === 'roleAnnouncement'
+            ? { ...opcao, values: { ...ROLE_ANNOUNCEMENT_DEFAULTS, ...config } }
+            : opcao
+    ));
+}
+
+function preencherAnuncioCargoDoPainel(canais = [], cargos = []) {
+    if (!document.getElementById('role_announcement_panel')) return;
+    const config = obterConfigAnuncioCargoSalva();
+    preencherRoleSelect(document.getElementById('role_announcement_role'), cargos, config.roleId);
+    preencherChannelSelect(document.getElementById('role_announcement_channel'), canais, config.channelId);
+    const campos = {
+        role_announcement_title: config.title,
+        role_announcement_message: config.message,
+        role_announcement_color: config.color,
+        role_announcement_image: config.imageUrl,
+        role_announcement_footer: config.footer,
+        role_announcement_max_recipients: config.maxRecipients
+    };
+    Object.entries(campos).forEach(([id, valor]) => {
+        const elemento = document.getElementById(id);
+        if (elemento) elemento.value = valor ?? '';
+    });
+    const toggles = {
+        role_announcement_send_channel: config.sendChannel,
+        role_announcement_send_dm: config.sendDm,
+        role_announcement_include_bots: config.includeBots
+    };
+    Object.entries(toggles).forEach(([id, valor]) => {
+        const elemento = document.getElementById(id);
+        if (elemento) elemento.checked = Boolean(valor);
+    });
+    atualizarPreviewAnuncioCargo();
+}
+
+function coletarAnuncioCargoDoPainel() {
+    if (!document.getElementById('role_announcement_panel')) return;
+    aplicarConfigAnuncioCargoNaAutomacao(obterConfigAnuncioCargoDoPainel());
+}
+
+function textoPreviewAnuncioCargo(texto) {
+    const substituicoes = {
+        '{user}': 'Usuario1',
+        '{username}': 'Usuario1',
+        '{user_tag}': 'Usuario1#0001',
+        '{mention}': '@Usuario1',
+        '{id}': '123456789',
+        '{server}': 'Silent Ocean',
+        '{server_upper}': 'SILENT OCEAN',
+        '{member_count}': '121',
+        '{role}': 'Membro',
+        '{role_mention}': '@Membro'
+    };
+    let mensagem = texto || ROLE_ANNOUNCEMENT_DEFAULTS.message;
+    Object.entries(substituicoes).forEach(([chave, valor]) => {
+        mensagem = mensagem.replaceAll(chave, valor);
+    });
+    return mensagem;
+}
+
+function atualizarPreviewAnuncioCargo() {
+    if (!document.getElementById('role_announcement_panel')) return;
+    const config = obterConfigAnuncioCargoDoPainel();
+    const titulo = document.getElementById('role_announcement_preview_title');
+    const mensagem = document.getElementById('role_announcement_preview_message');
+    const rodape = document.getElementById('role_announcement_preview_footer');
+    const alvo = document.getElementById('role_announcement_target_preview');
+    const embed = document.getElementById('role_announcement_embed_preview');
+    const destinos = [
+        config.sendChannel && config.channelId ? `#${config.channelIdName || config.channelId}` : '',
+        config.sendDm ? `DM para @${config.roleIdName || config.roleId || 'cargo'}` : ''
+    ].filter(Boolean);
+
+    if (titulo) titulo.textContent = config.title || ROLE_ANNOUNCEMENT_DEFAULTS.title;
+    if (mensagem) mensagem.textContent = textoPreviewAnuncioCargo(config.message);
+    if (rodape) rodape.textContent = config.footer || ROLE_ANNOUNCEMENT_DEFAULTS.footer;
+    if (alvo) alvo.textContent = destinos.length ? destinos.join(' + ') : 'Nenhum destino ativo';
+    if (embed) embed.style.borderLeftColor = config.color || ROLE_ANNOUNCEMENT_DEFAULTS.color;
+}
+
+function configurarPreviewAnuncioCargo() {
+    if (!document.getElementById('role_announcement_panel')) return;
+    [
+        'role_announcement_role',
+        'role_announcement_channel',
+        'role_announcement_title',
+        'role_announcement_message',
+        'role_announcement_color',
+        'role_announcement_footer',
+        'role_announcement_send_channel',
+        'role_announcement_send_dm',
+        'role_announcement_include_bots',
+        'role_announcement_max_recipients'
+    ].forEach((id) => {
+        const elemento = document.getElementById(id);
+        if (!elemento) return;
+        const aoAlterar = () => {
+            atualizarPreviewAnuncioCargo();
+            marcarConfiguracaoAlterada('automations');
+        };
+        elemento.oninput = aoAlterar;
+        elemento.onchange = aoAlterar;
+    });
+    atualizarPreviewAnuncioCargo();
+}
+
 function AutomationOptionCard(opcao) {
     const estado = obterSetting(moderacaoAtual.automacoes?.options, opcao.id);
     const campos = (opcao.fields || []).map((campo) => renderizarCampoConfiguravel('automation', opcao.id, campo)).join('');
-    const cardAberto = ['auto-response', 'command-block', 'invite-tracker', 'reaction-role'].includes(opcao.type);
+    const cardAberto = ['auto-response', 'command-block', 'invite-tracker', 'reaction-role', 'role-announcement'].includes(opcao.type);
     const notas = Array.isArray(opcao.notes) && opcao.notes.length
         ? `<ul class="automation-option-notes">${opcao.notes.map((nota) => `<li>${escaparHTML(nota)}</li>`).join('')}</ul>`
         : '';
@@ -2811,6 +3091,7 @@ function AutomationOptionCard(opcao) {
             ${opcao.type === 'reaction-role' ? ReactionRoleEditor() : ''}
             ${opcao.type === 'auto-response' ? AutomationRuleEditor() : ''}
             ${opcao.type === 'command-block' ? CommandBlockRuleEditor() : ''}
+            ${opcao.type === 'role-announcement' ? RoleAnnouncementPanel() : ''}
             ${campos ? `<div class="advanced-field-grid">${campos}</div>` : ''}
             ${opcao.type === 'invite-tracker' ? InviteTrackerPanel() : ''}
         </article>
@@ -2948,8 +3229,10 @@ function preencherCamposAutomacoes(canais = [], cargos = []) {
     preencherChannelSelect(document.getElementById('reaction_role_channel'), canais, '');
     preencherRoleSelect(document.getElementById('reaction_role_role'), cargos, '');
     renderizarMapeamentosReactionRole([{ emoji: '', roleId: '', roleName: '' }]);
+    preencherAnuncioCargoDoPainel(canais, cargos);
     configurarPreviewRastreadorConvites();
     configurarPreviewReactionRole();
+    configurarPreviewAnuncioCargo();
     atualizarCamposAutoRespostaEmbed();
     renderizarListaAutoRespostas();
     renderizarListaBloqueiosComando();
@@ -3024,6 +3307,7 @@ function coletarCamposAutomacoes() {
 
         return novo;
     });
+    coletarAnuncioCargoDoPainel();
 }
 
 function atualizarCamposAutoRespostaEmbed() {
@@ -3373,6 +3657,90 @@ function obterDadosEditorReactionRole() {
         messageText: document.getElementById('reaction_role_message_text')?.value.trim() || '',
         removeOnUnreact: Boolean(document.getElementById('reaction_role_remove_on_unreact')?.checked)
     };
+}
+
+async function publicarAnuncioCargoDiscord() {
+    const painelSecao = document.getElementById('dashboard-section-panel');
+    const serverId = painelSecao?.dataset.serverId || '';
+    const token = localStorage.getItem('discord_token');
+    const botao = document.getElementById('role_announcement_send_now');
+    const botaoHtml = botao?.innerHTML || '';
+    const config = obterConfigAnuncioCargoDoPainel();
+
+    if (!config.roleId) {
+        mostrarStatusModeracao('Escolha o cargo que recebera o anuncio.');
+        return false;
+    }
+
+    if (config.sendChannel && !config.channelId) {
+        mostrarStatusModeracao('Escolha o canal de anuncio ou desligue o envio no canal.');
+        return false;
+    }
+
+    if (!config.sendChannel && !config.sendDm) {
+        mostrarStatusModeracao('Ative pelo menos um destino: canal ou privado.');
+        return false;
+    }
+
+    if (!config.message.trim()) {
+        mostrarStatusModeracao('Escreva a mensagem do anuncio antes de enviar.');
+        return false;
+    }
+
+    if (token === 'demo-token') {
+        mostrarStatusModeracao('No modo teste local eu nao consigo enviar anuncio no Discord real.');
+        return false;
+    }
+
+    if (!token) {
+        mostrarStatusModeracao('Sessao expirada. Entre novamente com o Discord.');
+        return false;
+    }
+
+    try {
+        if (botao) {
+            botao.disabled = true;
+            botao.innerHTML = '<i class="ph ph-spinner-gap animate-spin"></i> Enviando...';
+        }
+
+        ativarOpcaoAutomacao('roleAnnouncement');
+        aplicarConfigAnuncioCargoNaAutomacao(config);
+        mostrarStatusModeracao('Salvando configuracao antes de enviar...', 'success');
+        const salvou = await salvarAutomacoesServidor();
+        if (!salvou) return false;
+
+        mostrarStatusModeracao('Enviando anuncio para o Discord...', 'success');
+        const response = await fetch(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/role-announcement/enviar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(config)
+        });
+        const resultado = await lerJsonResposta(response);
+
+        if (!response.ok || resultado.status !== 'sucesso') {
+            mostrarStatusModeracao(resultado.mensagem || resultado.erro || 'Nao consegui enviar o anuncio.');
+            return false;
+        }
+
+        const envio = resultado.resultado || {};
+        const partes = [];
+        if (envio.channelSent) partes.push(`canal #${envio.channelName || envio.channelId}`);
+        if (config.sendDm) partes.push(`${envio.dmSent || 0} DM(s) enviadas, ${envio.dmFailed || 0} falharam`);
+        mostrarStatusModeracao(`Anuncio enviado: ${partes.join(' + ') || 'processado'}.`, 'success');
+        return true;
+    } catch (erro) {
+        console.error('Erro ao enviar anuncio por cargo:', erro);
+        mostrarStatusModeracao('Erro ao conectar na API para enviar o anuncio.');
+        return false;
+    } finally {
+        if (botao) {
+            botao.disabled = false;
+            botao.innerHTML = botaoHtml;
+        }
+    }
 }
 
 async function publicarReactionRoleDiscord() {

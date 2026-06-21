@@ -60,6 +60,8 @@ ADMIN_MEMBERS_LIMIT = int(os.getenv("AMZ_ADMIN_MEMBERS_LIMIT", "500"))
 BOT_STARTUP_GRACE_SECONDS = max(60, int(os.getenv("AMZ_BOT_STARTUP_GRACE_SECONDS", "240")))
 BOT_OFFLINE_GRACE_SECONDS = max(60, int(os.getenv("AMZ_BOT_OFFLINE_GRACE_SECONDS", "180")))
 BOT_WATCHDOG_INTERVAL_SECONDS = max(15, int(os.getenv("AMZ_BOT_WATCHDOG_INTERVAL_SECONDS", "30")))
+ROLE_ANNOUNCEMENT_MAX_RECIPIENTS = max(1, int(os.getenv("AMZ_ROLE_ANNOUNCEMENT_MAX_RECIPIENTS", "200")))
+ROLE_ANNOUNCEMENT_SEND_DELAY = max(0.2, float(os.getenv("AMZ_ROLE_ANNOUNCEMENT_SEND_DELAY", "0.7")))
 API_STARTED_AT = datetime.now(timezone.utc)
 BOT_RUNTIME_LOOP = None
 
@@ -827,6 +829,256 @@ async def publicar_reaction_role_async(server_id, dados):
         "emoji": primeiro["emoji"],
         "mappings": mapeamentos_publicos,
         "jumpUrl": mensagem.jump_url,
+    }, None
+
+
+def limpar_texto_anuncio_cargo(valor, limite=900):
+    texto = str(valor or "").strip()
+    if len(texto) <= limite:
+        return texto
+    return texto[:limite].rstrip()
+
+
+def normalizar_bool_anuncio(valor, padrao=False):
+    if isinstance(valor, bool):
+        return valor
+    if valor is None:
+        return padrao
+    if isinstance(valor, str):
+        return valor.strip().lower() in ("1", "true", "sim", "yes", "on")
+    return bool(valor)
+
+
+def normalizar_cor_anuncio(valor):
+    texto = str(valor or "#35d8ff").strip()
+    if not texto.startswith("#"):
+        texto = f"#{texto}"
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", texto):
+        texto = "#35d8ff"
+    return int(texto[1:], 16), texto.lower()
+
+
+def normalizar_limite_anuncio(valor):
+    try:
+        numero = int(valor)
+    except (TypeError, ValueError):
+        numero = 50
+    return min(max(numero, 1), ROLE_ANNOUNCEMENT_MAX_RECIPIENTS)
+
+
+def substituir_variaveis_anuncio(texto, guild, role, member=None):
+    usuario_nome = getattr(member, "display_name", "membro do cargo")
+    usuario_tag = str(member) if member else "usuario#0000"
+    substituicoes = {
+        "{user}": usuario_nome,
+        "{username}": usuario_nome,
+        "{user_tag}": usuario_tag,
+        "{mention}": getattr(member, "mention", "@usuario"),
+        "{id}": str(getattr(member, "id", "")),
+        "{server}": guild.name,
+        "{server_upper}": guild.name.upper(),
+        "{member_count}": str(guild.member_count or len(guild.members)),
+        "{role}": role.name,
+        "{role_mention}": role.mention,
+    }
+
+    mensagem = str(texto or "")
+    for chave, valor in substituicoes.items():
+        mensagem = mensagem.replace(chave, valor)
+    return mensagem.strip()
+
+
+def preparar_config_anuncio_cargo(guild, dados):
+    try:
+        role_id = int(dados.get("roleId") or 0)
+    except (TypeError, ValueError):
+        return None, "Escolha um cargo valido para filtrar os membros."
+
+    role = guild.get_role(role_id)
+    if not role or role.is_default():
+        return None, "Cargo nao encontrado ou invalido para filtro."
+
+    enviar_canal = normalizar_bool_anuncio(dados.get("sendChannel"), True)
+    enviar_dm = normalizar_bool_anuncio(dados.get("sendDm"), True)
+    incluir_bots = normalizar_bool_anuncio(dados.get("includeBots"), False)
+
+    if not enviar_canal and not enviar_dm:
+        return None, "Ative pelo menos um destino: canal de anuncio ou privado dos membros."
+
+    canal = None
+    if enviar_canal:
+        try:
+            channel_id = int(dados.get("channelId") or 0)
+        except (TypeError, ValueError):
+            return None, "Escolha um canal de anuncio valido."
+
+        canal = guild.get_channel(channel_id)
+        if not isinstance(canal, discord.TextChannel):
+            return None, "Canal de anuncio nao encontrado."
+
+        membro_bot = guild.me
+        if not membro_bot:
+            return None, "Bot nao encontrado no servidor."
+        permissoes = canal.permissions_for(membro_bot)
+        if not permissoes.view_channel or not permissoes.send_messages:
+            return None, "Bot sem permissao para ver ou enviar mensagem no canal escolhido."
+
+    titulo = limpar_texto_anuncio_cargo(dados.get("title"), 240) or "Comunicado importante"
+    mensagem = limpar_texto_anuncio_cargo(dados.get("message"), 1800)
+    if not mensagem:
+        return None, "Escreva a mensagem do anuncio antes de enviar."
+
+    cor_int, cor_texto = normalizar_cor_anuncio(dados.get("color"))
+    imagem_url = limpar_texto_anuncio_cargo(dados.get("imageUrl"), 500)
+    if imagem_url and not imagem_url.lower().startswith(("http://", "https://")):
+        imagem_url = ""
+
+    return {
+        "role": role,
+        "canal": canal,
+        "sendChannel": enviar_canal,
+        "sendDm": enviar_dm,
+        "includeBots": incluir_bots,
+        "maxRecipients": normalizar_limite_anuncio(dados.get("maxRecipients")),
+        "title": titulo,
+        "message": mensagem,
+        "colorInt": cor_int,
+        "color": cor_texto,
+        "imageUrl": imagem_url,
+        "footer": limpar_texto_anuncio_cargo(dados.get("footer"), 200) or f"AMZ Bot • {guild.name}",
+    }, None
+
+
+def construir_embed_anuncio_cargo(guild, config, member=None):
+    role = config["role"]
+    embed = discord.Embed(
+        title=substituir_variaveis_anuncio(config["title"], guild, role, member),
+        description=substituir_variaveis_anuncio(config["message"], guild, role, member),
+        color=discord.Color(config["colorInt"]),
+        timestamp=datetime.now(timezone.utc),
+    )
+    embed.add_field(name="Servidor", value=guild.name, inline=True)
+    embed.add_field(name="Cargo", value=role.name, inline=True)
+    if config["imageUrl"]:
+        embed.set_image(url=config["imageUrl"])
+    if config["footer"]:
+        embed.set_footer(text=config["footer"])
+    return embed
+
+
+def conteudo_texto_anuncio_cargo(guild, config, member=None):
+    role = config["role"]
+    titulo = substituir_variaveis_anuncio(config["title"], guild, role, member)
+    mensagem = substituir_variaveis_anuncio(config["message"], guild, role, member)
+    return f"**{titulo}**\n{mensagem}"[:1900]
+
+
+async def coletar_membros_anuncio_cargo(guild, role, incluir_bots, limite):
+    membros = []
+    vistos = set()
+
+    def adicionar(member):
+        if not member or member.id in vistos:
+            return
+        if member.bot and not incluir_bots:
+            return
+        if role not in getattr(member, "roles", []):
+            return
+        vistos.add(member.id)
+        membros.append(member)
+
+    for member in role.members:
+        adicionar(member)
+        if len(membros) >= limite:
+            return membros
+
+    try:
+        async for member in guild.fetch_members(limit=None):
+            adicionar(member)
+            if len(membros) >= limite:
+                break
+    except (discord.Forbidden, discord.HTTPException):
+        pass
+
+    return membros
+
+
+async def enviar_anuncio_cargo_async(server_id, dados):
+    guild = obter_guild_bot(server_id)
+    if not guild:
+        return None, "Servidor nao encontrado pelo bot."
+
+    config, erro = preparar_config_anuncio_cargo(guild, dados or {})
+    if erro:
+        return None, erro
+
+    canal_enviado = False
+    mensagem_canal_id = ""
+    jump_url = ""
+    canal = config["canal"]
+
+    if config["sendChannel"] and canal:
+        permissoes = canal.permissions_for(guild.me)
+        if permissoes.embed_links:
+            mensagem_canal = await canal.send(
+                embed=construir_embed_anuncio_cargo(guild, config),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+        else:
+            mensagem_canal = await canal.send(
+                conteudo_texto_anuncio_cargo(guild, config),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+        canal_enviado = True
+        mensagem_canal_id = str(mensagem_canal.id)
+        jump_url = mensagem_canal.jump_url
+
+    membros = []
+    dms_enviadas = 0
+    dms_falharam = 0
+
+    if config["sendDm"]:
+        membros = await coletar_membros_anuncio_cargo(
+            guild,
+            config["role"],
+            config["includeBots"],
+            config["maxRecipients"],
+        )
+
+        for member in membros:
+            try:
+                await member.send(embed=construir_embed_anuncio_cargo(guild, config, member))
+                dms_enviadas += 1
+            except discord.Forbidden:
+                dms_falharam += 1
+            except discord.HTTPException:
+                dms_falharam += 1
+            await asyncio.sleep(ROLE_ANNOUNCEMENT_SEND_DELAY)
+
+    if hasattr(bot, "registrar_evento"):
+        bot.registrar_evento(
+            "role_announcement_sent",
+            f"Anuncio por cargo enviado para @{config['role'].name}.",
+            guild_id=guild.id,
+            channel_id=getattr(canal, "id", None),
+            role_id=config["role"].id,
+            channel_sent=canal_enviado,
+            dm_sent=dms_enviadas,
+            dm_failed=dms_falharam,
+        )
+
+    return {
+        "roleId": str(config["role"].id),
+        "roleName": config["role"].name,
+        "channelSent": canal_enviado,
+        "channelId": str(canal.id) if canal else "",
+        "channelName": canal.name if canal else "",
+        "messageId": mensagem_canal_id,
+        "jumpUrl": jump_url,
+        "dmSent": dms_enviadas,
+        "dmFailed": dms_falharam,
+        "membersMatched": len(membros),
+        "maxRecipients": config["maxRecipients"],
     }, None
 
 
@@ -2070,6 +2322,35 @@ def publicar_reaction_role(server_id):
             "status": "sucesso",
             "mensagem": "Mensagem de reaction role publicada.",
             "publicacao": publicacao,
+        }), 200
+    except Exception as e:
+        return jsonify({"status": "erro", "mensagem": str(e)}), 500
+
+
+@app.route("/api/servidores/<server_id>/role-announcement/enviar", methods=["POST"])
+def enviar_anuncio_cargo(server_id):
+    if not server_id:
+        return jsonify({"status": "erro", "mensagem": "ID do servidor invalido."}), 400
+
+    erro = validar_admin_requisicao(server_id)
+    if erro:
+        return erro
+
+    dados = request.json or {}
+
+    try:
+        resultado, mensagem_erro = executar_corrotina_bot(
+            enviar_anuncio_cargo_async(server_id, dados),
+            timeout=150,
+        )
+
+        if mensagem_erro:
+            return jsonify({"status": "erro", "mensagem": mensagem_erro}), 400
+
+        return jsonify({
+            "status": "sucesso",
+            "mensagem": "Anuncio enviado com seguranca.",
+            "resultado": resultado,
         }), 200
     except Exception as e:
         return jsonify({"status": "erro", "mensagem": str(e)}), 500

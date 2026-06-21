@@ -3394,6 +3394,165 @@ section {
     text-transform: none;
 }
 
+.automation-option-card-role-announcement {
+    position: relative;
+    overflow: hidden;
+}
+
+.automation-option-card-role-announcement::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 18% 0%, rgba(255, 194, 71, 0.14), transparent 30%),
+        radial-gradient(circle at 92% 12%, rgba(53, 216, 255, 0.14), transparent 34%);
+}
+
+.automation-option-card-role-announcement > * {
+    position: relative;
+    z-index: 1;
+}
+
+.role-announcement-panel {
+    background: linear-gradient(145deg, rgba(17, 13, 6, 0.98), rgba(0, 0, 0, 0.98));
+}
+
+.role-announcement-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+    gap: 14px;
+    align-items: start;
+}
+
+.role-announcement-preview {
+    display: grid;
+    gap: 12px;
+    border: 1px solid rgba(255, 194, 71, 0.18);
+    background:
+        linear-gradient(145deg, rgba(255, 194, 71, 0.08), rgba(53, 216, 255, 0.05)),
+        #050505;
+    padding: 14px;
+}
+
+.role-announcement-preview-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.role-announcement-preview-head span {
+    color: #ffc247;
+    font-size: 9px;
+    font-weight: 950;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.role-announcement-preview-head em {
+    color: rgba(255, 255, 255, 0.54);
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 800;
+    text-align: right;
+}
+
+.role-announcement-discord-card {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 10px;
+    border: 1px solid rgba(88, 101, 242, 0.32);
+    background: #313338;
+    padding: 13px;
+}
+
+.role-announcement-discord-message {
+    min-width: 0;
+}
+
+.role-announcement-discord-message > strong {
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.role-announcement-discord-message > strong span {
+    border-radius: 4px;
+    background: #5865f2;
+    padding: 2px 5px;
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 950;
+}
+
+.role-announcement-discord-message > small {
+    margin-left: 5px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 10px;
+}
+
+.role-announcement-discord-message article {
+    margin-top: 8px;
+    border-left: 4px solid #35d8ff;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.18);
+    padding: 10px 12px;
+}
+
+.role-announcement-discord-message b {
+    display: block;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 950;
+    overflow-wrap: anywhere;
+}
+
+.role-announcement-discord-message p {
+    margin-top: 6px;
+    color: #dbdee1;
+    font-size: 12px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.role-announcement-discord-message article small {
+    display: block;
+    margin-top: 10px;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 10px;
+}
+
+.role-announcement-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.role-announcement-stats span {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.035);
+    color: rgba(255, 255, 255, 0.62);
+    padding: 9px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.automation-rule-actions .role-announcement-send-button {
+    border-color: rgba(255, 194, 71, 0.46);
+    background: #ffc247;
+    color: #120b00;
+}
+
+.automation-rule-actions .role-announcement-send-button:hover {
+    background: #050505;
+    color: #ffc247;
+}
+
 .automation-option-card-reaction-role {
     position: relative;
     overflow: hidden;
@@ -3756,11 +3915,15 @@ section {
 
     .invite-tracker-panel-head,
     .invite-tracker-discord-preview,
+    .role-announcement-layout,
+    .role-announcement-discord-card,
+    .role-announcement-stats,
     .reaction-role-mapping-row {
         grid-template-columns: 1fr;
     }
 
-    .invite-tracker-panel-head {
+    .invite-tracker-panel-head,
+    .role-announcement-preview-head {
         display: grid;
     }
 
@@ -5613,6 +5776,9 @@ html[data-site-theme] .automation-rule-item,
 html[data-site-theme] .invite-tracker-panel,
 html[data-site-theme] .invite-tracker-panel-head em,
 html[data-site-theme] .invite-tracker-vars code,
+html[data-site-theme] .role-announcement-preview,
+html[data-site-theme] .role-announcement-preview-head em,
+html[data-site-theme] .role-announcement-stats span,
 html[data-site-theme] .reaction-role-preview,
 html[data-site-theme] .reaction-role-preview-emoji,
 html[data-site-theme] .reaction-role-mapping-row,
@@ -5673,7 +5839,8 @@ html[data-site-theme] .invite-tracker-panel {
 }
 
 html[data-site-theme] .invite-tracker-panel-head span,
-html[data-site-theme] .invite-tracker-vars code {
+html[data-site-theme] .invite-tracker-vars code,
+html[data-site-theme] .role-announcement-preview-head span {
     color: var(--app-accent, #178cff) !important;
 }
 
@@ -5682,11 +5849,14 @@ html[data-site-theme] .invite-tracker-panel-head strong {
 }
 
 html[data-site-theme] .invite-tracker-discord-preview,
-html[data-site-theme] .invite-tracker-discord-preview * {
+html[data-site-theme] .invite-tracker-discord-preview *,
+html[data-site-theme] .role-announcement-discord-card,
+html[data-site-theme] .role-announcement-discord-card * {
     color: #f2f3f5 !important;
 }
 
-html[data-site-theme] .invite-tracker-message p {
+html[data-site-theme] .invite-tracker-message p,
+html[data-site-theme] .role-announcement-discord-message p {
     color: #dbdee1 !important;
 }
 
