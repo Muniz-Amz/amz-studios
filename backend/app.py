@@ -32,6 +32,7 @@ from database import (
     salvar_moderacao,
     status_banco_dados,
 )
+from services.cleanup_service import executar_limpeza_configurada
 from services.url_video_service import UrlVideoError, UrlVideoService
 
 load_dotenv()
@@ -106,6 +107,28 @@ def executar_corrotina_bot(corrotina, timeout=15):
 
     futuro = asyncio.run_coroutine_threadsafe(corrotina, loop)
     return futuro.result(timeout=timeout)
+
+
+def agendar_corrotina_bot(corrotina):
+    try:
+        loop = obter_loop_bot()
+    except Exception:
+        if hasattr(corrotina, "close"):
+            corrotina.close()
+        raise
+
+    return asyncio.run_coroutine_threadsafe(corrotina, loop)
+
+
+def registrar_falha_futuro_bot(futuro, tipo, mensagem, **contexto):
+    def ao_concluir(resultado_futuro):
+        try:
+            resultado_futuro.result()
+        except Exception as erro:
+            if hasattr(bot, "registrar_evento"):
+                bot.registrar_evento(tipo, f"{mensagem}: {erro}", nivel="error", **contexto)
+
+    futuro.add_done_callback(ao_concluir)
 
 
 def data_iso(valor):
@@ -1903,10 +1926,53 @@ def salvar_limpeza_canal():
 
     try:
         limpezas = executar_corrotina_bot(salvar_limpeza(server_id, dados), timeout=15)
+        limpeza_salva = next(
+            (
+                limpeza
+                for limpeza in limpezas
+                if str(limpeza.get("canal_id", "")).strip() == str(canal_id).strip()
+            ),
+            None,
+        )
+        limpeza_imediata = {
+            "agendada": False,
+            "mensagem": "Limpeza salva. O ciclo automatico vai executar em breve.",
+        }
+
+        if limpeza_salva:
+            try:
+                futuro_limpeza = agendar_corrotina_bot(executar_limpeza_configurada(bot, server_id, limpeza_salva))
+                registrar_falha_futuro_bot(
+                    futuro_limpeza,
+                    "cleanup_save_immediate_error",
+                    f"Erro na limpeza imediata agendada para {canal_id}",
+                    guild_id=server_id,
+                    channel_id=canal_id,
+                )
+                limpeza_imediata = {
+                    "agendada": True,
+                    "mensagem": "Limpeza salva. Tambem iniciei uma verificacao imediata neste canal.",
+                }
+            except Exception as erro_limpeza:
+                limpeza_imediata = {
+                    "agendada": False,
+                    "mensagem": "Limpeza salva, mas a verificacao imediata nao iniciou. O ciclo automatico tentara depois.",
+                    "erro": str(erro_limpeza),
+                }
+                if hasattr(bot, "registrar_evento"):
+                    bot.registrar_evento(
+                        "cleanup_save_immediate_failed",
+                        f"Falha ao iniciar limpeza imediata em {canal_id}: {erro_limpeza}",
+                        nivel="warn",
+                        guild_id=server_id,
+                        channel_id=canal_id,
+                    )
+
         return jsonify({
             "status": "sucesso",
             "mensagem": "Limpeza de canal salva!",
             "limpezas": limpezas,
+            "limpeza_imediata": limpeza_imediata,
         }), 200
     except Exception as e:
         return jsonify({"status": "erro", "mensagem": str(e)}), 500

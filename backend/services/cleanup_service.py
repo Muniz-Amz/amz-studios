@@ -7,15 +7,46 @@ import discord
 
 from database import buscar_todas_limpezas
 
-INTERVALO_LIMPEZA_MINUTOS = max(10, int(os.getenv("AMZ_CLEANUP_INTERVAL_MINUTES", "15")))
-MAX_MENSAGENS_POR_CANAL = min(max(int(os.getenv("AMZ_CLEANUP_MAX_MESSAGES_PER_CHANNEL", "40")), 1), 50)
-MAX_CANAIS_POR_CICLO = min(max(int(os.getenv("AMZ_CLEANUP_MAX_CHANNELS_PER_RUN", "3")), 1), 10)
-PAUSA_ENTRE_DELECOES = max(float(os.getenv("AMZ_CLEANUP_DELETE_DELAY_SECONDS", "0.9")), 0.5)
-PAUSA_ENTRE_CANAIS = max(float(os.getenv("AMZ_CLEANUP_CHANNEL_DELAY_SECONDS", "2.5")), 1.0)
-RATE_LIMIT_BACKOFF_PADRAO = max(int(os.getenv("AMZ_CLEANUP_RATE_LIMIT_BACKOFF_SECONDS", "300")), 60)
-
 LIMPEZA_PAUSADA_ATE = 0
 PROXIMO_INDICE_LIMPEZA = 0
+
+
+def ler_int_env(nome, padrao, minimo=None, maximo=None):
+    try:
+        valor = int(os.getenv(nome, str(padrao)))
+    except (TypeError, ValueError):
+        valor = padrao
+
+    if minimo is not None:
+        valor = max(valor, minimo)
+
+    if maximo is not None:
+        valor = min(valor, maximo)
+
+    return valor
+
+
+def ler_float_env(nome, padrao, minimo=None, maximo=None):
+    try:
+        valor = float(os.getenv(nome, str(padrao)))
+    except (TypeError, ValueError):
+        valor = padrao
+
+    if minimo is not None:
+        valor = max(valor, minimo)
+
+    if maximo is not None:
+        valor = min(valor, maximo)
+
+    return valor
+
+
+INTERVALO_LIMPEZA_MINUTOS = ler_int_env("AMZ_CLEANUP_INTERVAL_MINUTES", 10, 10)
+MAX_MENSAGENS_POR_CANAL = ler_int_env("AMZ_CLEANUP_MAX_MESSAGES_PER_CHANNEL", 40, 1, 50)
+MAX_CANAIS_POR_CICLO = ler_int_env("AMZ_CLEANUP_MAX_CHANNELS_PER_RUN", 8, 1, 10)
+PAUSA_ENTRE_DELECOES = ler_float_env("AMZ_CLEANUP_DELETE_DELAY_SECONDS", 0.9, 0.5)
+PAUSA_ENTRE_CANAIS = ler_float_env("AMZ_CLEANUP_CHANNEL_DELAY_SECONDS", 2.5, 1.0)
+RATE_LIMIT_BACKOFF_PADRAO = ler_int_env("AMZ_CLEANUP_RATE_LIMIT_BACKOFF_SECONDS", 300, 60)
 
 
 def normalizar_dias(dias):
@@ -53,6 +84,20 @@ def obter_tempo_limpeza(limpeza):
 def rotulo_tempo_limpeza(limpeza):
     _, rotulo = obter_tempo_limpeza(limpeza)
     return rotulo
+
+
+def id_discord(valor):
+    try:
+        return int(str(valor).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def registrar_evento_limpeza(bot, tipo, mensagem, nivel="info", **contexto):
+    if hasattr(bot, "registrar_evento"):
+        bot.registrar_evento(tipo, mensagem, nivel=nivel, **contexto)
+
+    print(f"[LIMPEZA] {mensagem}")
 
 
 def bot_tem_permissoes_limpeza(channel):
@@ -126,20 +171,72 @@ def limpeza_em_backoff():
     return max(0, LIMPEZA_PAUSADA_ATE - time.monotonic())
 
 
-async def excluir_mensagens_antigas(bot, server_id, limpeza):
-    guild = bot.get_guild(int(server_id))
+async def excluir_mensagens_antigas(bot, server_id, limpeza, origem="auto", registrar_sem_remocao=False):
+    guild_id = id_discord(server_id)
+    canal_id = id_discord(limpeza.get("canal_id"))
 
-    if not guild:
+    if guild_id is None:
+        registrar_evento_limpeza(
+            bot,
+            "cleanup_auto_config_invalid",
+            f"Servidor invalido na configuracao de limpeza: {server_id}.",
+            nivel="error",
+            origem=origem,
+            server_id=server_id,
+        )
         return 0
 
-    canal_id = int(limpeza.get("canal_id", 0))
+    if canal_id is None:
+        registrar_evento_limpeza(
+            bot,
+            "cleanup_auto_config_invalid",
+            f"Canal invalido na configuracao de limpeza do servidor {server_id}: {limpeza.get('canal_id')}.",
+            nivel="error",
+            origem=origem,
+            guild_id=guild_id,
+            channel_id=limpeza.get("canal_id"),
+        )
+        return 0
+
+    guild = bot.get_guild(guild_id)
+
+    if not guild:
+        if registrar_sem_remocao:
+            registrar_evento_limpeza(
+                bot,
+                "cleanup_auto_guild_missing",
+                f"Servidor {guild_id} nao foi encontrado pelo bot durante a limpeza.",
+                nivel="warn",
+                origem=origem,
+                guild_id=guild_id,
+                channel_id=canal_id,
+            )
+        return 0
+
     channel = guild.get_channel(canal_id)
 
     if not isinstance(channel, discord.TextChannel):
+        registrar_evento_limpeza(
+            bot,
+            "cleanup_auto_channel_missing",
+            f"Canal {canal_id} nao existe mais ou nao e canal de texto em {guild.name}.",
+            nivel="warn",
+            origem=origem,
+            guild_id=guild_id,
+            channel_id=canal_id,
+        )
         return 0
 
     if not bot_tem_permissoes_limpeza(channel):
-        print(f"[LIMPEZA] Sem permissao para limpar #{channel.name} em {guild.name}.")
+        registrar_evento_limpeza(
+            bot,
+            "cleanup_auto_missing_permission",
+            f"Sem permissao para limpar #{channel.name} em {guild.name}. Preciso de Gerenciar mensagens e Ler historico.",
+            nivel="warn",
+            origem=origem,
+            guild_id=guild_id,
+            channel_id=canal_id,
+        )
         return 0
 
     tempo_limpeza, rotulo = obter_tempo_limpeza(limpeza)
@@ -147,7 +244,7 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza):
     removidas = 0
 
     try:
-        async for mensagem in channel.history(limit=MAX_MENSAGENS_POR_CANAL, before=limite, oldest_first=True):
+        async for mensagem in channel.history(limit=MAX_MENSAGENS_POR_CANAL, before=limite, oldest_first=False):
             if mensagem.pinned:
                 continue
 
@@ -158,28 +255,91 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza):
             except discord.NotFound:
                 continue
             except discord.Forbidden:
-                print(f"[LIMPEZA] Permissao negada ao apagar mensagens em #{channel.name}.")
+                registrar_evento_limpeza(
+                    bot,
+                    "cleanup_auto_delete_forbidden",
+                    f"Discord negou apagar mensagens em #{channel.name}. Confira permissao e hierarquia do bot.",
+                    nivel="warn",
+                    origem=origem,
+                    guild_id=guild_id,
+                    channel_id=canal_id,
+                )
                 break
             except discord.HTTPException as erro:
                 if eh_rate_limit(erro):
                     registrar_backoff_rate_limit(bot, erro, "delete", channel)
                     break
 
-                print(f"[LIMPEZA] Discord recusou delete em #{channel.name}: {erro}")
+                registrar_evento_limpeza(
+                    bot,
+                    "cleanup_auto_delete_error",
+                    f"Discord recusou delete em #{channel.name}: {erro}",
+                    nivel="warn",
+                    origem=origem,
+                    guild_id=guild_id,
+                    channel_id=canal_id,
+                )
                 await asyncio.sleep(2)
     except discord.Forbidden:
-        print(f"[LIMPEZA] Sem acesso ao historico de #{channel.name} em {guild.name}.")
+        registrar_evento_limpeza(
+            bot,
+            "cleanup_auto_history_forbidden",
+            f"Sem acesso ao historico de #{channel.name} em {guild.name}.",
+            nivel="warn",
+            origem=origem,
+            guild_id=guild_id,
+            channel_id=canal_id,
+        )
     except discord.HTTPException as erro:
         if eh_rate_limit(erro):
             registrar_backoff_rate_limit(bot, erro, "history", channel)
             return removidas
 
-        print(f"[LIMPEZA] Erro ao ler historico de #{channel.name}: {erro}")
+        registrar_evento_limpeza(
+            bot,
+            "cleanup_auto_history_error",
+            f"Erro ao ler historico de #{channel.name}: {erro}",
+            nivel="warn",
+            origem=origem,
+            guild_id=guild_id,
+            channel_id=canal_id,
+        )
 
     if removidas:
-        print(f"[LIMPEZA] #{channel.name} em {guild.name}: {removidas} mensagens com mais de {rotulo}.")
+        registrar_evento_limpeza(
+            bot,
+            "cleanup_auto_deleted",
+            f"#{channel.name} em {guild.name}: {removidas} mensagens com mais de {rotulo} removida(s).",
+            nivel="info",
+            origem=origem,
+            guild_id=guild_id,
+            channel_id=canal_id,
+            mensagens_removidas=removidas,
+            tempo=rotulo,
+        )
+    elif registrar_sem_remocao:
+        registrar_evento_limpeza(
+            bot,
+            "cleanup_auto_no_messages",
+            f"#{channel.name} em {guild.name}: nenhuma mensagem vencida encontrada para {rotulo}.",
+            nivel="info",
+            origem=origem,
+            guild_id=guild_id,
+            channel_id=canal_id,
+            tempo=rotulo,
+        )
 
     return removidas
+
+
+async def executar_limpeza_configurada(bot, server_id, limpeza):
+    return await excluir_mensagens_antigas(
+        bot,
+        server_id,
+        limpeza,
+        origem="config_save",
+        registrar_sem_remocao=True,
+    )
 
 
 async def executar_limpezas(bot):
@@ -196,7 +356,17 @@ async def executar_limpezas(bot):
             )
         return 0
 
-    servidores = await buscar_todas_limpezas()
+    try:
+        servidores = await buscar_todas_limpezas()
+    except Exception as erro:
+        registrar_evento_limpeza(
+            bot,
+            "cleanup_auto_database_error",
+            f"Nao consegui carregar configuracoes de limpeza do banco: {erro}",
+            nivel="error",
+        )
+        return 0
+
     trabalhos = [
         (servidor.get("id"), limpeza)
         for servidor in servidores
@@ -219,7 +389,18 @@ async def executar_limpezas(bot):
 
         indice = (inicio + deslocamento) % len(trabalhos)
         server_id, limpeza = trabalhos[indice]
-        total_removidas += await excluir_mensagens_antigas(bot, server_id, limpeza)
+        try:
+            total_removidas += await excluir_mensagens_antigas(bot, server_id, limpeza)
+        except Exception as erro:
+            registrar_evento_limpeza(
+                bot,
+                "cleanup_auto_unhandled_error",
+                f"Erro inesperado limpando canal {limpeza.get('canal_id')} do servidor {server_id}: {erro}",
+                nivel="error",
+                guild_id=server_id,
+                channel_id=limpeza.get("canal_id"),
+            )
+
         canais_processados += 1
         PROXIMO_INDICE_LIMPEZA = (indice + 1) % len(trabalhos)
 

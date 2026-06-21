@@ -3197,6 +3197,46 @@ section {
     min-height: 118px;
 }
 
+.auto-response-editor {
+    background: linear-gradient(145deg, rgba(10, 10, 10, 0.98), rgba(0, 0, 0, 0.98));
+}
+
+.auto-response-intro {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 12px;
+    margin-top: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.025);
+    padding: 13px;
+}
+
+.auto-response-intro i {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(53, 216, 255, 0.32);
+    color: #35d8ff;
+    font-size: 18px;
+}
+
+.auto-response-intro strong {
+    display: block;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 950;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.auto-response-intro p {
+    margin-top: 4px;
+    color: rgba(255, 255, 255, 0.46);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
 .automation-option-card-invite-tracker {
     position: relative;
     overflow: hidden;

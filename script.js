@@ -2553,12 +2553,19 @@ function ReactionRoleEditor() {
 
 function AutomationRuleEditor() {
     return `
-        <div class="automation-rule-editor">
+        <div class="automation-rule-editor auto-response-editor">
             <div class="advanced-section-heading">
                 <i class="ph ph-chat-circle-dots"></i>
                 <div>
                     <strong>Auto resposta por palavra-chave</strong>
                     <p>O bot le mensagens novas e responde quando o texto combinar com uma auto resposta ligada.</p>
+                </div>
+            </div>
+            <div class="auto-response-intro">
+                <i class="ph ph-chat-centered-text"></i>
+                <div>
+                    <strong>Auto resposta por palavra-chave</strong>
+                    <p>Configure uma palavra, mensagem e regras para o bot responder automaticamente.</p>
                 </div>
             </div>
             <div class="automation-rule-form">
@@ -2587,27 +2594,27 @@ function AutomationRuleEditor() {
                     </select>
                     <small>Escolha embed para enviar uma caixinha bonita no Discord.</small>
                 </label>
-                <label class="advanced-field auto-response-embed-field" data-auto-response-embed-field>
+                <label class="advanced-field auto-response-embed-field is-hidden" data-auto-response-embed-field>
                     <span>Titulo do embed</span>
                     <input id="auto_response_embed_title" type="text" maxlength="120" placeholder="Central AMZ">
                     <small>Opcional. Fica no topo da mensagem bonita.</small>
                 </label>
-                <label class="advanced-field auto-response-embed-field" data-auto-response-embed-field>
+                <label class="advanced-field auto-response-embed-field is-hidden" data-auto-response-embed-field>
                     <span>Cor do embed</span>
                     <input id="auto_response_embed_color" type="text" maxlength="7" placeholder="#35d8ff" value="#35d8ff">
                     <small>Use formato hexadecimal, exemplo #35d8ff.</small>
                 </label>
-                <label class="advanced-field auto-response-embed-field" data-auto-response-embed-field>
+                <label class="advanced-field auto-response-embed-field is-hidden" data-auto-response-embed-field>
                     <span>Imagem/banner</span>
                     <input id="auto_response_embed_image" type="url" placeholder="https://...">
                     <small>Opcional. Imagem grande dentro da resposta.</small>
                 </label>
-                <label class="advanced-field auto-response-embed-field" data-auto-response-embed-field>
+                <label class="advanced-field auto-response-embed-field is-hidden" data-auto-response-embed-field>
                     <span>Miniatura</span>
                     <input id="auto_response_embed_thumbnail" type="url" placeholder="https://...">
                     <small>Opcional. Imagem pequena no canto.</small>
                 </label>
-                <label class="advanced-field advanced-field-wide auto-response-embed-field" data-auto-response-embed-field>
+                <label class="advanced-field advanced-field-wide auto-response-embed-field is-hidden" data-auto-response-embed-field>
                     <span>Rodape</span>
                     <input id="auto_response_embed_footer" type="text" maxlength="120" placeholder="AMZ Bot">
                     <small>Variaveis aceitas: {user}, {mention}, {server}, {channel}.</small>
@@ -2629,17 +2636,17 @@ function AutomationRuleEditor() {
                     <input id="auto_response_cooldown" type="number" min="0" max="86400" value="30">
                     <small>Tempo minimo antes dessa regra responder de novo.</small>
                 </label>
-                <label class="advanced-field">
-                    <span>Apagar resposta depois de</span>
-                    <input id="auto_response_delete_after" type="number" min="0" max="86400" value="0">
-                    <small>0 deixa a resposta no chat. Outro valor apaga apos esse tempo.</small>
-                </label>
                 <label class="advanced-toggle-inline">
                     <span>
                         Ignorar administradores/moderadores
                         <small>Administradores e moderadores nao acionam essa regra quando estiver ligado.</small>
                     </span>
                     ${ToggleSwitch('auto_response_ignore_staff', false)}
+                </label>
+                <label class="advanced-field">
+                    <span>Apagar resposta depois de</span>
+                    <input id="auto_response_delete_after" type="number" min="0" max="86400" value="0">
+                    <small>0 deixa a resposta no chat. Outro valor apaga apos esse tempo.</small>
                 </label>
                 <div class="automation-rule-actions">
                     <button type="button" onclick="adicionarOuAtualizarRegraAutoResposta()" id="auto_response_save_rule">
@@ -5002,7 +5009,7 @@ async function enviarConfiguracao() {
             salvarLimpezasCacheServidor(serverId, limpezas);
             renderizarLimpezasConfiguradas(limpezas);
             if(statusMsg) {
-                statusMsg.innerText = "Limpeza salva e sincronizada com MongoDB!";
+                statusMsg.innerText = resultado.limpeza_imediata?.mensagem || "Limpeza salva e sincronizada com MongoDB!";
                 statusMsg.className = "vm-status-message success";
             }
             finalizarSalvamentoConfiguracao();
