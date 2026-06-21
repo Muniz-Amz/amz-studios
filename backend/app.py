@@ -488,7 +488,11 @@ def montar_icon_url(guild_id, icon_hash):
     return f"https://cdn.discordapp.com/icons/{guild_id}/{icon_hash}.{extensao}?size=128"
 
 
-def canais_texto_do_servidor(server_id):
+def canal_pode_ter_mensagens(canal):
+    return isinstance(canal, (discord.TextChannel, discord.VoiceChannel)) and callable(getattr(canal, "history", None))
+
+
+def canais_texto_do_servidor(server_id, incluir_calls=False):
     guild = bot.get_guild(int(server_id))
 
     if not guild:
@@ -496,16 +500,24 @@ def canais_texto_do_servidor(server_id):
 
     canais = []
 
+    canais_mensagem = [
+        canal
+        for canal in guild.channels
+        if isinstance(canal, discord.TextChannel)
+        or (incluir_calls and canal_pode_ter_mensagens(canal))
+    ]
+
     for canal in sorted(
-        guild.text_channels,
+        canais_mensagem,
         key=lambda item: (item.category.position if item.category else -1, item.position),
     ):
+        tipo = "call" if isinstance(canal, discord.VoiceChannel) else str(canal.type)
         canais.append({
             "id": str(canal.id),
             "nome": canal.name,
             "mention": f"#{canal.name}",
             "categoria": canal.category.name if canal.category else None,
-            "tipo": str(canal.type),
+            "tipo": tipo,
             "posicao": canal.position,
             "permissoes_bot": permissoes_bot_canal(canal),
         })
@@ -2068,7 +2080,8 @@ def listar_canais_servidor(server_id):
         return erro
 
     try:
-        canais = canais_texto_do_servidor(server_id)
+        incluir_calls = str(request.args.get("incluir_calls", "")).strip().lower() in ("1", "true", "sim", "yes", "on")
+        canais = canais_texto_do_servidor(server_id, incluir_calls=incluir_calls)
 
         if canais is None:
             return jsonify({"status": "erro", "mensagem": "Servidor nao encontrado pelo bot."}), 404

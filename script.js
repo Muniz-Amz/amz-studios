@@ -4573,7 +4573,7 @@ function renderizarSelectCanais(canais = []) {
     select.disabled = false;
 
     if (!canais.length) {
-        select.innerHTML = '<option value="">Nenhum canal de texto encontrado</option>';
+        select.innerHTML = '<option value="">Nenhum canal encontrado</option>';
         if (canalId) canalId.value = '';
         if (canalNome) canalNome.value = '';
         return;
@@ -4581,11 +4581,15 @@ function renderizarSelectCanais(canais = []) {
 
     select.innerHTML = [
         '<option value="">Selecione um canal</option>',
-        ...canais.map((canal) => `
+        ...canais.map((canal) => {
+            const prefixo = canal.tipo === 'call' ? '🔊' : '#';
+            const detalhe = canal.tipo === 'call' ? ' · chat de call' : '';
+            return `
             <option value="${escaparHTML(canal.id)}" data-channel-name="${escaparHTML(canal.nome)}">
-                #${escaparHTML(canal.nome)}${canal.categoria ? ` - ${escaparHTML(canal.categoria)}` : ''}
+                ${prefixo}${escaparHTML(canal.nome)}${detalhe}${canal.categoria ? ` - ${escaparHTML(canal.categoria)}` : ''}
             </option>
-        `)
+        `;
+        })
     ].join('');
 
     selecionarCanalLimpeza();
@@ -4645,7 +4649,7 @@ async function carregarCanaisServidor() {
     }
 
     try {
-        const response = await fetch(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/canais`, {
+        const response = await fetch(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/canais?incluir_calls=1`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const resultado = await lerJsonResposta(response);

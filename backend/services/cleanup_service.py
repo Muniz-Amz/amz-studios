@@ -111,6 +111,10 @@ def bot_tem_permissoes_limpeza(channel):
     return permissoes.manage_messages and permissoes.read_message_history
 
 
+def canal_suporta_limpeza(channel):
+    return isinstance(channel, (discord.TextChannel, discord.VoiceChannel)) and callable(getattr(channel, "history", None))
+
+
 def eh_rate_limit(erro):
     texto = str(erro)
     return isinstance(erro, discord.HTTPException) and (
@@ -215,11 +219,11 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza, origem="auto", regi
 
     channel = guild.get_channel(canal_id)
 
-    if not isinstance(channel, discord.TextChannel):
+    if not canal_suporta_limpeza(channel):
         registrar_evento_limpeza(
             bot,
             "cleanup_auto_channel_missing",
-            f"Canal {canal_id} nao existe mais ou nao e canal de texto em {guild.name}.",
+            f"Canal {canal_id} nao existe mais ou nao tem chat limpavel em {guild.name}.",
             nivel="warn",
             origem=origem,
             guild_id=guild_id,
