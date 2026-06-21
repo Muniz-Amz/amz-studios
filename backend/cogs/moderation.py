@@ -546,6 +546,24 @@ class ModerationCog(commands.Cog):
 
         return bool(formas_config & self.formas_emoji_payload_reaction_role(payload.emoji))
 
+    def mapeamentos_reaction_role(self, regra):
+        candidatos = regra.get("mappings") or regra.get("mapeamentos") or []
+        if not isinstance(candidatos, list) or not candidatos:
+            candidatos = [{
+                "emoji": regra.get("emoji"),
+                "roleId": regra.get("roleId"),
+                "roleName": regra.get("roleName"),
+            }]
+
+        mapeamentos = []
+        for item in candidatos:
+            if not isinstance(item, dict):
+                continue
+            if item.get("emoji") and item.get("roleId"):
+                mapeamentos.append(item)
+
+        return mapeamentos
+
     def obter_regra_reaction_role(self, config, payload):
         if not self.automacao_ativa(config, "reactionRole"):
             return None
@@ -561,8 +579,15 @@ class ModerationCog(commands.Cog):
             if str(regra.get("channelId") or "") != str(payload.channel_id):
                 continue
 
-            if self.reaction_role_corresponde(payload, regra):
-                return regra
+            for mapeamento in self.mapeamentos_reaction_role(regra):
+                regra_com_mapeamento = {
+                    **regra,
+                    "emoji": mapeamento.get("emoji"),
+                    "roleId": mapeamento.get("roleId"),
+                    "roleName": mapeamento.get("roleName") or regra.get("roleName"),
+                }
+                if self.reaction_role_corresponde(payload, regra_com_mapeamento):
+                    return regra_com_mapeamento
 
         return None
 

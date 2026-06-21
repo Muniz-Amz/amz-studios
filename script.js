@@ -1930,6 +1930,35 @@ function normalizarSegurancaLocal(seguranca = {}) {
     };
 }
 
+function normalizarMapeamentosReactionRole(regra = {}) {
+    const lista = Array.isArray(regra.mappings || regra.mapeamentos)
+        ? (regra.mappings || regra.mapeamentos)
+        : [];
+    const origem = lista.length ? lista : [{
+        emoji: regra.emoji,
+        roleId: regra.roleId || regra.role_id,
+        roleName: regra.roleName || regra.role_name
+    }];
+    const vistos = new Set();
+
+    return origem.map((item = {}) => {
+        const emoji = String(item.emoji || '').trim();
+        const roleId = String(item.roleId || item.role_id || '').trim();
+        const roleName = String(item.roleName || item.role_name || '').trim();
+        return { emoji, roleId, roleName };
+    }).filter((item) => {
+        if (!item.emoji || !item.roleId || vistos.has(item.emoji)) return false;
+        vistos.add(item.emoji);
+        return true;
+    }).slice(0, 20);
+}
+
+function resumirMapeamentosReactionRole(mapeamentos = []) {
+    return normalizarMapeamentosReactionRole({ mappings: mapeamentos })
+        .map((item) => `${item.emoji} @${item.roleName || item.roleId}`)
+        .join(' · ');
+}
+
 function normalizarAutomacoesLocal(automacoes = {}) {
     return {
         lastExecution: automacoes.lastExecution || automacoes.last_execution || '',
@@ -1958,19 +1987,24 @@ function normalizarAutomacoesLocal(automacoes = {}) {
             }))
             : [],
         reactionRoleRules: Array.isArray(automacoes.reactionRoleRules || automacoes.reaction_role_rules)
-            ? (automacoes.reactionRoleRules || automacoes.reaction_role_rules).map((regra) => ({
-                id: regra.id || `reaction-role-${Date.now()}`,
-                enabled: Boolean(regra.enabled ?? regra.ativo ?? true),
-                messageId: String(regra.messageId || regra.message_id || '').trim(),
-                channelId: String(regra.channelId || regra.channel_id || '').trim(),
-                channelName: regra.channelName || regra.channel_name || '',
-                roleId: String(regra.roleId || regra.role_id || '').trim(),
-                roleName: regra.roleName || regra.role_name || '',
-                emoji: String(regra.emoji || '').trim(),
-                label: String(regra.label || regra.nome || '').trim(),
-                messageText: String(regra.messageText || regra.message_text || '').trim(),
-                removeOnUnreact: Boolean(regra.removeOnUnreact ?? regra.remove_on_unreact ?? true)
-            })).filter((regra) => regra.messageId && regra.channelId && regra.roleId && regra.emoji)
+            ? (automacoes.reactionRoleRules || automacoes.reaction_role_rules).map((regra) => {
+                const mappings = normalizarMapeamentosReactionRole(regra);
+                const primeiro = mappings[0] || {};
+                return {
+                    id: regra.id || `reaction-role-${Date.now()}`,
+                    enabled: Boolean(regra.enabled ?? regra.ativo ?? true),
+                    messageId: String(regra.messageId || regra.message_id || '').trim(),
+                    channelId: String(regra.channelId || regra.channel_id || '').trim(),
+                    channelName: regra.channelName || regra.channel_name || '',
+                    roleId: primeiro.roleId || '',
+                    roleName: primeiro.roleName || '',
+                    emoji: primeiro.emoji || '',
+                    mappings,
+                    label: String(regra.label || regra.nome || '').trim(),
+                    messageText: String(regra.messageText || regra.message_text || '').trim(),
+                    removeOnUnreact: Boolean(regra.removeOnUnreact ?? regra.remove_on_unreact ?? true)
+                };
+            }).filter((regra) => regra.messageId && regra.channelId && regra.mappings.length)
             : []
     };
 }
@@ -2451,16 +2485,27 @@ function ReactionRoleEditor() {
                     <input id="reaction_role_message_id" type="text" inputmode="numeric" placeholder="123456789012345678">
                     <small>Opcional: use só se já tiver uma mensagem pronta. O botão publicar preenche isso sozinho.</small>
                 </label>
-                <label class="advanced-field">
+                <label class="advanced-field reaction-role-legacy-field">
                     <span>Cargo entregue</span>
                     ${RoleSelect({ id: 'reaction_role_role' })}
                     <small>O cargo precisa ficar abaixo do cargo do bot.</small>
                 </label>
-                <label class="advanced-field">
+                <label class="advanced-field reaction-role-legacy-field">
                     <span>Emoji da reação</span>
                     <input id="reaction_role_emoji" type="text" maxlength="80" placeholder="🎮">
                     <small>Pode ser emoji normal ou emoji custom do servidor.</small>
                 </label>
+                <div class="advanced-field advanced-field-wide reaction-role-mapping-field">
+                    <div class="reaction-role-mapping-head">
+                        <span>Emojis e cargos</span>
+                        <button type="button" onclick="adicionarMapeamentoReactionRole()">
+                            <i class="ph ph-plus-circle"></i>
+                            Adicionar emoji/cargo
+                        </button>
+                    </div>
+                    <div class="reaction-role-mappings" id="reaction_role_mappings"></div>
+                    <small>Uma mensagem unica no Discord pode ter varios emojis. Cada emoji entrega um cargo diferente.</small>
+                </div>
                 <label class="advanced-field advanced-field-wide">
                     <span>Nome da regra</span>
                     <input id="reaction_role_label" type="text" maxlength="80" placeholder="Jogador Roblox">
@@ -2468,8 +2513,8 @@ function ReactionRoleEditor() {
                 </label>
                 <label class="advanced-field advanced-field-wide">
                     <span>Mensagem bonita que o bot vai publicar</span>
-                    <textarea id="reaction_role_message_text" rows="4" placeholder="Reaja com {emoji} para receber o cargo {role}."></textarea>
-                    <small>Variáveis: {emoji}, {role}, {role_mention}, {server}. Depois de publicar, o bot já coloca a reação.</small>
+                    <textarea id="reaction_role_message_text" rows="4" placeholder="Reaja nos emojis abaixo para receber seus cargos."></textarea>
+                    <small>Variaveis: {emoji}, {role}, {role_mention}, {roles}, {server}. Depois de publicar, o bot ja coloca todas as reacoes.</small>
                 </label>
                 <div class="automation-rule-actions">
                     <button type="button" onclick="publicarReactionRoleDiscord()" id="reaction_role_publish_rule" class="reaction-role-publish-button">
@@ -2847,6 +2892,7 @@ function preencherCamposAutomacoes(canais = [], cargos = []) {
     preencherChannelSelect(document.getElementById('command_block_channels'), canais, [], false);
     preencherChannelSelect(document.getElementById('reaction_role_channel'), canais, '');
     preencherRoleSelect(document.getElementById('reaction_role_role'), cargos, '');
+    renderizarMapeamentosReactionRole([{ emoji: '', roleId: '', roleName: '' }]);
     configurarPreviewRastreadorConvites();
     configurarPreviewReactionRole();
     renderizarListaAutoRespostas();
@@ -3059,28 +3105,124 @@ function limparEditorAutoResposta(limparStatus = true) {
     if (limparStatus) mostrarStatusModeracao('Editor limpo.', 'success');
 }
 
-function atualizarPreviewReactionRole() {
-    const emoji = document.getElementById('reaction_role_emoji')?.value.trim() || '✨';
-    const canal = document.getElementById('reaction_role_channel');
+function criarLinhaMapeamentoReactionRole(mapeamento = {}, indice = 0) {
+    return `
+        <div class="reaction-role-mapping-row" data-reaction-role-mapping>
+            <label class="advanced-field">
+                <span>Emoji ${indice + 1}</span>
+                <input data-reaction-role-emoji type="text" maxlength="80" placeholder="🎮" value="${escaparHTML(mapeamento.emoji || '')}">
+            </label>
+            <label class="advanced-field">
+                <span>Cargo ${indice + 1}</span>
+                ${RoleSelect({ id: `reaction_role_role_${indice}`, attrs: 'data-reaction-role-role' })}
+            </label>
+            <button type="button" class="reaction-role-remove-mapping" onclick="removerMapeamentoReactionRole(${indice})" title="Remover este emoji">
+                <i class="ph ph-trash"></i>
+            </button>
+        </div>
+    `;
+}
+
+function renderizarMapeamentosReactionRole(mapeamentos = []) {
+    const lista = document.getElementById('reaction_role_mappings');
+    if (!lista) return;
+
+    const valores = (Array.isArray(mapeamentos) ? mapeamentos : []).slice(0, 20).map((item = {}) => ({
+        emoji: String(item.emoji || '').trim(),
+        roleId: String(item.roleId || item.role_id || '').trim(),
+        roleName: String(item.roleName || item.role_name || '').trim()
+    }));
+    const linhas = valores.length ? valores : [{ emoji: '', roleId: '', roleName: '' }];
+
+    lista.innerHTML = linhas.map((mapeamento, indice) => criarLinhaMapeamentoReactionRole(mapeamento, indice)).join('');
+    lista.querySelectorAll('[data-reaction-role-mapping]').forEach((linha, indice) => {
+        const select = linha.querySelector('[data-reaction-role-role]');
+        preencherRoleSelect(select, moderacaoRecursosAtual.cargos, linhas[indice]?.roleId || '');
+        linha.querySelectorAll('input, select').forEach((campo) => {
+            campo.addEventListener('input', () => {
+                sincronizarCamposLegadosReactionRole();
+                atualizarPreviewReactionRole();
+            });
+            campo.addEventListener('change', () => {
+                sincronizarCamposLegadosReactionRole();
+                atualizarPreviewReactionRole();
+            });
+        });
+    });
+
+    sincronizarCamposLegadosReactionRole();
+    atualizarPreviewReactionRole();
+}
+
+function obterMapeamentosReactionRoleDoEditor() {
+    const linhas = Array.from(document.querySelectorAll('#reaction_role_mappings [data-reaction-role-mapping]'));
+    return normalizarMapeamentosReactionRole({
+        mappings: linhas.map((linha) => {
+            const cargo = linha.querySelector('[data-reaction-role-role]');
+            return {
+                emoji: linha.querySelector('[data-reaction-role-emoji]')?.value.trim() || '',
+                roleId: cargo?.value || '',
+                roleName: obterNomeSelecionado(cargo, 'roleName')
+            };
+        })
+    });
+}
+
+function obterMapeamentosReactionRoleBrutosDoEditor() {
+    return Array.from(document.querySelectorAll('#reaction_role_mappings [data-reaction-role-mapping]')).map((linha) => {
+        const cargo = linha.querySelector('[data-reaction-role-role]');
+        return {
+            emoji: linha.querySelector('[data-reaction-role-emoji]')?.value.trim() || '',
+            roleId: cargo?.value || '',
+            roleName: obterNomeSelecionado(cargo, 'roleName')
+        };
+    });
+}
+
+function sincronizarCamposLegadosReactionRole() {
+    const primeiro = obterMapeamentosReactionRoleDoEditor()[0] || {};
+    const emoji = document.getElementById('reaction_role_emoji');
     const cargo = document.getElementById('reaction_role_role');
+    if (emoji) emoji.value = primeiro.emoji || '';
+    if (cargo) preencherRoleSelect(cargo, moderacaoRecursosAtual.cargos, primeiro.roleId || '');
+}
+
+function adicionarMapeamentoReactionRole() {
+    const atuais = obterMapeamentosReactionRoleBrutosDoEditor();
+    if (atuais.length >= 20) {
+        mostrarStatusModeracao('Limite de 20 emojis por mensagem atingido.');
+        return;
+    }
+    renderizarMapeamentosReactionRole([...atuais, { emoji: '', roleId: '', roleName: '' }]);
+}
+
+function removerMapeamentoReactionRole(indice) {
+    const atuais = obterMapeamentosReactionRoleBrutosDoEditor();
+    const restantes = atuais.filter((_, itemIndice) => itemIndice !== indice);
+    renderizarMapeamentosReactionRole(restantes.length ? restantes : [{ emoji: '', roleId: '', roleName: '' }]);
+}
+
+function atualizarPreviewReactionRole() {
+    const mapeamentos = obterMapeamentosReactionRoleDoEditor();
+    const emojis = mapeamentos.map((item) => item.emoji).join(' ') || '✨';
+    const canal = document.getElementById('reaction_role_channel');
     const label = document.getElementById('reaction_role_label')?.value.trim();
 
     const previewEmoji = document.getElementById('reaction_role_preview_emoji');
     const previewTitle = document.getElementById('reaction_role_preview_title');
     const previewMeta = document.getElementById('reaction_role_preview_meta');
 
-    if (previewEmoji) previewEmoji.textContent = emoji;
-    if (previewTitle) previewTitle.textContent = label || `Reaja com ${emoji} para receber cargo`;
+    if (previewEmoji) previewEmoji.textContent = emojis;
+    if (previewTitle) previewTitle.textContent = label || `${mapeamentos.length || 1} cargo(s) em uma mensagem`;
 
     if (previewMeta) {
         const canalNome = canal?.value ? `#${obterNomeSelecionado(canal, 'channelName') || canal.value}` : 'canal não definido';
-        const cargoNome = cargo?.value ? `@${obterNomeSelecionado(cargo, 'roleName') || cargo.value}` : 'cargo não definido';
-        previewMeta.textContent = `${canalNome} · ${cargoNome}`;
+        previewMeta.textContent = `${canalNome} · ${resumirMapeamentosReactionRole(mapeamentos) || 'nenhum cargo definido'}`;
     }
 }
 
 function configurarPreviewReactionRole() {
-    ['reaction_role_emoji', 'reaction_role_channel', 'reaction_role_role', 'reaction_role_label'].forEach((id) => {
+    ['reaction_role_channel', 'reaction_role_label'].forEach((id) => {
         document.getElementById(id)?.addEventListener('input', atualizarPreviewReactionRole);
         document.getElementById(id)?.addEventListener('change', atualizarPreviewReactionRole);
     });
@@ -3099,41 +3241,48 @@ function renderizarListaReactionRoles() {
         return;
     }
 
-    lista.innerHTML = regras.map((regra) => `
-        <article class="automation-rule-item reaction-role-item">
-            <div class="reaction-role-item-main">
-                <b>${escaparHTML(regra.emoji || '✨')}</b>
-                <div>
-                    <strong>${escaparHTML(regra.label || regra.roleName || 'Cargo por reação')}</strong>
-                    <span>${escaparHTML(regra.channelName || regra.channelId || 'Canal')} · ${escaparHTML(regra.roleName || regra.roleId || 'Cargo')}</span>
-                    <p>Mensagem: ${escaparHTML(regra.messageId)} · ${regra.removeOnUnreact ? 'remove ao tirar reação' : 'mantém cargo ao tirar reação'}</p>
+    lista.innerHTML = regras.map((regra) => {
+        const mapeamentos = normalizarMapeamentosReactionRole(regra);
+        const emojis = mapeamentos.map((item) => item.emoji).join(' ') || '✨';
+        const resumo = resumirMapeamentosReactionRole(mapeamentos) || 'Cargos nao definidos';
+        return `
+            <article class="automation-rule-item reaction-role-item">
+                <div class="reaction-role-item-main">
+                    <b>${escaparHTML(emojis)}</b>
+                    <div>
+                        <strong>${escaparHTML(regra.label || `${mapeamentos.length} cargos por reação`)}</strong>
+                        <span>${escaparHTML(regra.channelName || regra.channelId || 'Canal')} · ${escaparHTML(resumo)}</span>
+                        <p>Mensagem: ${escaparHTML(regra.messageId)} · ${regra.removeOnUnreact ? 'remove ao tirar reação' : 'mantém cargo ao tirar reação'}</p>
+                    </div>
                 </div>
-            </div>
-            <em class="${regra.enabled ? 'sent' : 'failed'}">${regra.enabled ? 'ON' : 'OFF'}</em>
-            <button type="button" onclick="editarReactionRole('${escaparHTML(regra.id)}')">
-                <i class="ph ph-pencil-simple"></i>
-                Editar
-            </button>
-            <button type="button" onclick="excluirReactionRole('${escaparHTML(regra.id)}')">
-                <i class="ph ph-trash"></i>
-                Excluir
-            </button>
-        </article>
-    `).join('');
+                <em class="${regra.enabled ? 'sent' : 'failed'}">${regra.enabled ? 'ON' : 'OFF'}</em>
+                <button type="button" onclick="editarReactionRole('${escaparHTML(regra.id)}')">
+                    <i class="ph ph-pencil-simple"></i>
+                    Editar
+                </button>
+                <button type="button" onclick="excluirReactionRole('${escaparHTML(regra.id)}')">
+                    <i class="ph ph-trash"></i>
+                    Excluir
+                </button>
+            </article>
+        `;
+    }).join('');
 }
 
 function obterDadosEditorReactionRole() {
     const canal = document.getElementById('reaction_role_channel');
-    const cargo = document.getElementById('reaction_role_role');
+    const mappings = obterMapeamentosReactionRoleDoEditor();
+    const primeiro = mappings[0] || {};
     return {
         id: reactionRoleEditandoId || `reaction-role-${Date.now()}`,
         enabled: Boolean(document.getElementById('reaction_role_rule_enabled')?.checked),
         messageId: document.getElementById('reaction_role_message_id')?.value.trim() || '',
         channelId: canal?.value || '',
         channelName: obterNomeSelecionado(canal, 'channelName'),
-        roleId: cargo?.value || '',
-        roleName: obterNomeSelecionado(cargo, 'roleName'),
-        emoji: document.getElementById('reaction_role_emoji')?.value.trim() || '',
+        roleId: primeiro.roleId || '',
+        roleName: primeiro.roleName || '',
+        emoji: primeiro.emoji || '',
+        mappings,
         label: document.getElementById('reaction_role_label')?.value.trim() || '',
         messageText: document.getElementById('reaction_role_message_text')?.value.trim() || '',
         removeOnUnreact: Boolean(document.getElementById('reaction_role_remove_on_unreact')?.checked)
@@ -3148,8 +3297,8 @@ async function publicarReactionRoleDiscord() {
     const botaoHtml = botao?.innerHTML || '';
     const regra = obterDadosEditorReactionRole();
 
-    if (!regra.channelId || !regra.roleId || !regra.emoji) {
-        mostrarStatusModeracao('Escolha canal, cargo e emoji antes de publicar a mensagem.');
+    if (!regra.channelId || !regra.mappings.length) {
+        mostrarStatusModeracao('Escolha canal e pelo menos um par emoji/cargo antes de publicar a mensagem.');
         return false;
     }
 
@@ -3187,9 +3336,10 @@ async function publicarReactionRoleDiscord() {
 
         const publicacao = resultado.publicacao || {};
         const campoMensagem = document.getElementById('reaction_role_message_id');
-        const campoEmoji = document.getElementById('reaction_role_emoji');
         if (campoMensagem) campoMensagem.value = publicacao.messageId || regra.messageId || '';
-        if (campoEmoji && publicacao.emoji) campoEmoji.value = publicacao.emoji;
+        if (Array.isArray(publicacao.mappings) && publicacao.mappings.length) {
+            renderizarMapeamentosReactionRole(publicacao.mappings);
+        }
 
         const adicionou = adicionarOuAtualizarReactionRole();
         if (!adicionou) return false;
@@ -3216,8 +3366,8 @@ function adicionarOuAtualizarReactionRole() {
     moderacaoAtual.automacoes = normalizarAutomacoesLocal(moderacaoAtual.automacoes);
     const regra = obterDadosEditorReactionRole();
 
-    if (!regra.channelId || !regra.messageId || !regra.roleId || !regra.emoji) {
-        mostrarStatusModeracao('Informe canal, ID da mensagem, cargo e emoji para criar a regra.');
+    if (!regra.channelId || !regra.messageId || !regra.mappings.length) {
+        mostrarStatusModeracao('Informe canal, ID da mensagem e pelo menos um par emoji/cargo para criar a regra.');
         return false;
     }
 
@@ -3252,9 +3402,8 @@ function editarReactionRole(id) {
     document.getElementById('reaction_role_rule_enabled').checked = regra.enabled;
     document.getElementById('reaction_role_remove_on_unreact').checked = regra.removeOnUnreact;
     preencherChannelSelect(document.getElementById('reaction_role_channel'), moderacaoRecursosAtual.canais, regra.channelId);
-    preencherRoleSelect(document.getElementById('reaction_role_role'), moderacaoRecursosAtual.cargos, regra.roleId);
+    renderizarMapeamentosReactionRole(regra.mappings);
     document.getElementById('reaction_role_message_id').value = regra.messageId;
-    document.getElementById('reaction_role_emoji').value = regra.emoji;
     document.getElementById('reaction_role_label').value = regra.label || '';
     document.getElementById('reaction_role_message_text').value = regra.messageText || '';
     atualizarPreviewReactionRole();
@@ -3284,6 +3433,7 @@ function limparEditorReactionRole(limparStatus = true) {
 
     preencherChannelSelect(document.getElementById('reaction_role_channel'), moderacaoRecursosAtual.canais, '');
     preencherRoleSelect(document.getElementById('reaction_role_role'), moderacaoRecursosAtual.cargos, '');
+    renderizarMapeamentosReactionRole([{ emoji: '', roleId: '', roleName: '' }]);
 
     ['reaction_role_message_id', 'reaction_role_emoji', 'reaction_role_label', 'reaction_role_message_text'].forEach((id) => {
         const elemento = document.getElementById(id);

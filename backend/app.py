@@ -646,6 +646,61 @@ def pode_publicar_reaction_role(guild, canal, role):
     return True, "Pode publicar."
 
 
+def normalizar_mapeamentos_publicacao_reaction_role(guild, canal, dados):
+    candidatos = dados.get("mappings") or dados.get("mapeamentos") or []
+    if not isinstance(candidatos, list):
+        candidatos = []
+
+    if not candidatos:
+        candidatos = [{
+            "emoji": dados.get("emoji"),
+            "roleId": dados.get("roleId"),
+            "roleName": dados.get("roleName"),
+        }]
+
+    mapeamentos = []
+    vistos = set()
+    for item in candidatos[:20]:
+        if not isinstance(item, dict):
+            continue
+
+        emoji_bruto = str(item.get("emoji") or "").strip()
+        role_id_bruto = str(item.get("roleId") or item.get("role_id") or "").strip()
+        if not emoji_bruto or not role_id_bruto:
+            continue
+
+        if emoji_bruto in vistos:
+            return None, f"Emoji duplicado na configuracao: {emoji_bruto}"
+
+        try:
+            role = guild.get_role(int(role_id_bruto))
+        except (TypeError, ValueError):
+            return None, f"Cargo invalido para o emoji {emoji_bruto}."
+
+        permitido, motivo = pode_publicar_reaction_role(guild, canal, role)
+        if not permitido:
+            nome = getattr(role, "name", role_id_bruto)
+            return None, f"{nome}: {motivo}"
+
+        emoji_reacao, erro_emoji = resolver_emoji_reaction_role(guild, emoji_bruto)
+        if erro_emoji:
+            return None, erro_emoji
+
+        vistos.add(emoji_bruto)
+        mapeamentos.append({
+            "emoji": str(emoji_reacao),
+            "emojiObject": emoji_reacao,
+            "role": role,
+            "roleId": str(role.id),
+            "roleName": role.name,
+        })
+
+    if not mapeamentos:
+        return None, "Informe pelo menos um emoji e um cargo."
+
+    return mapeamentos, None
+
+
 async def publicar_reaction_role_async(server_id, dados):
     guild = bot.get_guild(int(server_id))
     if not guild:
@@ -653,7 +708,6 @@ async def publicar_reaction_role_async(server_id, dados):
 
     try:
         channel_id = int(dados.get("channelId") or 0)
-        role_id = int(dados.get("roleId") or 0)
     except (TypeError, ValueError):
         return None, "Canal ou cargo inválido."
 
@@ -661,24 +715,28 @@ async def publicar_reaction_role_async(server_id, dados):
     if not isinstance(canal, discord.TextChannel):
         return None, "Canal de texto não encontrado."
 
-    role = guild.get_role(role_id)
-    permitido, motivo = pode_publicar_reaction_role(guild, canal, role)
-    if not permitido:
-        return None, motivo
+    mapeamentos, erro_mapeamentos = normalizar_mapeamentos_publicacao_reaction_role(guild, canal, dados)
+    if erro_mapeamentos:
+        return None, erro_mapeamentos
 
-    emoji_reacao, erro_emoji = resolver_emoji_reaction_role(guild, dados.get("emoji"))
-    if erro_emoji:
-        return None, erro_emoji
-
-    emoji_texto = str(emoji_reacao)
-    titulo = limpar_texto_reaction_role(dados.get("label"), 80) or f"Receba o cargo {role.name}"
-    texto_padrao = f"Reaja com {emoji_texto} para receber o cargo **{role.name}**."
+    primeiro = mapeamentos[0]
+    role = primeiro["role"]
+    emoji_reacao = primeiro["emojiObject"]
+    emojis_texto = " ".join(item["emoji"] for item in mapeamentos)
+    emoji_texto = emojis_texto
+    roles_texto = "\n".join(f"{item['emoji']} -> {item['role'].mention}" for item in mapeamentos)
+    roles_nomes = ", ".join(item["roleName"] for item in mapeamentos)
+    role_mentions = " ".join(item["role"].mention for item in mapeamentos)
+    titulo = limpar_texto_reaction_role(dados.get("label"), 80) or "Escolha seus cargos por reacao"
+    texto_padrao = "Reaja abaixo para receber o cargo correspondente:\n" + roles_texto
     texto = limpar_texto_reaction_role(dados.get("messageText"), 1100) or texto_padrao
     texto = (
         texto
-        .replace("{emoji}", emoji_texto)
-        .replace("{role}", role.name)
-        .replace("{role_mention}", role.mention)
+        .replace("{emoji}", primeiro["emoji"])
+        .replace("{role}", primeiro["roleName"])
+        .replace("{role_mention}", primeiro["role"].mention)
+        .replace("{roles}", roles_nomes)
+        .replace("{role_mentions}", role_mentions)
         .replace("{server}", guild.name)
     )
 
@@ -688,8 +746,8 @@ async def publicar_reaction_role_async(server_id, dados):
         color=discord.Color.from_rgb(53, 216, 255),
         timestamp=datetime.now(timezone.utc),
     )
-    embed.add_field(name="Cargo", value=role.mention, inline=True)
-    embed.add_field(name="Reação", value=emoji_texto, inline=True)
+    embed.add_field(name="Cargos", value=roles_texto[:900], inline=False)
+    embed.add_field(name="Reacoes", value=emoji_texto, inline=True)
     if dados.get("removeOnUnreact", True):
         embed.add_field(name="Remoção", value="Ao tirar a reação, o cargo também sai.", inline=False)
     embed.set_footer(text=f"AMZ Bot • {guild.name}")
@@ -698,10 +756,12 @@ async def publicar_reaction_role_async(server_id, dados):
     if permissoes_canal.embed_links:
         mensagem = await canal.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
     else:
-        conteudo = f"**{titulo}**\n{texto}\n\nReação: {emoji_texto} | Cargo: {role.name}"
+        conteudo = f"**{titulo}**\n{texto}\n\n{roles_texto}"
         mensagem = await canal.send(conteudo[:1900], allowed_mentions=discord.AllowedMentions.none())
 
     await mensagem.add_reaction(emoji_reacao)
+    for item in mapeamentos[1:]:
+        await mensagem.add_reaction(item["emojiObject"])
 
     if hasattr(bot, "registrar_evento"):
         bot.registrar_evento(
@@ -711,7 +771,17 @@ async def publicar_reaction_role_async(server_id, dados):
             channel_id=canal.id,
             role_id=role.id,
             message_id=mensagem.id,
+            roles_count=len(mapeamentos),
         )
+
+    mapeamentos_publicos = [
+        {
+            "emoji": item["emoji"],
+            "roleId": item["roleId"],
+            "roleName": item["roleName"],
+        }
+        for item in mapeamentos
+    ]
 
     return {
         "messageId": str(mensagem.id),
@@ -719,7 +789,8 @@ async def publicar_reaction_role_async(server_id, dados):
         "channelName": canal.name,
         "roleId": str(role.id),
         "roleName": role.name,
-        "emoji": emoji_texto,
+        "emoji": primeiro["emoji"],
+        "mappings": mapeamentos_publicos,
         "jumpUrl": mensagem.jump_url,
     }, None
 
@@ -1906,7 +1977,7 @@ def publicar_reaction_role(server_id):
     try:
         publicacao, mensagem_erro = executar_corrotina_bot(
             publicar_reaction_role_async(server_id, dados),
-            timeout=20,
+            timeout=35,
         )
 
         if mensagem_erro:

@@ -562,6 +562,39 @@ def _normalizar_bloqueios_comandos(valores):
     return regras
 
 
+def _normalizar_mapeamentos_reaction_role(regra):
+    candidatos = regra.get("mappings") or regra.get("mapeamentos") or []
+    if not isinstance(candidatos, list):
+        candidatos = []
+
+    if not candidatos:
+        candidatos = [{
+            "emoji": regra.get("emoji"),
+            "roleId": regra.get("roleId") or regra.get("role_id"),
+            "roleName": regra.get("roleName") or regra.get("role_name"),
+        }]
+
+    mapeamentos = []
+    vistos = set()
+    for item in candidatos[:20]:
+        if not isinstance(item, dict):
+            continue
+
+        emoji = _limitar_texto(item.get("emoji"), 80)
+        role_id = _limitar_texto(item.get("roleId") or item.get("role_id"), 32)
+        if not emoji or not role_id or emoji in vistos:
+            continue
+
+        vistos.add(emoji)
+        mapeamentos.append({
+            "emoji": emoji,
+            "roleId": role_id,
+            "roleName": _limitar_texto(item.get("roleName") or item.get("role_name"), 120),
+        })
+
+    return mapeamentos
+
+
 def _normalizar_reaction_roles(valores):
     if not isinstance(valores, list):
         return []
@@ -573,10 +606,12 @@ def _normalizar_reaction_roles(valores):
 
         message_id = _limitar_texto(regra.get("messageId") or regra.get("message_id"), 32)
         channel_id = _limitar_texto(regra.get("channelId") or regra.get("channel_id"), 32)
-        role_id = _limitar_texto(regra.get("roleId") or regra.get("role_id"), 32)
-        emoji = _limitar_texto(regra.get("emoji"), 80)
+        mapeamentos = _normalizar_mapeamentos_reaction_role(regra)
+        primeiro_mapeamento = mapeamentos[0] if mapeamentos else {}
+        role_id = primeiro_mapeamento.get("roleId", "")
+        emoji = primeiro_mapeamento.get("emoji", "")
 
-        if not message_id or not channel_id or not role_id or not emoji:
+        if not message_id or not channel_id or not mapeamentos:
             continue
 
         regras.append({
@@ -586,8 +621,9 @@ def _normalizar_reaction_roles(valores):
             "channelId": channel_id,
             "channelName": _limitar_texto(regra.get("channelName") or regra.get("channel_name"), 120),
             "roleId": role_id,
-            "roleName": _limitar_texto(regra.get("roleName") or regra.get("role_name"), 120),
+            "roleName": primeiro_mapeamento.get("roleName", ""),
             "emoji": emoji,
+            "mappings": mapeamentos,
             "label": _limitar_texto(regra.get("label") or regra.get("nome"), 80),
             "messageText": _limitar_texto(regra.get("messageText") or regra.get("message_text"), 1100),
             "removeOnUnreact": _normalizar_bool(regra.get("removeOnUnreact", regra.get("remove_on_unreact", True))),

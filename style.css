@@ -3397,6 +3397,61 @@ section {
     font-size: 11px;
 }
 
+.reaction-role-legacy-field {
+    display: none !important;
+}
+
+.reaction-role-mapping-field {
+    gap: 10px;
+}
+
+.reaction-role-mapping-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.reaction-role-mapping-head button,
+.reaction-role-remove-mapping {
+    min-height: 34px;
+    border: 1px solid rgba(113, 255, 150, 0.28);
+    background: rgba(113, 255, 150, 0.08);
+    color: #ffffff;
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    font-size: 9px;
+    font-weight: 950;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.reaction-role-mappings {
+    display: grid;
+    gap: 10px;
+}
+
+.reaction-role-mapping-row {
+    display: grid;
+    grid-template-columns: minmax(92px, 0.42fr) minmax(0, 1fr) 42px;
+    gap: 10px;
+    align-items: end;
+    padding: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.reaction-role-remove-mapping {
+    width: 42px;
+    padding: 0;
+    color: #ff6d6d;
+    border-color: rgba(255, 109, 109, 0.3);
+    background: rgba(255, 109, 109, 0.07);
+}
+
 .reaction-role-item-main {
     display: flex;
     align-items: center;
@@ -3634,7 +3689,8 @@ section {
     }
 
     .invite-tracker-panel-head,
-    .invite-tracker-discord-preview {
+    .invite-tracker-discord-preview,
+    .reaction-role-mapping-row {
         grid-template-columns: 1fr;
     }
 
@@ -5493,6 +5549,9 @@ html[data-site-theme] .invite-tracker-panel-head em,
 html[data-site-theme] .invite-tracker-vars code,
 html[data-site-theme] .reaction-role-preview,
 html[data-site-theme] .reaction-role-preview-emoji,
+html[data-site-theme] .reaction-role-mapping-row,
+html[data-site-theme] .reaction-role-mapping-head button,
+html[data-site-theme] .reaction-role-remove-mapping,
 html[data-site-theme] .reaction-role-item-main b,
 html[data-site-theme] .admin-login-card,
 html[data-site-theme] .admin-toolbar,
