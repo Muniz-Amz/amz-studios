@@ -9,6 +9,8 @@ from database import buscar_todas_limpezas
 
 LIMPEZA_PAUSADA_ATE = 0
 PROXIMO_INDICE_LIMPEZA = 0
+CANAIS_COM_FALHAS = {}
+CANAIS_PAUSADOS = {}
 
 
 def ler_int_env(nome, padrao, minimo=None, maximo=None):
@@ -47,6 +49,8 @@ MAX_CANAIS_POR_CICLO = ler_int_env("AMZ_CLEANUP_MAX_CHANNELS_PER_RUN", 8, 1, 10)
 PAUSA_ENTRE_DELECOES = ler_float_env("AMZ_CLEANUP_DELETE_DELAY_SECONDS", 0.9, 0.5)
 PAUSA_ENTRE_CANAIS = ler_float_env("AMZ_CLEANUP_CHANNEL_DELAY_SECONDS", 2.5, 1.0)
 RATE_LIMIT_BACKOFF_PADRAO = ler_int_env("AMZ_CLEANUP_RATE_LIMIT_BACKOFF_SECONDS", 300, 60)
+MAX_FALHAS_CANAL = ler_int_env("AMZ_CLEANUP_CHANNEL_FAILURE_LIMIT", 2, 1, 10)
+TRAVA_CANAL_SEGUNDOS = ler_int_env("AMZ_CLEANUP_CHANNEL_LOCK_SECONDS", 1800, 300)
 
 
 def normalizar_dias(dias):
@@ -98,6 +102,83 @@ def registrar_evento_limpeza(bot, tipo, mensagem, nivel="info", **contexto):
         bot.registrar_evento(tipo, mensagem, nivel=nivel, **contexto)
 
     print(f"[LIMPEZA] {mensagem}")
+
+
+def chave_trava_canal(guild_id, canal_id):
+    return (str(guild_id), str(canal_id))
+
+
+def segundos_trava_canal(guild_id, canal_id):
+    chave = chave_trava_canal(guild_id, canal_id)
+    trava = CANAIS_PAUSADOS.get(chave)
+
+    if not trava:
+        return 0, None
+
+    restante = trava.get("ate", 0) - time.monotonic()
+
+    if restante <= 0:
+        CANAIS_PAUSADOS.pop(chave, None)
+        CANAIS_COM_FALHAS.pop(chave, None)
+        return 0, None
+
+    return restante, trava
+
+
+def limpar_trava_canal(bot, guild_id, canal_id, channel=None):
+    chave = chave_trava_canal(guild_id, canal_id)
+    tinha_trava = chave in CANAIS_PAUSADOS or chave in CANAIS_COM_FALHAS
+    CANAIS_PAUSADOS.pop(chave, None)
+    CANAIS_COM_FALHAS.pop(chave, None)
+
+    if tinha_trava:
+        nome_canal = f"#{getattr(channel, 'name', canal_id)}"
+        registrar_evento_limpeza(
+            bot,
+            "cleanup_auto_channel_unlocked",
+            f"Trava removida da limpeza em {nome_canal}.",
+            nivel="info",
+            guild_id=guild_id,
+            channel_id=canal_id,
+        )
+
+
+def registrar_falha_canal(bot, guild_id, canal_id, tipo, mensagem, nivel="warn", travar_agora=False, **contexto):
+    chave = chave_trava_canal(guild_id, canal_id)
+    falhas = CANAIS_COM_FALHAS.get(chave, 0) + 1
+    CANAIS_COM_FALHAS[chave] = falhas
+
+    registrar_evento_limpeza(
+        bot,
+        tipo,
+        mensagem,
+        nivel=nivel,
+        guild_id=guild_id,
+        channel_id=canal_id,
+        falhas=falhas,
+        **contexto,
+    )
+
+    if not travar_agora and falhas < MAX_FALHAS_CANAL:
+        return
+
+    CANAIS_COM_FALHAS[chave] = 0
+    CANAIS_PAUSADOS[chave] = {
+        "ate": time.monotonic() + TRAVA_CANAL_SEGUNDOS,
+        "motivo": mensagem,
+        "tipo": tipo,
+    }
+    minutos = max(round(TRAVA_CANAL_SEGUNDOS / 60), 1)
+    registrar_evento_limpeza(
+        bot,
+        "cleanup_auto_channel_locked",
+        f"Trava ativada: limpeza do canal {canal_id} pausada por {minutos} min. Motivo: {mensagem}",
+        nivel="warn",
+        guild_id=guild_id,
+        channel_id=canal_id,
+        motivo=tipo,
+        tempo_segundos=TRAVA_CANAL_SEGUNDOS,
+    )
 
 
 def bot_tem_permissoes_limpeza(channel):
@@ -175,7 +256,7 @@ def limpeza_em_backoff():
     return max(0, LIMPEZA_PAUSADA_ATE - time.monotonic())
 
 
-async def excluir_mensagens_antigas(bot, server_id, limpeza, origem="auto", registrar_sem_remocao=False):
+async def excluir_mensagens_antigas(bot, server_id, limpeza, origem="auto", registrar_sem_remocao=False, ignorar_trava=False):
     guild_id = id_discord(server_id)
     canal_id = id_discord(limpeza.get("canal_id"))
 
@@ -202,50 +283,66 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza, origem="auto", regi
         )
         return 0
 
+    if not ignorar_trava:
+        restante_trava, trava = segundos_trava_canal(guild_id, canal_id)
+
+        if restante_trava > 0:
+            if registrar_sem_remocao:
+                registrar_evento_limpeza(
+                    bot,
+                    "cleanup_auto_channel_locked_skip",
+                    f"Limpeza deste canal esta pausada por mais {int(restante_trava)}s. Motivo: {trava.get('motivo')}",
+                    nivel="warn",
+                    origem=origem,
+                    guild_id=guild_id,
+                    channel_id=canal_id,
+                )
+            return 0
+
     guild = bot.get_guild(guild_id)
 
     if not guild:
-        if registrar_sem_remocao:
-            registrar_evento_limpeza(
-                bot,
-                "cleanup_auto_guild_missing",
-                f"Servidor {guild_id} nao foi encontrado pelo bot durante a limpeza.",
-                nivel="warn",
-                origem=origem,
-                guild_id=guild_id,
-                channel_id=canal_id,
-            )
+        registrar_falha_canal(
+            bot,
+            guild_id,
+            canal_id,
+            "cleanup_auto_guild_missing",
+            f"Servidor {guild_id} nao foi encontrado pelo bot durante a limpeza.",
+            origem=origem,
+            travar_agora=True,
+        )
         return 0
 
     channel = guild.get_channel(canal_id)
 
     if not canal_suporta_limpeza(channel):
-        registrar_evento_limpeza(
+        registrar_falha_canal(
             bot,
+            guild_id,
+            canal_id,
             "cleanup_auto_channel_missing",
             f"Canal {canal_id} nao existe mais ou nao tem chat limpavel em {guild.name}.",
-            nivel="warn",
             origem=origem,
-            guild_id=guild_id,
-            channel_id=canal_id,
+            travar_agora=True,
         )
         return 0
 
     if not bot_tem_permissoes_limpeza(channel):
-        registrar_evento_limpeza(
+        registrar_falha_canal(
             bot,
+            guild_id,
+            canal_id,
             "cleanup_auto_missing_permission",
             f"Sem permissao para limpar #{channel.name} em {guild.name}. Preciso de Gerenciar mensagens e Ler historico.",
-            nivel="warn",
             origem=origem,
-            guild_id=guild_id,
-            channel_id=canal_id,
+            travar_agora=True,
         )
         return 0
 
     tempo_limpeza, rotulo = obter_tempo_limpeza(limpeza)
     limite = datetime.now(timezone.utc) - tempo_limpeza
     removidas = 0
+    falhou = False
 
     try:
         async for mensagem in channel.history(limit=MAX_MENSAGENS_POR_CANAL, before=limite, oldest_first=False):
@@ -259,57 +356,62 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza, origem="auto", regi
             except discord.NotFound:
                 continue
             except discord.Forbidden:
-                registrar_evento_limpeza(
+                falhou = True
+                registrar_falha_canal(
                     bot,
+                    guild_id,
+                    canal_id,
                     "cleanup_auto_delete_forbidden",
                     f"Discord negou apagar mensagens em #{channel.name}. Confira permissao e hierarquia do bot.",
-                    nivel="warn",
                     origem=origem,
-                    guild_id=guild_id,
-                    channel_id=canal_id,
+                    travar_agora=True,
                 )
                 break
             except discord.HTTPException as erro:
                 if eh_rate_limit(erro):
+                    falhou = True
                     registrar_backoff_rate_limit(bot, erro, "delete", channel)
                     break
 
-                registrar_evento_limpeza(
+                falhou = True
+                registrar_falha_canal(
                     bot,
+                    guild_id,
+                    canal_id,
                     "cleanup_auto_delete_error",
                     f"Discord recusou delete em #{channel.name}: {erro}",
-                    nivel="warn",
                     origem=origem,
-                    guild_id=guild_id,
-                    channel_id=canal_id,
                 )
                 await asyncio.sleep(2)
     except discord.Forbidden:
-        registrar_evento_limpeza(
+        falhou = True
+        registrar_falha_canal(
             bot,
+            guild_id,
+            canal_id,
             "cleanup_auto_history_forbidden",
             f"Sem acesso ao historico de #{channel.name} em {guild.name}.",
-            nivel="warn",
             origem=origem,
-            guild_id=guild_id,
-            channel_id=canal_id,
+            travar_agora=True,
         )
     except discord.HTTPException as erro:
         if eh_rate_limit(erro):
+            falhou = True
             registrar_backoff_rate_limit(bot, erro, "history", channel)
             return removidas
 
-        registrar_evento_limpeza(
+        falhou = True
+        registrar_falha_canal(
             bot,
+            guild_id,
+            canal_id,
             "cleanup_auto_history_error",
             f"Erro ao ler historico de #{channel.name}: {erro}",
-            nivel="warn",
             origem=origem,
-            guild_id=guild_id,
-            channel_id=canal_id,
         )
 
     if removidas:
+        limpar_trava_canal(bot, guild_id, canal_id, channel)
         registrar_evento_limpeza(
             bot,
             "cleanup_auto_deleted",
@@ -321,7 +423,10 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza, origem="auto", regi
             mensagens_removidas=removidas,
             tempo=rotulo,
         )
-    elif registrar_sem_remocao:
+    elif not falhou:
+        limpar_trava_canal(bot, guild_id, canal_id, channel)
+
+    if not removidas and registrar_sem_remocao and not falhou:
         registrar_evento_limpeza(
             bot,
             "cleanup_auto_no_messages",
@@ -343,6 +448,7 @@ async def executar_limpeza_configurada(bot, server_id, limpeza):
         limpeza,
         origem="config_save",
         registrar_sem_remocao=True,
+        ignorar_trava=True,
     )
 
 
