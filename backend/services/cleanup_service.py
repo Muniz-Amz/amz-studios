@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import discord
 
-from database import buscar_todas_limpezas
+from database import atualizar_status_limpeza, buscar_todas_limpezas
 
 LIMPEZA_PAUSADA_ATE = 0
 PROXIMO_INDICE_LIMPEZA = 0
@@ -181,6 +181,21 @@ def registrar_falha_canal(bot, guild_id, canal_id, tipo, mensagem, nivel="warn",
     )
 
 
+async def marcar_status_limpeza(bot, guild_id, canal_id, status, motivo=""):
+    try:
+        await atualizar_status_limpeza(guild_id, canal_id, status, motivo)
+    except Exception as erro:
+        registrar_evento_limpeza(
+            bot,
+            "cleanup_status_update_error",
+            f"Nao consegui atualizar status da limpeza do canal {canal_id}: {erro}",
+            nivel="warn",
+            guild_id=guild_id,
+            channel_id=canal_id,
+            status=status,
+        )
+
+
 def bot_tem_permissoes_limpeza(channel):
     guild = getattr(channel, "guild", None)
     bot_member = getattr(guild, "me", None)
@@ -302,6 +317,13 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza, origem="auto", regi
     guild = bot.get_guild(guild_id)
 
     if not guild:
+        await marcar_status_limpeza(
+            bot,
+            guild_id,
+            canal_id,
+            "servidor_indisponivel",
+            "Servidor nao foi encontrado pelo bot.",
+        )
         registrar_falha_canal(
             bot,
             guild_id,
@@ -316,6 +338,13 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza, origem="auto", regi
     channel = guild.get_channel(canal_id)
 
     if not canal_suporta_limpeza(channel):
+        await marcar_status_limpeza(
+            bot,
+            guild_id,
+            canal_id,
+            "canal_removido",
+            "Canal removido, inexistente ou sem chat limpavel.",
+        )
         registrar_falha_canal(
             bot,
             guild_id,
@@ -328,6 +357,13 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza, origem="auto", regi
         return 0
 
     if not bot_tem_permissoes_limpeza(channel):
+        await marcar_status_limpeza(
+            bot,
+            guild_id,
+            canal_id,
+            "sem_permissao",
+            "Bot sem Gerenciar mensagens ou Ler historico neste canal.",
+        )
         registrar_falha_canal(
             bot,
             guild_id,
@@ -338,6 +374,9 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza, origem="auto", regi
             travar_agora=True,
         )
         return 0
+
+    if str(limpeza.get("status") or "ok") != "ok":
+        await marcar_status_limpeza(bot, guild_id, canal_id, "ok")
 
     tempo_limpeza, rotulo = obter_tempo_limpeza(limpeza)
     limite = datetime.now(timezone.utc) - tempo_limpeza
@@ -357,6 +396,13 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza, origem="auto", regi
                 continue
             except discord.Forbidden:
                 falhou = True
+                await marcar_status_limpeza(
+                    bot,
+                    guild_id,
+                    canal_id,
+                    "sem_permissao",
+                    "Discord negou apagar mensagens. Confira permissao e hierarquia.",
+                )
                 registrar_falha_canal(
                     bot,
                     guild_id,
@@ -374,6 +420,13 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza, origem="auto", regi
                     break
 
                 falhou = True
+                await marcar_status_limpeza(
+                    bot,
+                    guild_id,
+                    canal_id,
+                    "erro_temporario",
+                    f"Discord recusou delete temporariamente: {erro}",
+                )
                 registrar_falha_canal(
                     bot,
                     guild_id,
@@ -385,6 +438,13 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza, origem="auto", regi
                 await asyncio.sleep(2)
     except discord.Forbidden:
         falhou = True
+        await marcar_status_limpeza(
+            bot,
+            guild_id,
+            canal_id,
+            "sem_permissao",
+            "Bot sem acesso ao historico deste canal.",
+        )
         registrar_falha_canal(
             bot,
             guild_id,
@@ -401,6 +461,13 @@ async def excluir_mensagens_antigas(bot, server_id, limpeza, origem="auto", regi
             return removidas
 
         falhou = True
+        await marcar_status_limpeza(
+            bot,
+            guild_id,
+            canal_id,
+            "erro_temporario",
+            f"Erro ao ler historico: {erro}",
+        )
         registrar_falha_canal(
             bot,
             guild_id,

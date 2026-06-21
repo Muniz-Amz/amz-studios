@@ -2546,6 +2546,16 @@ section {
     gap: 14px;
 }
 
+.cleanup-item.is-invalid {
+    border-color: rgba(255, 76, 76, 0.75);
+    box-shadow: inset 3px 0 0 rgba(255, 76, 76, 0.9);
+}
+
+.cleanup-item.is-warning {
+    border-color: rgba(255, 196, 87, 0.7);
+    box-shadow: inset 3px 0 0 rgba(255, 196, 87, 0.85);
+}
+
 .cleanup-item-icon {
     width: 34px;
     height: 34px;
@@ -2581,6 +2591,16 @@ section {
     margin-top: 3px;
     color: rgba(255, 255, 255, 0.42);
     font-size: 11px;
+}
+
+.cleanup-item-body .cleanup-item-alert {
+    color: #ff5c5c;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+}
+
+.cleanup-item.is-warning .cleanup-item-alert {
+    color: #ffc457;
 }
 
 .cleanup-item button {

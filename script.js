@@ -4777,6 +4777,55 @@ function obterRotuloTempoLimpeza(limpeza = {}) {
     return obterRotuloDias(limpeza.dias || 1);
 }
 
+function obterStatusLimpeza(limpeza = {}) {
+    const status = String(limpeza.status || 'ok');
+    const mapa = {
+        ok: {
+            rotulo: 'Ativa',
+            detalhe: '',
+            icone: 'ph-broom',
+            classe: ''
+        },
+        canal_removido: {
+            rotulo: 'Canal removido',
+            detalhe: 'Esse canal nao existe mais no servidor. Remova esta limpeza ou escolha outro canal.',
+            icone: 'ph-warning-diamond',
+            classe: 'is-invalid'
+        },
+        sem_permissao: {
+            rotulo: 'Sem permissao',
+            detalhe: 'O bot precisa de Gerenciar mensagens e Ler historico neste canal.',
+            icone: 'ph-lock-key',
+            classe: 'is-warning'
+        },
+        servidor_indisponivel: {
+            rotulo: 'Servidor indisponivel',
+            detalhe: 'O bot nao encontrou este servidor agora.',
+            icone: 'ph-warning-circle',
+            classe: 'is-warning'
+        },
+        erro_temporario: {
+            rotulo: 'Erro temporario',
+            detalhe: 'O Discord recusou a leitura ou exclusao agora. O bot tentara novamente depois.',
+            icone: 'ph-clock-countdown',
+            classe: 'is-warning'
+        }
+    };
+    const info = mapa[status] || {
+        rotulo: 'Atencao',
+        detalhe: 'Essa limpeza precisa ser verificada.',
+        icone: 'ph-warning',
+        classe: 'is-warning'
+    };
+    const motivo = String(limpeza.status_motivo || '').trim();
+
+    return {
+        ...info,
+        status,
+        detalhe: motivo || info.detalhe
+    };
+}
+
 function renderizarLimpezasConfiguradas(limpezas = []) {
     const container = document.getElementById('limpezas-configuradas');
     if (!container) return;
@@ -4792,15 +4841,21 @@ function renderizarLimpezasConfiguradas(limpezas = []) {
         const canalId = String(limpeza.canal_id || '');
         const canalNome = String(limpeza.canal_nome || canalId || 'canal');
         const tempo = obterRotuloTempoLimpeza(limpeza);
+        const status = obterStatusLimpeza(limpeza);
 
         return `
-            <div class="cleanup-item">
+            <div class="cleanup-item ${status.classe}">
                 <div class="cleanup-item-icon">
-                    <i class="ph ph-broom"></i>
+                    <i class="ph ${escaparHTML(status.icone)}"></i>
                 </div>
                 <div class="cleanup-item-body">
                     <strong>#${escaparHTML(canalNome.replace(/^#/, ''))}</strong>
                     <span>Excluir mensagens com mais de ${escaparHTML(tempo)} no canal configurado.</span>
+                    ${status.status !== 'ok' ? `
+                        <span class="cleanup-item-alert">
+                            ${escaparHTML(status.rotulo)}: ${escaparHTML(status.detalhe)}
+                        </span>
+                    ` : ''}
                     <small>ID: ${escaparHTML(canalId)}</small>
                 </div>
                 <button type="button" data-remover-limpeza="${escaparHTML(canalId)}">

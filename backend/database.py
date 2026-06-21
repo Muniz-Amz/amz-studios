@@ -235,6 +235,7 @@ def _normalizar_limpeza(dados):
     canal_id = str(dados.get("canal_id", "")).strip()
     canal_nome = str(dados.get("canal_nome") or dados.get("canal") or canal_id).strip()
     usa_minutos = dados.get("minutos") is not None or dados.get("unidade") == "minutos"
+    agora = _agora_iso()
 
     if usa_minutos:
         tempo = _normalizar_minutos(dados.get("minutos", "1"))
@@ -254,7 +255,10 @@ def _normalizar_limpeza(dados):
         "canal_nome": canal_nome,
         **campo_tempo,
         "acao": "excluir_mensagens",
-        "atualizado_em": _agora_iso(),
+        "status": "ok",
+        "status_motivo": "",
+        "status_at": agora,
+        "atualizado_em": agora,
     }
 
 
@@ -830,6 +834,35 @@ async def buscar_limpezas(server_id):
     """
     documento = await collection.find_one({"id": str(server_id)}, {"_id": 0})
     return _limpezas_do_documento(documento)
+
+
+async def atualizar_status_limpeza(server_id, canal_id, status, motivo=""):
+    """
+    Marca uma limpeza como valida ou com problema sem remover a configuracao.
+    """
+    server_id = str(server_id)
+    canal_id = str(canal_id)
+    status = _limitar_texto(status, 40, "ok")
+    motivo = _limitar_texto(motivo, 300)
+    agora = _agora_iso()
+    atualizacao = {
+        "$set": {
+            "limpezas.$[limpeza].status": status,
+            "limpezas.$[limpeza].status_at": agora,
+            "atualizado_em": agora,
+        }
+    }
+
+    if motivo:
+        atualizacao["$set"]["limpezas.$[limpeza].status_motivo"] = motivo
+    else:
+        atualizacao["$unset"] = {"limpezas.$[limpeza].status_motivo": ""}
+
+    await collection.update_one(
+        {"id": server_id},
+        atualizacao,
+        array_filters=[{"limpeza.canal_id": canal_id}],
+    )
 
 
 async def salvar_boas_vindas(server_id, dados):
