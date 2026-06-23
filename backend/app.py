@@ -34,6 +34,7 @@ from database import (
     status_banco_dados,
 )
 from services.cleanup_service import executar_limpeza_configurada
+from services.role_announcement_service import iniciar_anuncio_cargo_async as iniciar_anuncio_cargo_service_async
 from services.url_video_service import UrlVideoError, UrlVideoService
 
 load_dotenv()
@@ -735,12 +736,41 @@ def normalizar_mapeamentos_publicacao_reaction_role(guild, canal, dados):
             "role": role,
             "roleId": str(role.id),
             "roleName": role.name,
+            "title": limpar_texto_reaction_role(item.get("title") or item.get("titulo"), 80),
+            "description": limpar_texto_reaction_role(
+                item.get("description") or item.get("descricao") or item.get("message") or item.get("mensagem"),
+                450,
+            ),
         })
 
     if not mapeamentos:
         return None, "Informe pelo menos um emoji e um cargo."
 
     return mapeamentos, None
+
+
+def formatar_texto_item_reaction_role(texto, guild, item):
+    return (
+        str(texto or "")
+        .replace("{emoji}", item["emoji"])
+        .replace("{role}", item["roleName"])
+        .replace("{role_mention}", item["role"].mention)
+        .replace("{server}", guild.name)
+    ).strip()
+
+
+def titulo_item_reaction_role(guild, item):
+    titulo = item.get("title") or f"{item['emoji']} {item['roleName']}"
+    titulo = formatar_texto_item_reaction_role(titulo, guild, item)
+    return limpar_texto_reaction_role(titulo, 250) or f"{item['emoji']} Cargo"
+
+
+def descricao_item_reaction_role(guild, item):
+    texto = item.get("description") or "Reagindo em {emoji}, voce vai ganhar o cargo {role_mention}."
+    texto = formatar_texto_item_reaction_role(texto, guild, item)
+    if item["role"].mention not in texto and item["roleName"] not in texto:
+        texto = f"{texto}\nCargo: {item['role'].mention}"
+    return limpar_texto_reaction_role(texto, 1000) or item["role"].mention
 
 
 async def publicar_reaction_role_async(server_id, dados):
@@ -766,7 +796,12 @@ async def publicar_reaction_role_async(server_id, dados):
     emoji_reacao = primeiro["emojiObject"]
     emojis_texto = " ".join(item["emoji"] for item in mapeamentos)
     emoji_texto = emojis_texto
-    roles_texto = "\n".join(f"{item['emoji']} -> {item['role'].mention}" for item in mapeamentos)
+    roles_texto = "\n".join(
+        f"{item['emoji']} -> {item['role'].mention}"
+        + (f"\n{formatar_texto_item_reaction_role(item['title'], guild, item)}" if item.get("title") else "")
+        + (f"\n{descricao_item_reaction_role(guild, item)}" if item.get("description") else "")
+        for item in mapeamentos
+    )
     roles_nomes = ", ".join(item["roleName"] for item in mapeamentos)
     role_mentions = " ".join(item["role"].mention for item in mapeamentos)
     titulo = limpar_texto_reaction_role(dados.get("label"), 80) or "Escolha seus cargos por reacao"
@@ -788,7 +823,12 @@ async def publicar_reaction_role_async(server_id, dados):
         color=discord.Color.from_rgb(53, 216, 255),
         timestamp=datetime.now(timezone.utc),
     )
-    embed.add_field(name="Cargos", value=roles_texto[:900], inline=False)
+    for item in mapeamentos:
+        embed.add_field(
+            name=titulo_item_reaction_role(guild, item),
+            value=descricao_item_reaction_role(guild, item),
+            inline=False,
+        )
     embed.add_field(name="Reacoes", value=emoji_texto, inline=True)
     if dados.get("removeOnUnreact", True):
         embed.add_field(name="Remoção", value="Ao tirar a reação, o cargo também sai.", inline=False)
@@ -821,6 +861,8 @@ async def publicar_reaction_role_async(server_id, dados):
             "emoji": item["emoji"],
             "roleId": item["roleId"],
             "roleName": item["roleName"],
+            "title": item.get("title", ""),
+            "description": item.get("description", ""),
         }
         for item in mapeamentos
     ]
@@ -2449,7 +2491,7 @@ def enviar_anuncio_cargo(server_id):
 
     try:
         resultado, mensagem_erro = executar_corrotina_bot(
-            iniciar_anuncio_cargo_async(server_id, dados),
+            iniciar_anuncio_cargo_service_async(server_id, dados),
             timeout=15,
         )
 

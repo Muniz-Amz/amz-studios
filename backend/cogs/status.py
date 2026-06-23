@@ -17,6 +17,7 @@ COMANDOS_HELP = {
     ],
     "Moderacao": [
         ("/mod limpar quantidade", "Apaga de 1 a 1000 mensagens recentes do canal atual."),
+        ("/aviso cargo mensagem canal", "Envia aviso por cargo com as configuracoes do painel."),
         ("/avisos testar tipo", "Envia um teste do aviso de entrada ou saida no canal configurado."),
         ("Painel ADM", "Banir, expulsar, castigar e consultar membros pelo site."),
         ("Logs", "Registra mensagens apagadas/editadas, bans, castigos, canais e cargos."),

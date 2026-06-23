@@ -15,6 +15,7 @@ EXTENSIONS = (
     "cogs.status",
     "cogs.admin",
     "cogs.media",
+    "cogs.announcement",
     "cogs.welcome",
     "cogs.mention",
     "cogs.moderation",

@@ -151,6 +151,7 @@ PADRAO_MODERACAO = {
     "permissoes": {
         "cargos_admin": [],
         "cargos_moderador": [],
+        "cargos_aviso": [],
         "permitir_ban": True,
         "permitir_expulsar": True,
         "permitir_castigar": True,
@@ -615,6 +616,11 @@ def _normalizar_mapeamentos_reaction_role(regra):
             "emoji": emoji,
             "roleId": role_id,
             "roleName": _limitar_texto(item.get("roleName") or item.get("role_name"), 120),
+            "title": _limitar_texto(item.get("title") or item.get("titulo"), 80),
+            "description": _limitar_texto(
+                item.get("description") or item.get("descricao") or item.get("message") or item.get("mensagem"),
+                450,
+            ),
         })
 
     return mapeamentos
@@ -720,6 +726,11 @@ def _normalizar_moderacao(dados):
         "permissoes": {
             "cargos_admin": _normalizar_lista_texto(permissoes.get("cargos_admin"), 100, 32),
             "cargos_moderador": _normalizar_lista_texto(permissoes.get("cargos_moderador"), 100, 32),
+            "cargos_aviso": _normalizar_lista_texto(
+                permissoes.get("cargos_aviso") or permissoes.get("cargos_aviso_slash"),
+                100,
+                32,
+            ),
             "permitir_ban": _normalizar_bool(permissoes.get("permitir_ban")),
             "permitir_expulsar": _normalizar_bool(permissoes.get("permitir_expulsar")),
             "permitir_castigar": _normalizar_bool(permissoes.get("permitir_castigar")),

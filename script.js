@@ -359,6 +359,15 @@ const MODERACAO_PADRAO = {
         canais: true,
         cargos: true
     },
+    permissoes: {
+        cargos_admin: [],
+        cargos_moderador: [],
+        cargos_aviso: [],
+        permitir_ban: true,
+        permitir_expulsar: true,
+        permitir_castigar: true,
+        permitir_limpar: true
+    },
     auditoria: criarAuditoriaPadrao(),
     seguranca: criarSegurancaPadrao(),
     automacoes: criarAutomacoesPadrao()
@@ -1974,7 +1983,9 @@ function normalizarMapeamentosReactionRole(regra = {}) {
         const emoji = String(item.emoji || '').trim();
         const roleId = String(item.roleId || item.role_id || '').trim();
         const roleName = String(item.roleName || item.role_name || '').trim();
-        return { emoji, roleId, roleName };
+        const title = String(item.title || item.titulo || '').trim();
+        const description = String(item.description || item.descricao || item.message || item.mensagem || '').trim();
+        return { emoji, roleId, roleName, title, description };
     }).filter((item) => {
         if (!item.emoji || !item.roleId || vistos.has(item.emoji)) return false;
         vistos.add(item.emoji);
@@ -1984,7 +1995,7 @@ function normalizarMapeamentosReactionRole(regra = {}) {
 
 function resumirMapeamentosReactionRole(mapeamentos = []) {
     return normalizarMapeamentosReactionRole({ mappings: mapeamentos })
-        .map((item) => `${item.emoji} @${item.roleName || item.roleId}`)
+        .map((item) => `${item.emoji} @${item.roleName || item.roleId}${item.title ? ` - ${item.title}` : ''}`)
         .join(' · ');
 }
 
@@ -2053,14 +2064,37 @@ function normalizarAutomacoesLocal(automacoes = {}) {
     };
 }
 
+function normalizarListaIds(valor) {
+    if (Array.isArray(valor)) {
+        return valor.map(String).map((item) => item.trim()).filter(Boolean);
+    }
+
+    return textoParaLista(valor);
+}
+
+function normalizarPermissoesModeracaoLocal(permissoes = {}) {
+    permissoes = permissoes && typeof permissoes === 'object' ? permissoes : {};
+
+    return {
+        ...MODERACAO_PADRAO.permissoes,
+        cargos_admin: normalizarListaIds(permissoes.cargos_admin),
+        cargos_moderador: normalizarListaIds(permissoes.cargos_moderador),
+        cargos_aviso: normalizarListaIds(permissoes.cargos_aviso || permissoes.cargos_aviso_slash),
+        permitir_ban: Boolean(permissoes.permitir_ban ?? MODERACAO_PADRAO.permissoes.permitir_ban),
+        permitir_expulsar: Boolean(permissoes.permitir_expulsar ?? MODERACAO_PADRAO.permissoes.permitir_expulsar),
+        permitir_castigar: Boolean(permissoes.permitir_castigar ?? MODERACAO_PADRAO.permissoes.permitir_castigar),
+        permitir_limpar: Boolean(permissoes.permitir_limpar ?? MODERACAO_PADRAO.permissoes.permitir_limpar)
+    };
+}
+
 function normalizarModeracaoLocal(config = {}) {
     const normalizada = mesclarConfig(MODERACAO_PADRAO, config || {});
     delete normalizada.automod;
     delete normalizada.blacklist;
-    delete normalizada.permissoes;
     delete normalizada.bot_profile;
     delete normalizada.interface;
     delete normalizada.profiles;
+    normalizada.permissoes = normalizarPermissoesModeracaoLocal(normalizada.permissoes);
     normalizada.auditoria = normalizarAuditoriaLocal(normalizada.auditoria);
     normalizada.seguranca = normalizarSegurancaLocal(normalizada.seguranca);
     normalizada.automacoes = normalizarAutomacoesLocal(normalizada.automacoes);
@@ -2084,9 +2118,9 @@ function ChannelSelect({ id, attrs = '', multiple = false } = {}) {
     `;
 }
 
-function RoleSelect({ id, attrs = '' } = {}) {
+function RoleSelect({ id, attrs = '', multiple = false } = {}) {
     return `
-        <select id="${escaparHTML(id)}" ${attrs}>
+        <select id="${escaparHTML(id)}" ${attrs} ${multiple ? 'multiple' : ''}>
             <option value="">Carregando cargos...</option>
         </select>
     `;
@@ -2111,14 +2145,23 @@ function preencherChannelSelect(select, canais = [], selecionado = '', permitirV
     });
 }
 
-function preencherRoleSelect(select, cargos = [], selecionado = '') {
+function preencherRoleSelect(select, cargos = [], selecionado = '', permitirVazio = true) {
     if (!select) return;
 
-    select.innerHTML = [
-        '<option value="">Nao definido</option>',
+    const valores = select.multiple
+        ? new Set(Array.isArray(selecionado) ? selecionado.map(String) : textoParaLista(selecionado))
+        : new Set([String(selecionado || '')]);
+
+    const opcoes = [
+        permitirVazio && !select.multiple ? '<option value="">Nao definido</option>' : '',
         ...cargos.map((cargo) => `<option value="${escaparHTML(cargo.id)}" data-role-name="${escaparHTML(cargo.nome)}">${escaparHTML(cargo.nome)}</option>`)
-    ].join('');
-    select.value = selecionado || '';
+    ].filter(Boolean);
+
+    select.innerHTML = opcoes.length ? opcoes.join('') : '<option value="">Nenhum cargo encontrado</option>';
+
+    Array.from(select.options).forEach((option) => {
+        option.selected = valores.has(option.value);
+    });
 }
 
 function obterNomeSelecionado(select, datasetKey) {
@@ -2548,7 +2591,7 @@ function ReactionRoleEditor() {
                         </button>
                     </div>
                     <div class="reaction-role-mappings" id="reaction_role_mappings"></div>
-                    <small>Uma mensagem unica no Discord pode ter varios emojis. Cada emoji entrega um cargo diferente.</small>
+                    <small>Uma mensagem unica no Discord pode ter varios emojis. Nos textos por cargo use {emoji}, {role}, {role_mention} e {server}.</small>
                 </div>
                 <label class="advanced-field advanced-field-wide">
                     <span>Nome da regra</span>
@@ -2558,7 +2601,7 @@ function ReactionRoleEditor() {
                 <label class="advanced-field advanced-field-wide">
                     <span>Mensagem bonita que o bot vai publicar</span>
                     <textarea id="reaction_role_message_text" rows="4" placeholder="Reaja nos emojis abaixo para receber seus cargos."></textarea>
-                    <small>Variaveis: {emoji}, {role}, {role_mention}, {roles}, {server}. Depois de publicar, o bot ja coloca todas as reacoes.</small>
+                    <small>Texto geral do topo. Em cada emoji/cargo voce pode escrever um mini titulo e uma explicacao propria.</small>
                 </label>
                 <div class="automation-rule-actions">
                     <button type="button" onclick="publicarReactionRoleDiscord()" id="reaction_role_publish_rule" class="reaction-role-publish-button">
@@ -2845,6 +2888,11 @@ function RoleAnnouncementPanel() {
                         </span>
                         ${ToggleSwitch('role_announcement_send_dm', true)}
                     </label>
+                    <label class="advanced-field advanced-field-wide">
+                        <span>Cargos que podem usar /aviso</span>
+                        ${RoleSelect({ id: 'role_announcement_allowed_roles', multiple: true })}
+                        <small>Administradores sempre podem usar. Os cargos escolhidos aqui liberam apenas este comando.</small>
+                    </label>
                     <label class="advanced-field">
                         <span>Cargo filtrado</span>
                         ${RoleSelect({ id: 'role_announcement_role' })}
@@ -3011,10 +3059,26 @@ function aplicarConfigAnuncioCargoNaAutomacao(config) {
     ));
 }
 
+function obterCargosLiberadosAvisoDoPainel() {
+    const select = document.getElementById('role_announcement_allowed_roles');
+    return Array.from(select?.selectedOptions || []).map((option) => option.value).filter(Boolean);
+}
+
+function aplicarPermissoesAnuncioCargoDoPainel() {
+    moderacaoAtual.permissoes = normalizarPermissoesModeracaoLocal(moderacaoAtual.permissoes);
+    moderacaoAtual.permissoes.cargos_aviso = obterCargosLiberadosAvisoDoPainel();
+}
+
 function preencherAnuncioCargoDoPainel(canais = [], cargos = []) {
     if (!document.getElementById('role_announcement_panel')) return;
     const config = obterConfigAnuncioCargoSalva();
     preencherRoleSelect(document.getElementById('role_announcement_role'), cargos, config.roleId);
+    preencherRoleSelect(
+        document.getElementById('role_announcement_allowed_roles'),
+        cargos,
+        moderacaoAtual.permissoes?.cargos_aviso || [],
+        false
+    );
     preencherChannelSelect(document.getElementById('role_announcement_channel'), canais, config.channelId);
     const campos = {
         role_announcement_title: config.title,
@@ -3046,6 +3110,7 @@ function preencherAnuncioCargoDoPainel(canais = [], cargos = []) {
 function coletarAnuncioCargoDoPainel() {
     if (!document.getElementById('role_announcement_panel')) return;
     aplicarConfigAnuncioCargoNaAutomacao(obterConfigAnuncioCargoDoPainel());
+    aplicarPermissoesAnuncioCargoDoPainel();
 }
 
 function textoPreviewAnuncioCargo(texto) {
@@ -3093,6 +3158,7 @@ function configurarPreviewAnuncioCargo() {
     if (!document.getElementById('role_announcement_panel')) return;
     [
         'role_announcement_role',
+        'role_announcement_allowed_roles',
         'role_announcement_channel',
         'role_announcement_title',
         'role_announcement_message',
@@ -3276,7 +3342,7 @@ function preencherCamposAutomacoes(canais = [], cargos = []) {
     preencherChannelSelect(document.getElementById('command_block_channels'), canais, [], false);
     preencherChannelSelect(document.getElementById('reaction_role_channel'), canais, '');
     preencherRoleSelect(document.getElementById('reaction_role_role'), cargos, '');
-    renderizarMapeamentosReactionRole([{ emoji: '', roleId: '', roleName: '' }]);
+    renderizarMapeamentosReactionRole([{ emoji: '', roleId: '', roleName: '', title: '', description: '' }]);
     preencherAnuncioCargoDoPainel(canais, cargos);
     configurarPreviewRastreadorConvites();
     configurarPreviewReactionRole();
@@ -3534,6 +3600,14 @@ function criarLinhaMapeamentoReactionRole(mapeamento = {}, indice = 0) {
                 <span>Cargo ${indice + 1}</span>
                 ${RoleSelect({ id: `reaction_role_role_${indice}`, attrs: 'data-reaction-role-role' })}
             </label>
+            <label class="advanced-field">
+                <span>Mini titulo ${indice + 1}</span>
+                <input data-reaction-role-title type="text" maxlength="80" placeholder="Cargo PX" value="${escaparHTML(mapeamento.title || '')}">
+            </label>
+            <label class="advanced-field reaction-role-mapping-description">
+                <span>Texto do cargo ${indice + 1}</span>
+                <textarea data-reaction-role-description rows="3" maxlength="450" placeholder="Reagindo neste emoji voce vai ganhar este cargo.">${escaparHTML(mapeamento.description || '')}</textarea>
+            </label>
             <button type="button" class="reaction-role-remove-mapping" onclick="removerMapeamentoReactionRole(${indice})" title="Remover este emoji">
                 <i class="ph ph-trash"></i>
             </button>
@@ -3548,15 +3622,17 @@ function renderizarMapeamentosReactionRole(mapeamentos = []) {
     const valores = (Array.isArray(mapeamentos) ? mapeamentos : []).slice(0, 20).map((item = {}) => ({
         emoji: String(item.emoji || '').trim(),
         roleId: String(item.roleId || item.role_id || '').trim(),
-        roleName: String(item.roleName || item.role_name || '').trim()
+        roleName: String(item.roleName || item.role_name || '').trim(),
+        title: String(item.title || item.titulo || '').trim(),
+        description: String(item.description || item.descricao || item.message || item.mensagem || '').trim()
     }));
-    const linhas = valores.length ? valores : [{ emoji: '', roleId: '', roleName: '' }];
+    const linhas = valores.length ? valores : [{ emoji: '', roleId: '', roleName: '', title: '', description: '' }];
 
     lista.innerHTML = linhas.map((mapeamento, indice) => criarLinhaMapeamentoReactionRole(mapeamento, indice)).join('');
     lista.querySelectorAll('[data-reaction-role-mapping]').forEach((linha, indice) => {
         const select = linha.querySelector('[data-reaction-role-role]');
         preencherRoleSelect(select, moderacaoRecursosAtual.cargos, linhas[indice]?.roleId || '');
-        linha.querySelectorAll('input, select').forEach((campo) => {
+        linha.querySelectorAll('input, select, textarea').forEach((campo) => {
             campo.addEventListener('input', () => {
                 sincronizarCamposLegadosReactionRole();
                 atualizarPreviewReactionRole();
@@ -3580,7 +3656,9 @@ function obterMapeamentosReactionRoleDoEditor() {
             return {
                 emoji: linha.querySelector('[data-reaction-role-emoji]')?.value.trim() || '',
                 roleId: cargo?.value || '',
-                roleName: obterNomeSelecionado(cargo, 'roleName')
+                roleName: obterNomeSelecionado(cargo, 'roleName'),
+                title: linha.querySelector('[data-reaction-role-title]')?.value.trim() || '',
+                description: linha.querySelector('[data-reaction-role-description]')?.value.trim() || ''
             };
         })
     });
@@ -3592,7 +3670,9 @@ function obterMapeamentosReactionRoleBrutosDoEditor() {
         return {
             emoji: linha.querySelector('[data-reaction-role-emoji]')?.value.trim() || '',
             roleId: cargo?.value || '',
-            roleName: obterNomeSelecionado(cargo, 'roleName')
+            roleName: obterNomeSelecionado(cargo, 'roleName'),
+            title: linha.querySelector('[data-reaction-role-title]')?.value.trim() || '',
+            description: linha.querySelector('[data-reaction-role-description]')?.value.trim() || ''
         };
     });
 }
@@ -3611,13 +3691,13 @@ function adicionarMapeamentoReactionRole() {
         mostrarStatusModeracao('Limite de 20 emojis por mensagem atingido.');
         return;
     }
-    renderizarMapeamentosReactionRole([...atuais, { emoji: '', roleId: '', roleName: '' }]);
+    renderizarMapeamentosReactionRole([...atuais, { emoji: '', roleId: '', roleName: '', title: '', description: '' }]);
 }
 
 function removerMapeamentoReactionRole(indice) {
     const atuais = obterMapeamentosReactionRoleBrutosDoEditor();
     const restantes = atuais.filter((_, itemIndice) => itemIndice !== indice);
-    renderizarMapeamentosReactionRole(restantes.length ? restantes : [{ emoji: '', roleId: '', roleName: '' }]);
+    renderizarMapeamentosReactionRole(restantes.length ? restantes : [{ emoji: '', roleId: '', roleName: '', title: '', description: '' }]);
 }
 
 function atualizarPreviewReactionRole() {
@@ -3936,7 +4016,7 @@ function limparEditorReactionRole(limparStatus = true) {
 
     preencherChannelSelect(document.getElementById('reaction_role_channel'), moderacaoRecursosAtual.canais, '');
     preencherRoleSelect(document.getElementById('reaction_role_role'), moderacaoRecursosAtual.cargos, '');
-    renderizarMapeamentosReactionRole([{ emoji: '', roleId: '', roleName: '' }]);
+    renderizarMapeamentosReactionRole([{ emoji: '', roleId: '', roleName: '', title: '', description: '' }]);
 
     ['reaction_role_message_id', 'reaction_role_emoji', 'reaction_role_label', 'reaction_role_message_text'].forEach((id) => {
         const elemento = document.getElementById(id);
@@ -4541,12 +4621,14 @@ function renderizarPainelBoasVindas(serverName) {
                     <span>Preview entrada</span>
                     <strong id="welcome_preview_entrada_titulo"></strong>
                     <p id="welcome_preview_entrada_mensagem"></p>
+                    <div class="welcome-preview-info" id="welcome_preview_entrada_info"></div>
                     <small id="welcome_preview_entrada_conteudo"></small>
                 </article>
                 <article class="welcome-preview" id="welcome_preview_saida">
                     <span>Preview saida</span>
                     <strong id="welcome_preview_saida_titulo"></strong>
                     <p id="welcome_preview_saida_mensagem"></p>
+                    <div class="welcome-preview-info" id="welcome_preview_saida_info"></div>
                     <small id="welcome_preview_saida_conteudo"></small>
                 </article>
             </div>
@@ -4717,17 +4799,40 @@ function formatarPreviewBoasVindas(texto) {
     }, String(texto || ''));
 }
 
+function infoPreviewBoasVindas(tipo) {
+    const painelSecao = document.getElementById('dashboard-section-panel');
+    const serverName = painelSecao?.dataset.serverName || document.getElementById('nome-servidor-atual')?.innerText || 'Seu servidor';
+    const linhas = [
+        'Usuario',
+        'Nome: Usuario',
+        'Tag: usuario#0000',
+        'ID: 1234567890',
+        'Conta criada: ha 2 anos',
+        'Servidor',
+        `Servidor: ${serverName}`,
+        'Total de membros: 100'
+    ];
+
+    if (tipo === 'saida') {
+        linhas.splice(5, 0, 'Entrou no servidor: ha 3 meses');
+    }
+
+    return linhas.join('\n');
+}
+
 function atualizarPreviewBoasVindas() {
     ['entrada', 'saida'].forEach((tipo) => {
         const preview = document.getElementById(`welcome_preview_${tipo}`);
         const titulo = document.getElementById(`welcome_preview_${tipo}_titulo`);
         const mensagem = document.getElementById(`welcome_preview_${tipo}_mensagem`);
+        const info = document.getElementById(`welcome_preview_${tipo}_info`);
         const conteudo = document.getElementById(`welcome_preview_${tipo}_conteudo`);
         const cor = document.getElementById(`welcome_${tipo}_cor`)?.value || BOAS_VINDAS_PADRAO[`${tipo}_cor`];
 
         if (preview) preview.style.borderColor = normalizarCorHex(cor, BOAS_VINDAS_PADRAO[`${tipo}_cor`]);
         if (titulo) titulo.innerText = formatarPreviewBoasVindas(document.getElementById(`welcome_${tipo}_titulo`)?.value);
         if (mensagem) mensagem.innerText = formatarPreviewBoasVindas(document.getElementById(`welcome_${tipo}_mensagem`)?.value);
+        if (info) info.innerText = infoPreviewBoasVindas(tipo);
         if (conteudo) conteudo.innerText = formatarPreviewBoasVindas(document.getElementById(`welcome_${tipo}_conteudo`)?.value);
     });
 }

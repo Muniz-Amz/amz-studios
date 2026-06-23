@@ -73,6 +73,36 @@ def formatar_variaveis(template, member, contexto=None):
     return texto.strip()
 
 
+def formatar_data_discord(data):
+    if not data:
+        return "Nao disponivel"
+
+    return f"<t:{int(data.timestamp())}:R>"
+
+
+def montar_campo_usuario(member):
+    linhas = [
+        f"Nome: {member.display_name}",
+        f"Tag: {member}",
+        f"ID: `{member.id}`",
+        f"Conta criada: {formatar_data_discord(getattr(member, 'created_at', None))}",
+    ]
+
+    joined_at = getattr(member, "joined_at", None)
+    if joined_at:
+        linhas.append(f"Entrou no servidor: {formatar_data_discord(joined_at)}")
+
+    return "\n".join(linhas)[:1024]
+
+
+def montar_campo_servidor(member):
+    guild = member.guild
+    return (
+        f"Servidor: {guild.name}\n"
+        f"Total de membros: {guild.member_count or len(guild.members)}"
+    )[:1024]
+
+
 async def obter_canal_texto(guild, canal_id):
     try:
         canal_id_int = int(canal_id)
@@ -108,6 +138,9 @@ def montar_embed(member, config, campos, contexto=None):
     if url_http_valida(imagem_url):
         embed.set_image(url=imagem_url)
 
+    embed.add_field(name="Usuario", value=montar_campo_usuario(member), inline=False)
+    embed.add_field(name="Servidor", value=montar_campo_servidor(member), inline=True)
+
     if campos.get("tipo") == "saida" and contexto:
         embed.add_field(
             name="Registro de saida",
@@ -131,6 +164,9 @@ def montar_fallback_texto(conteudo, embed, imagem_url):
 
     if embed.description:
         partes.append(embed.description)
+
+    for campo in embed.fields:
+        partes.append(f"{campo.name}\n{campo.value}")
 
     if url_http_valida(imagem_url):
         partes.append(imagem_url)
