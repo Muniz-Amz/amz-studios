@@ -40,6 +40,7 @@ def montar_dados_aviso(config, cargo, mensagem, canal=None):
         "roleId": str(cargo.id),
         "roleIdName": cargo.name,
         "message": mensagem.strip(),
+        "imageUrl": "",
     }
 
     if canal:
