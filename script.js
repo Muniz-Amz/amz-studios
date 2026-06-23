@@ -2888,11 +2888,18 @@ function RoleAnnouncementPanel() {
                         </span>
                         ${ToggleSwitch('role_announcement_send_dm', true)}
                     </label>
-                    <label class="advanced-field advanced-field-wide">
+                    <div class="advanced-field advanced-field-wide role-announcement-permission-box">
                         <span>Cargos que podem usar /aviso</span>
-                        ${RoleSelect({ id: 'role_announcement_allowed_roles', multiple: true })}
-                        <small>Administradores sempre podem usar. Os cargos escolhidos aqui liberam apenas este comando.</small>
-                    </label>
+                        <div class="role-announcement-permission-picker">
+                            ${RoleSelect({ id: 'role_announcement_allowed_role_select' })}
+                            <button type="button" onclick="adicionarCargoLiberadoAviso()">
+                                <i class="ph ph-plus-circle"></i>
+                                Adicionar cargo
+                            </button>
+                        </div>
+                        <div class="role-announcement-permission-list" id="role_announcement_allowed_roles_list"></div>
+                        <small>Administradores sempre podem usar. A lista salva libera apenas o comando /aviso.</small>
+                    </div>
                     <label class="advanced-field">
                         <span>Cargo filtrado</span>
                         ${RoleSelect({ id: 'role_announcement_role' })}
@@ -3059,9 +3066,69 @@ function aplicarConfigAnuncioCargoNaAutomacao(config) {
     ));
 }
 
+function nomeCargoModeracao(roleId) {
+    const cargo = moderacaoRecursosAtual.cargos.find((item) => String(item.id) === String(roleId));
+    return cargo?.nome || roleId;
+}
+
 function obterCargosLiberadosAvisoDoPainel() {
-    const select = document.getElementById('role_announcement_allowed_roles');
-    return Array.from(select?.selectedOptions || []).map((option) => option.value).filter(Boolean);
+    const itens = Array.from(document.querySelectorAll('#role_announcement_allowed_roles_list [data-role-announcement-allowed-role]'));
+    if (itens.length) {
+        return itens.map((item) => item.dataset.roleId).filter(Boolean);
+    }
+
+    return normalizarListaIds(moderacaoAtual.permissoes?.cargos_aviso);
+}
+
+function renderizarCargosLiberadosAviso(cargosIds = null) {
+    const lista = document.getElementById('role_announcement_allowed_roles_list');
+    if (!lista) return;
+
+    const ids = normalizarListaIds(cargosIds ?? moderacaoAtual.permissoes?.cargos_aviso);
+    if (!ids.length) {
+        lista.innerHTML = '<div class="role-announcement-permission-empty">Nenhum cargo liberado ainda.</div>';
+        return;
+    }
+
+    lista.innerHTML = ids.map((roleId) => `
+        <div class="role-announcement-permission-chip" data-role-announcement-allowed-role data-role-id="${escaparHTML(roleId)}">
+            <span>${escaparHTML(nomeCargoModeracao(roleId))}</span>
+            <button type="button" onclick="removerCargoLiberadoAviso('${escaparHTML(roleId)}')" title="Remover cargo">
+                <i class="ph ph-x"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+function adicionarCargoLiberadoAviso() {
+    const select = document.getElementById('role_announcement_allowed_role_select');
+    const roleId = select?.value || '';
+    if (!roleId) {
+        mostrarStatusModeracao('Escolha um cargo para liberar o /aviso.');
+        return;
+    }
+
+    const atuais = obterCargosLiberadosAvisoDoPainel();
+    if (atuais.includes(roleId)) {
+        mostrarStatusModeracao('Esse cargo ja esta liberado para usar /aviso.');
+        return;
+    }
+
+    const proximos = [...atuais, roleId];
+    moderacaoAtual.permissoes = normalizarPermissoesModeracaoLocal(moderacaoAtual.permissoes);
+    moderacaoAtual.permissoes.cargos_aviso = proximos;
+    renderizarCargosLiberadosAviso(proximos);
+    select.value = '';
+    marcarConfiguracaoAlterada('automations');
+    mostrarStatusModeracao('Cargo adicionado. Clique em salvar configuracao para sincronizar.', 'success');
+}
+
+function removerCargoLiberadoAviso(roleId) {
+    const proximos = obterCargosLiberadosAvisoDoPainel().filter((item) => String(item) !== String(roleId));
+    moderacaoAtual.permissoes = normalizarPermissoesModeracaoLocal(moderacaoAtual.permissoes);
+    moderacaoAtual.permissoes.cargos_aviso = proximos;
+    renderizarCargosLiberadosAviso(proximos);
+    marcarConfiguracaoAlterada('automations');
 }
 
 function aplicarPermissoesAnuncioCargoDoPainel() {
@@ -3074,11 +3141,11 @@ function preencherAnuncioCargoDoPainel(canais = [], cargos = []) {
     const config = obterConfigAnuncioCargoSalva();
     preencherRoleSelect(document.getElementById('role_announcement_role'), cargos, config.roleId);
     preencherRoleSelect(
-        document.getElementById('role_announcement_allowed_roles'),
+        document.getElementById('role_announcement_allowed_role_select'),
         cargos,
-        moderacaoAtual.permissoes?.cargos_aviso || [],
-        false
+        ''
     );
+    renderizarCargosLiberadosAviso(moderacaoAtual.permissoes?.cargos_aviso || []);
     preencherChannelSelect(document.getElementById('role_announcement_channel'), canais, config.channelId);
     const campos = {
         role_announcement_title: config.title,
@@ -3158,7 +3225,7 @@ function configurarPreviewAnuncioCargo() {
     if (!document.getElementById('role_announcement_panel')) return;
     [
         'role_announcement_role',
-        'role_announcement_allowed_roles',
+        'role_announcement_allowed_role_select',
         'role_announcement_channel',
         'role_announcement_title',
         'role_announcement_message',
