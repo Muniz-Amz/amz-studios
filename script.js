@@ -15,6 +15,7 @@ const MAX_MINUTOS_LIMPEZA = 1440;
 const ADMIN_TOKEN_KEY = 'amz_admin_token';
 const SITE_THEME_KEY = 'amz_site_theme';
 const SITE_THEMES = new Set(['dark', 'light']);
+const MODERACAO_RECURSOS_CACHE_MS = 5000;
 const SAVE_TRAY_SECTIONS = {
     setup: 'Limpeza',
     server: 'Avisos',
@@ -397,7 +398,7 @@ let automacaoRegraEditandoId = '';
 let comandoBloqueioEditandoId = '';
 let reactionRoleEditandoId = '';
 let moderacaoServidorCarregadoId = '';
-let moderacaoRecursosAtual = { canais: [], cargos: [] };
+let moderacaoRecursosAtual = { canais: [], cargos: [], atualizadoEm: 0 };
 let saveTrayListenerAtivo = false;
 let saveTrayToastTimer = null;
 let adminLogsTimer = null;
@@ -724,6 +725,11 @@ function obterRotuloPermissaoServidor(servidor = {}) {
     if ((permissoes & DISCORD_PERMISSION_MANAGE_GUILD) === DISCORD_PERMISSION_MANAGE_GUILD) return 'Gerenciar servidor';
 
     return 'Administrador';
+}
+
+function urlSemCache(url) {
+    const separador = String(url).includes('?') ? '&' : '?';
+    return `${url}${separador}_ts=${Date.now()}`;
 }
 
 function hashAtualNormalizado() {
@@ -1722,7 +1728,7 @@ function configurarServidor(id, nome, iconUrl = '') {
     if (moderacaoServidorCarregadoId !== id) {
         moderacaoAtual = normalizarModeracaoLocal(clonarConfig(MODERACAO_PADRAO));
         moderacaoServidorCarregadoId = '';
-        moderacaoRecursosAtual = { canais: [], cargos: [] };
+        moderacaoRecursosAtual = { canais: [], cargos: [], atualizadoEm: 0 };
         automacaoRegraEditandoId = '';
         comandoBloqueioEditandoId = '';
         reactionRoleEditandoId = '';
@@ -3329,12 +3335,18 @@ function AutomationsPage(serverName) {
         <div class="advanced-config-page automations-page">
             <div id="automation-summary">${AutomationSummary()}</div>
             <section class="advanced-section">
-                <div class="advanced-section-heading">
-                    <i class="ph ph-lightning"></i>
-                    <div>
-                        <strong>Ações automáticas do servidor</strong>
-                        <p>Cada card controla uma automacao separada. Ative, preencha os campos e salve.</p>
+                <div class="advanced-section-heading automation-page-heading">
+                    <div class="advanced-section-title">
+                        <i class="ph ph-lightning"></i>
+                        <div>
+                            <strong>Ações automáticas do servidor</strong>
+                            <p>Cada card controla uma automacao separada. Ative, preencha os campos e salve.</p>
+                        </div>
                     </div>
+                    <button type="button" class="automation-refresh-button" onclick="atualizarRecursosModeracaoAtual()">
+                        <i class="ph ph-arrows-clockwise"></i>
+                        Atualizar canais/cargos
+                    </button>
                 </div>
                 <div class="automation-group-list">
                     ${AUTOMATION_GROUPS.map(AutomationGroupSection).join('')}
@@ -3431,7 +3443,7 @@ function coletarCamposSeguranca() {
 
 function preencherCamposAutomacoes(canais = [], cargos = []) {
     moderacaoAtual.automacoes = normalizarAutomacoesLocal(moderacaoAtual.automacoes);
-    moderacaoRecursosAtual = { canais, cargos };
+    moderacaoRecursosAtual = { canais, cargos, atualizadoEm: moderacaoRecursosAtual.atualizadoEm || Date.now() };
     const resumo = document.getElementById('automation-summary');
     if (resumo) resumo.innerHTML = AutomationSummary();
 
@@ -4460,16 +4472,50 @@ function obterRecursosModeracaoCache(serverId) {
         const recursos = JSON.parse(localStorage.getItem(chaveModeracaoRecursosCache(serverId)) || '{}');
         return {
             canais: Array.isArray(recursos.canais) ? recursos.canais : [],
-            cargos: Array.isArray(recursos.cargos) ? recursos.cargos : []
+            cargos: Array.isArray(recursos.cargos) ? recursos.cargos : [],
+            atualizadoEm: Number.parseInt(recursos.atualizadoEm || '0', 10) || 0
         };
     } catch {
-        return { canais: [], cargos: [] };
+        return { canais: [], cargos: [], atualizadoEm: 0 };
     }
 }
 
 function salvarRecursosModeracaoCache(serverId, canais = [], cargos = []) {
     if (!serverId) return;
-    localStorage.setItem(chaveModeracaoRecursosCache(serverId), JSON.stringify({ canais, cargos }));
+    localStorage.setItem(chaveModeracaoRecursosCache(serverId), JSON.stringify({ canais, cargos, atualizadoEm: Date.now() }));
+}
+
+function recursosModeracaoRecentes(recursos = {}) {
+    return Date.now() - Number(recursos.atualizadoEm || 0) < MODERACAO_RECURSOS_CACHE_MS;
+}
+
+async function buscarRecursosModeracaoServidor(serverId, token) {
+    const [responseCanais, responseCargos] = await Promise.all([
+        fetch(urlSemCache(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/canais`), {
+            headers: { 'Authorization': `Bearer ${token}` },
+            cache: 'no-store'
+        }),
+        fetch(urlSemCache(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/cargos`), {
+            headers: { 'Authorization': `Bearer ${token}` },
+            cache: 'no-store'
+        })
+    ]);
+
+    const resultadoCanais = await lerJsonResposta(responseCanais);
+    const resultadoCargos = await lerJsonResposta(responseCargos);
+
+    if (!responseCanais.ok || resultadoCanais.status !== 'sucesso') {
+        throw new Error(resultadoCanais.mensagem || resultadoCanais.erro || 'Nao foi possivel carregar os canais.');
+    }
+
+    if (!responseCargos.ok || resultadoCargos.status !== 'sucesso') {
+        throw new Error(resultadoCargos.mensagem || resultadoCargos.erro || 'Nao foi possivel carregar os cargos.');
+    }
+
+    return {
+        canais: resultadoCanais.canais || [],
+        cargos: resultadoCargos.cargos || []
+    };
 }
 
 async function carregarModeracaoServidor(secao) {
@@ -4486,8 +4532,11 @@ async function carregarModeracaoServidor(secao) {
 
     if (moderacaoServidorCarregadoId === serverId) {
         preencherPainelConfiguracaoAtual(secao, moderacaoRecursosAtual.canais, moderacaoRecursosAtual.cargos);
-        mostrarStatusModeracao('Configuracao pronta. Salve para sincronizar alteracoes.', 'success');
-        return;
+        if (recursosModeracaoRecentes(moderacaoRecursosAtual)) {
+            mostrarStatusModeracao('Configuracao pronta. Salve para sincronizar alteracoes.', 'success');
+            return;
+        }
+        mostrarStatusModeracao('Atualizando lista de canais e cargos...', 'success');
     }
 
     if (token === 'demo-token') {
@@ -4499,7 +4548,7 @@ async function carregarModeracaoServidor(secao) {
         canais = obterCanaisDemo();
         cargos = obterCargosDemo();
         moderacaoServidorCarregadoId = serverId;
-        moderacaoRecursosAtual = { canais, cargos };
+        moderacaoRecursosAtual = { canais, cargos, atualizadoEm: Date.now() };
         preencherPainelConfiguracaoAtual(secao, canais, cargos);
         mostrarStatusModeracao('Modo teste local. Configuracao salva no navegador.', 'success');
         return;
@@ -4523,20 +4572,13 @@ async function carregarModeracaoServidor(secao) {
     }
 
     try {
-        const [responseConfig, responseCanais, responseCargos] = await Promise.all([
+        const [responseConfig, recursosApi] = await Promise.all([
             fetch(`${API_URL}/api/config/${encodeURIComponent(serverId)}/moderacao`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }),
-            fetch(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/canais`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            }),
-            fetch(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/cargos`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
+            buscarRecursosModeracaoServidor(serverId, token)
         ]);
         const resultadoConfig = await lerJsonResposta(responseConfig);
-        const resultadoCanais = await lerJsonResposta(responseCanais);
-        const resultadoCargos = await lerJsonResposta(responseCargos);
 
         if (responseConfig.ok && resultadoConfig.status === 'sucesso') {
             moderacaoAtual = normalizarModeracaoLocal(resultadoConfig.moderacao || {});
@@ -4545,16 +4587,11 @@ async function carregarModeracaoServidor(secao) {
             moderacaoAtual = normalizarModeracaoLocal(clonarConfig(MODERACAO_PADRAO));
         }
 
-        if (responseCanais.ok && resultadoCanais.status === 'sucesso') {
-            canais = resultadoCanais.canais || [];
-        }
-
-        if (responseCargos.ok && resultadoCargos.status === 'sucesso') {
-            cargos = resultadoCargos.cargos || [];
-        }
+        canais = recursosApi.canais || [];
+        cargos = recursosApi.cargos || [];
 
         moderacaoServidorCarregadoId = serverId;
-        moderacaoRecursosAtual = { canais, cargos };
+        moderacaoRecursosAtual = { canais, cargos, atualizadoEm: Date.now() };
         salvarRecursosModeracaoCache(serverId, canais, cargos);
         preencherPainelConfiguracaoAtual(secao, canais, cargos);
         mostrarStatusModeracao('Configuracao carregada.', 'success');
@@ -4569,6 +4606,46 @@ async function carregarModeracaoServidor(secao) {
         moderacaoAtual = normalizarModeracaoLocal(clonarConfig(MODERACAO_PADRAO));
         preencherPainelConfiguracaoAtual(secao, [], []);
         mostrarStatusModeracao('Erro ao conectar na API.');
+    }
+}
+
+async function atualizarRecursosModeracaoAtual() {
+    const painelSecao = document.getElementById('dashboard-section-panel');
+    const serverId = painelSecao?.dataset.serverId || '';
+    const token = localStorage.getItem('discord_token');
+    const secaoAtual = obterSecaoDashboardAtiva();
+
+    if (!serverId) {
+        mostrarStatusModeracao('Servidor nao identificado.');
+        return;
+    }
+
+    if (token === 'demo-token') {
+        const canais = obterCanaisDemo();
+        const cargos = obterCargosDemo();
+        moderacaoRecursosAtual = { canais, cargos, atualizadoEm: Date.now() };
+        preencherPainelConfiguracaoAtual(secaoAtual, canais, cargos);
+        mostrarStatusModeracao('Lista de teste atualizada no navegador.', 'success');
+        return;
+    }
+
+    if (!token) {
+        mostrarStatusModeracao('Sessao expirada. Entre novamente com o Discord.');
+        return;
+    }
+
+    try {
+        mostrarStatusModeracao('Atualizando canais e cargos direto do Discord...', 'success');
+        const recursos = await buscarRecursosModeracaoServidor(serverId, token);
+        const canais = recursos.canais || [];
+        const cargos = recursos.cargos || [];
+        moderacaoRecursosAtual = { canais, cargos, atualizadoEm: Date.now() };
+        salvarRecursosModeracaoCache(serverId, canais, cargos);
+        preencherPainelConfiguracaoAtual(secaoAtual, canais, cargos);
+        mostrarStatusModeracao('Canais e cargos atualizados.', 'success');
+    } catch (erro) {
+        console.error('Erro ao atualizar recursos de moderacao:', erro);
+        mostrarStatusModeracao(erro.message || 'Nao foi possivel atualizar canais e cargos agora.');
     }
 }
 
@@ -5006,8 +5083,9 @@ async function carregarBoasVindasServidor() {
             mostrarStatusBoasVindas(resultadoConfig.mensagem || resultadoConfig.erro || 'Nao foi possivel carregar os avisos.');
         }
 
-        const responseCanais = await fetch(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/canais`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+        const responseCanais = await fetch(urlSemCache(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/canais`), {
+            headers: { 'Authorization': `Bearer ${token}` },
+            cache: 'no-store'
         });
         const resultadoCanais = await lerJsonResposta(responseCanais);
 
@@ -5279,8 +5357,9 @@ async function carregarCanaisServidor() {
     }
 
     try {
-        const response = await fetch(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/canais?incluir_calls=1`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+        const response = await fetch(urlSemCache(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/canais?incluir_calls=1`), {
+            headers: { 'Authorization': `Bearer ${token}` },
+            cache: 'no-store'
         });
         const resultado = await lerJsonResposta(response);
 

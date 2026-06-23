@@ -2507,6 +2507,14 @@ def enviar_anuncio_cargo(server_id):
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
 
 
+def jsonify_sem_cache(payload):
+    resposta = jsonify(payload)
+    resposta.headers["Cache-Control"] = "no-store, max-age=0"
+    resposta.headers["Pragma"] = "no-cache"
+    resposta.headers["Expires"] = "0"
+    return resposta
+
+
 @app.route("/api/servidores/<server_id>/canais", methods=["GET"])
 def listar_canais_servidor(server_id):
     if not server_id:
@@ -2523,7 +2531,7 @@ def listar_canais_servidor(server_id):
         if canais is None:
             return jsonify({"status": "erro", "mensagem": "Servidor nao encontrado pelo bot."}), 404
 
-        return jsonify({"status": "sucesso", "canais": canais}), 200
+        return jsonify_sem_cache({"status": "sucesso", "canais": canais}), 200
     except Exception as e:
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
 
@@ -2543,7 +2551,7 @@ def listar_cargos_servidor(server_id):
         if cargos is None:
             return jsonify({"status": "erro", "mensagem": "Servidor nao encontrado pelo bot."}), 404
 
-        return jsonify({"status": "sucesso", "cargos": cargos}), 200
+        return jsonify_sem_cache({"status": "sucesso", "cargos": cargos}), 200
     except Exception as e:
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
 
