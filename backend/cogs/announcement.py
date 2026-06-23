@@ -7,6 +7,9 @@ from security.discord_permissions import usuario_e_admin_ou_dono
 from services.role_announcement_service import iniciar_anuncio_cargo_async
 
 
+EXTENSOES_IMAGEM = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+
+
 def ids_lista(valores):
     if isinstance(valores, (list, tuple, set)):
         return {str(valor).strip() for valor in valores if str(valor).strip()}
@@ -34,13 +37,22 @@ def usuario_pode_usar_aviso(guild, member, config):
     return any(str(role.id) in cargos_liberados for role in getattr(member, "roles", []))
 
 
-def montar_dados_aviso(config, cargo, mensagem, canal=None):
+def anexo_imagem_valido(imagem):
+    if not imagem:
+        return True
+
+    content_type = str(getattr(imagem, "content_type", "") or "").lower()
+    filename = str(getattr(imagem, "filename", "") or "").lower()
+    return content_type.startswith("image/") or filename.endswith(EXTENSOES_IMAGEM)
+
+
+def montar_dados_aviso(config, cargo, mensagem, canal=None, imagem=None):
     dados = {
         **valores_automacao(config, "roleAnnouncement"),
         "roleId": str(cargo.id),
         "roleIdName": cargo.name,
         "message": mensagem.strip(),
-        "imageUrl": "",
+        "imageUrl": str(getattr(imagem, "url", "") or ""),
     }
 
     if canal:
@@ -60,6 +72,7 @@ class AnnouncementCog(commands.Cog):
         cargo="Cargo que vai receber o aviso.",
         mensagem="Mensagem enviada no privado e/ou canal configurado.",
         canal="Canal opcional para publicar o aviso tambem.",
+        imagem="Imagem opcional para aparecer no aviso.",
     )
     @app_commands.guild_only()
     async def aviso(
@@ -68,12 +81,20 @@ class AnnouncementCog(commands.Cog):
         cargo: discord.Role,
         mensagem: app_commands.Range[str, 1, 1800],
         canal: discord.TextChannel = None,
+        imagem: discord.Attachment = None,
     ):
         if not interaction.guild or not isinstance(interaction.user, discord.Member):
             await interaction.response.send_message("Use esse comando dentro de um servidor.", ephemeral=True)
             return
 
         await interaction.response.defer(ephemeral=True, thinking=True)
+
+        if not anexo_imagem_valido(imagem):
+            await interaction.followup.send(
+                "O arquivo de imagem precisa ser PNG, JPG, GIF ou WEBP.",
+                ephemeral=True,
+            )
+            return
 
         config = await buscar_moderacao(str(interaction.guild.id))
         if not usuario_pode_usar_aviso(interaction.guild, interaction.user, config):
@@ -83,7 +104,7 @@ class AnnouncementCog(commands.Cog):
             )
             return
 
-        dados = montar_dados_aviso(config, cargo, str(mensagem), canal)
+        dados = montar_dados_aviso(config, cargo, str(mensagem), canal, imagem)
         resultado, erro = await iniciar_anuncio_cargo_async(str(interaction.guild.id), dados)
         if erro:
             await interaction.followup.send(f"Nao consegui iniciar o aviso: {erro}", ephemeral=True)

@@ -20,7 +20,7 @@ COMANDOS_HELP = {
         ("/mod advertir usuario motivo", "Registra uma advertencia e envia o log no canal configurado."),
         ("/mod advertencias usuario", "Consulta as advertencias ativas de um membro."),
         ("/mod remover-advertencia usuario id motivo", "Remove uma advertencia pelo ID."),
-        ("/aviso cargo mensagem canal", "Envia aviso por cargo com as configuracoes do painel."),
+        ("/aviso cargo mensagem canal imagem", "Envia aviso por cargo com canal e imagem opcionais."),
         ("Painel ADM", "Banir, expulsar, castigar e consultar membros pelo site."),
         ("Logs", "Registra mensagens apagadas/editadas, bans, castigos, canais e cargos."),
     ],
