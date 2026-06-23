@@ -2,6 +2,7 @@
 import copy
 import os
 import time
+import uuid
 from datetime import datetime, timezone
 
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -12,6 +13,7 @@ client = AsyncIOMotorClient(MONGO_URI)
 
 db = client["AMZCore"]
 collection = db["servidores"]
+advertencias_collection = db["advertencias"]
 MAX_DIAS_LIMPEZA_DISCORD = 14
 MAX_MINUTOS_LIMPEZA = 1440
 MAX_TITULO_AVISO = 240
@@ -945,6 +947,69 @@ async def buscar_moderacao(server_id):
     """
     documento = await collection.find_one({"id": str(server_id)}, {"_id": 0, "moderacao": 1})
     return _normalizar_moderacao((documento or {}).get("moderacao"))
+
+
+async def registrar_advertencia(server_id, usuario, responsavel, motivo):
+    registro = {
+        "id": uuid.uuid4().hex[:12],
+        "server_id": str(server_id),
+        "user_id": str(usuario.id),
+        "user_name": _limitar_texto(str(usuario), 120),
+        "responsible_id": str(responsavel.id),
+        "responsible_name": _limitar_texto(str(responsavel), 120),
+        "reason": _limitar_texto(motivo, 500, "Sem motivo informado"),
+        "active": True,
+        "created_at": _agora_iso(),
+        "removed_at": "",
+        "removed_by_id": "",
+        "removed_by_name": "",
+        "removal_reason": "",
+    }
+    await advertencias_collection.insert_one({**registro})
+    return registro
+
+
+async def listar_advertencias(server_id, user_id, limite=10, incluir_removidas=False):
+    filtro = {
+        "server_id": str(server_id),
+        "user_id": str(user_id),
+    }
+    if not incluir_removidas:
+        filtro["active"] = True
+
+    limite = min(max(int(limite or 10), 1), 25)
+    cursor = advertencias_collection.find(filtro, {"_id": 0}).sort("created_at", -1).limit(limite)
+    return [documento async for documento in cursor]
+
+
+async def contar_advertencias_ativas(server_id, user_id):
+    return await advertencias_collection.count_documents({
+        "server_id": str(server_id),
+        "user_id": str(user_id),
+        "active": True,
+    })
+
+
+async def remover_advertencia(server_id, user_id, advertencia_id, responsavel, motivo=""):
+    return await advertencias_collection.find_one_and_update(
+        {
+            "server_id": str(server_id),
+            "user_id": str(user_id),
+            "id": str(advertencia_id).strip(),
+            "active": True,
+        },
+        {
+            "$set": {
+                "active": False,
+                "removed_at": _agora_iso(),
+                "removed_by_id": str(responsavel.id),
+                "removed_by_name": _limitar_texto(str(responsavel), 120),
+                "removal_reason": _limitar_texto(motivo, 500, "Removida manualmente"),
+            }
+        },
+        return_document=ReturnDocument.AFTER,
+        projection={"_id": 0},
+    )
 
 
 async def registrar_historico_auditoria(server_id, item):

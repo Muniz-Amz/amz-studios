@@ -7,6 +7,13 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
+from database import (
+    buscar_moderacao,
+    contar_advertencias_ativas,
+    listar_advertencias,
+    registrar_advertencia,
+    remover_advertencia,
+)
 from security.discord_permissions import usuario_e_admin_ou_dono
 from services.cleanup_service import INTERVALO_LIMPEZA_MINUTOS, executar_limpezas
 
@@ -14,6 +21,17 @@ from services.cleanup_service import INTERVALO_LIMPEZA_MINUTOS, executar_limpeza
 MAX_LIMPAR_MENSAGENS = 250
 COOLDOWN_LIMPEZA_SEGUNDOS = 20
 RATE_LIMIT_PADRAO_SEGUNDOS = 30
+
+
+def ids_lista(valores):
+    if isinstance(valores, (list, tuple, set)):
+        return {str(valor).strip() for valor in valores if str(valor).strip()}
+
+    return {
+        item.strip()
+        for item in str(valores or "").replace(",", "\n").splitlines()
+        if item.strip()
+    }
 
 
 def extrair_espera_rate_limit(erro):
@@ -96,6 +114,81 @@ class CleanupCog(commands.Cog):
                 return False
 
             raise
+
+    def usuario_pode_advertir(self, guild, member, config):
+        if usuario_e_admin_ou_dono(guild, member):
+            return True
+
+        permissoes = config.get("permissoes", {})
+        cargos_liberados = ids_lista(permissoes.get("cargos_admin")) | ids_lista(permissoes.get("cargos_moderador"))
+        return any(str(role.id) in cargos_liberados for role in getattr(member, "roles", []))
+
+    def validar_alvo_advertencia(self, guild, responsavel, usuario):
+        if usuario.bot:
+            return "Bots nao podem receber advertencias."
+
+        if usuario.id == responsavel.id:
+            return "Voce nao pode advertir a si mesmo."
+
+        if usuario.id == guild.owner_id:
+            return "O dono do servidor nao pode receber advertencias."
+
+        if responsavel.id != guild.owner_id:
+            if usuario.guild_permissions.administrator:
+                return "Apenas o dono do servidor pode advertir outro administrador."
+
+            if usuario.top_role >= responsavel.top_role:
+                return "Voce nao pode advertir um membro com cargo igual ou superior ao seu."
+
+        return None
+
+    async def enviar_log_advertencia(self, guild, config, usuario, responsavel, registro, total, removida=False):
+        cog_moderacao = self.bot.get_cog("ModerationCog")
+        if not cog_moderacao or not hasattr(cog_moderacao, "enviar_log"):
+            return
+
+        titulo = "Advertencia removida" if removida else "Membro advertido"
+        event_id = "remocao_punicoes" if removida else "advertencias"
+        cor = discord.Color.green() if removida else discord.Color.orange()
+        motivo = registro.get("removal_reason") if removida else registro.get("reason")
+        await cog_moderacao.enviar_log(
+            guild,
+            config,
+            "moderacao",
+            titulo,
+            f"{usuario.mention} (`{usuario.id}`)",
+            cor,
+            fields=[
+                ("Responsavel", f"{responsavel.mention} (`{responsavel.id}`)", False),
+                ("Motivo", motivo or "Sem motivo informado", False),
+                ("ID da advertencia", f"`{registro.get('id')}`", True),
+                ("Advertencias ativas", str(total), True),
+            ],
+            event_id=event_id,
+            responsavel=responsavel,
+        )
+
+    async def enviar_dm_advertencia(self, guild, usuario, responsavel, registro, total, removida=False):
+        embed = discord.Embed(
+            title="Advertencia removida" if removida else "Voce recebeu uma advertencia",
+            color=discord.Color.green() if removida else discord.Color.orange(),
+        )
+        embed.add_field(name="Servidor", value=guild.name, inline=False)
+        embed.add_field(name="Responsavel", value=str(responsavel), inline=True)
+        embed.add_field(name="ID", value=f"`{registro.get('id')}`", inline=True)
+        embed.add_field(
+            name="Motivo",
+            value=(registro.get("removal_reason") if removida else registro.get("reason")) or "Sem motivo informado",
+            inline=False,
+        )
+        embed.add_field(name="Advertencias ativas", value=str(total), inline=False)
+        embed.set_footer(text="AMZ Moderacao")
+
+        try:
+            await usuario.send(embed=embed)
+            return True
+        except (discord.Forbidden, discord.HTTPException):
+            return False
 
     async def limpar_canal(self, interaction, quantidade):
         channel = interaction.channel
@@ -183,6 +276,156 @@ class CleanupCog(commands.Cog):
         embed.set_footer(text=f"Comando organizado: /mod limpar | Limite: {MAX_LIMPAR_MENSAGENS}")
 
         await self.responder_seguro(interaction, embed=embed, ephemeral=True)
+
+    @mod.command(name="advertir", description="Registra uma advertencia para um membro.")
+    @app_commands.describe(
+        usuario="Membro que recebera a advertencia.",
+        motivo="Motivo da advertencia.",
+    )
+    @app_commands.guild_only()
+    async def mod_advertir(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+        motivo: app_commands.Range[str, 3, 500],
+    ):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        config = await buscar_moderacao(str(interaction.guild.id))
+
+        if not self.usuario_pode_advertir(interaction.guild, interaction.user, config):
+            await interaction.followup.send(
+                "Apenas administradores ou cargos de moderacao configurados no painel podem advertir.",
+                ephemeral=True,
+            )
+            return
+
+        erro_alvo = self.validar_alvo_advertencia(interaction.guild, interaction.user, usuario)
+        if erro_alvo:
+            await interaction.followup.send(erro_alvo, ephemeral=True)
+            return
+
+        registro = await registrar_advertencia(
+            interaction.guild.id,
+            usuario,
+            interaction.user,
+            str(motivo).strip(),
+        )
+        total = await contar_advertencias_ativas(interaction.guild.id, usuario.id)
+        dm_enviada = await self.enviar_dm_advertencia(
+            interaction.guild,
+            usuario,
+            interaction.user,
+            registro,
+            total,
+        )
+        await self.enviar_log_advertencia(
+            interaction.guild,
+            config,
+            usuario,
+            interaction.user,
+            registro,
+            total,
+        )
+
+        await interaction.followup.send(
+            f"{usuario.mention} recebeu a advertencia `{registro['id']}`. "
+            f"Total ativo: `{total}`. DM: `{'enviada' if dm_enviada else 'bloqueada'}`.",
+            ephemeral=True,
+        )
+
+    @mod.command(name="advertencias", description="Consulta as advertencias ativas de um membro.")
+    @app_commands.describe(usuario="Membro que voce deseja consultar.")
+    @app_commands.guild_only()
+    async def mod_advertencias(self, interaction: discord.Interaction, usuario: discord.Member):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        config = await buscar_moderacao(str(interaction.guild.id))
+
+        if not self.usuario_pode_advertir(interaction.guild, interaction.user, config):
+            await interaction.followup.send(
+                "Apenas administradores ou cargos de moderacao configurados no painel podem consultar advertencias.",
+                ephemeral=True,
+            )
+            return
+
+        registros = await listar_advertencias(interaction.guild.id, usuario.id, limite=10)
+        if not registros:
+            await interaction.followup.send(f"{usuario.mention} nao possui advertencias ativas.", ephemeral=True)
+            return
+
+        linhas = [
+            f"`{registro['id']}` • {registro.get('reason') or 'Sem motivo'}\n"
+            f"Por: {registro.get('responsible_name') or 'Desconhecido'} • {registro.get('created_at') or '--'}"
+            for registro in registros
+        ]
+        embed = discord.Embed(
+            title=f"Advertencias de {usuario}",
+            description="\n\n".join(linhas)[:4000],
+            color=discord.Color.orange(),
+        )
+        embed.set_footer(text=f"Mostrando {len(registros)} advertencia(s) ativa(s)")
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @mod.command(name="remover-advertencia", description="Remove uma advertencia ativa de um membro.")
+    @app_commands.describe(
+        usuario="Membro que possui a advertencia.",
+        id="ID exibido ao criar ou consultar a advertencia.",
+        motivo="Motivo da remocao.",
+    )
+    @app_commands.guild_only()
+    async def mod_remover_advertencia(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+        id: app_commands.Range[str, 6, 40],
+        motivo: app_commands.Range[str, 3, 500] = "Removida manualmente",
+    ):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        config = await buscar_moderacao(str(interaction.guild.id))
+
+        if not self.usuario_pode_advertir(interaction.guild, interaction.user, config):
+            await interaction.followup.send(
+                "Apenas administradores ou cargos de moderacao configurados no painel podem remover advertencias.",
+                ephemeral=True,
+            )
+            return
+
+        registro = await remover_advertencia(
+            interaction.guild.id,
+            usuario.id,
+            str(id),
+            interaction.user,
+            str(motivo).strip(),
+        )
+        if not registro:
+            await interaction.followup.send(
+                "Advertencia ativa nao encontrada para esse membro. Confira o ID com `/mod advertencias`.",
+                ephemeral=True,
+            )
+            return
+
+        total = await contar_advertencias_ativas(interaction.guild.id, usuario.id)
+        dm_enviada = await self.enviar_dm_advertencia(
+            interaction.guild,
+            usuario,
+            interaction.user,
+            registro,
+            total,
+            removida=True,
+        )
+        await self.enviar_log_advertencia(
+            interaction.guild,
+            config,
+            usuario,
+            interaction.user,
+            registro,
+            total,
+            removida=True,
+        )
+        await interaction.followup.send(
+            f"Advertencia `{registro['id']}` removida de {usuario.mention}. "
+            f"Total ativo: `{total}`. DM: `{'enviada' if dm_enviada else 'bloqueada'}`.",
+            ephemeral=True,
+        )
 
 
 async def setup(bot):
