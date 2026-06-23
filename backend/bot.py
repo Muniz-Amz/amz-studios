@@ -34,7 +34,7 @@ LIMPAR_SLASH_GLOBAL = os.getenv("AMZ_CLEAR_GLOBAL_SLASH", "false").strip().lower
     "yes",
     "on",
 )
-SINCRONIZAR_SLASH_SERVIDORES_AO_INICIAR = os.getenv("AMZ_SYNC_CONNECTED_GUILDS_ON_READY", "false").strip().lower() in (
+SINCRONIZAR_SLASH_SERVIDORES_AO_INICIAR = os.getenv("AMZ_SYNC_CONNECTED_GUILDS_ON_READY", "true").strip().lower() in (
     "1",
     "true",
     "sim",
