@@ -3042,6 +3042,23 @@ section {
     gap: 12px;
 }
 
+.automation-group-list {
+    display: grid;
+    gap: 16px;
+}
+
+.automation-group-section {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.018);
+    padding: 12px;
+}
+
+.automation-group-heading {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
 .advanced-control-grid {
     grid-template-columns: minmax(0, 1fr) minmax(260px, 0.82fr);
 }

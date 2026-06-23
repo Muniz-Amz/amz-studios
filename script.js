@@ -234,6 +234,26 @@ const automationSettings = [
         ]
     }
 ];
+const AUTOMATION_GROUPS = [
+    {
+        title: 'Cargos e permissÃµes',
+        description: 'Tudo que entrega cargo, remove cargo ou envia comunicado por cargo.',
+        icon: 'ph-identification-card',
+        ids: ['autoRole', 'reactionRole', 'roleAnnouncement']
+    },
+    {
+        title: 'Mensagens e avisos',
+        description: 'Respostas, convites, metas e mensagens programadas.',
+        icon: 'ph-chat-centered-text',
+        ids: ['inviteTracker', 'autoResponse', 'scheduledMessage', 'memberGoalNotice']
+    },
+    {
+        title: 'Controle de canais',
+        description: 'Regras que organizam canais, threads e uso de comandos.',
+        icon: 'ph-sliders-horizontal',
+        ids: ['autoThread', 'commandChannelBlock']
+    }
+];
 const ROLE_ANNOUNCEMENT_DEFAULTS = {
     roleId: '',
     roleIdName: '',
@@ -3279,6 +3299,27 @@ function AutomationOptionCard(opcao) {
     `;
 }
 
+function AutomationGroupSection(grupo) {
+    const opcoes = grupo.ids
+        .map((id) => automationSettings.find((opcao) => opcao.id === id))
+        .filter(Boolean);
+
+    return `
+        <section class="advanced-section automation-group-section">
+            <div class="advanced-section-heading automation-group-heading">
+                <i class="ph ${escaparHTML(grupo.icon)}"></i>
+                <div>
+                    <strong>${escaparHTML(grupo.title)}</strong>
+                    <p>${escaparHTML(grupo.description)}</p>
+                </div>
+            </div>
+            <div class="automation-option-grid">
+                ${opcoes.map(AutomationOptionCard).join('')}
+            </div>
+        </section>
+    `;
+}
+
 function AutomationsPage(serverName) {
     return `
         <div class="vm-panel-heading">
@@ -3295,8 +3336,8 @@ function AutomationsPage(serverName) {
                         <p>Cada card controla uma automacao separada. Ative, preencha os campos e salve.</p>
                     </div>
                 </div>
-                <div class="automation-option-grid">
-                    ${automationSettings.map(AutomationOptionCard).join('')}
+                <div class="automation-group-list">
+                    ${AUTOMATION_GROUPS.map(AutomationGroupSection).join('')}
                 </div>
             </section>
             <button type="button" onclick="salvarAutomacoesServidor()" class="vm-save-button">
