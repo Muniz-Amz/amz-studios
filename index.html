@@ -502,7 +502,9 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                             <button type="button" class="vm-sidebar-link" data-dashboard-section="role" onclick="selecionarSecaoDashboard('role')">Moderação</button>
                             <button type="button" class="vm-sidebar-link" data-dashboard-section="audit" onclick="selecionarSecaoDashboard('audit')">Auditoria</button>
                             <button type="button" class="vm-sidebar-link" data-dashboard-section="security" onclick="selecionarSecaoDashboard('security')">Segurança</button>
-                            <button type="button" class="vm-sidebar-link" data-dashboard-section="automations" onclick="selecionarSecaoDashboard('automations')">Automações</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="automationRoles" onclick="selecionarSecaoDashboard('automationRoles')">Auto cargos</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="automationMessages" onclick="selecionarSecaoDashboard('automationMessages')">Mensagens</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="automationChannels" onclick="selecionarSecaoDashboard('automationChannels')">Canais</button>
                         </nav>
 
                         <div class="vm-sidebar-divider"></div>
@@ -569,11 +571,25 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                                     <small>Anti raid e proteção</small>
                                 </span>
                             </button>
-                            <button type="button" class="vm-dashboard-card" data-dashboard-section="automations" onclick="selecionarSecaoDashboard('automations')">
-                                <i class="ph ph-lightning"></i>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="automationRoles" onclick="selecionarSecaoDashboard('automationRoles')">
+                                <i class="ph ph-identification-card"></i>
                                 <span>
-                                    <strong>AUTOMAÇÕES</strong>
-                                    <small>Ações automáticas do servidor</small>
+                                    <strong>AUTO CARGOS</strong>
+                                    <small>Cargo por entrada, reação e aviso</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="automationMessages" onclick="selecionarSecaoDashboard('automationMessages')">
+                                <i class="ph ph-chat-centered-text"></i>
+                                <span>
+                                    <strong>MENSAGENS</strong>
+                                    <small>Respostas, convites, metas e agendadas</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="automationChannels" onclick="selecionarSecaoDashboard('automationChannels')">
+                                <i class="ph ph-sliders-horizontal"></i>
+                                <span>
+                                    <strong>CANAIS</strong>
+                                    <small>Threads e bloqueio de comandos</small>
                                 </span>
                             </button>
                         </div>
@@ -771,7 +787,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
 
     <script>
         const amzScript = document.createElement('script');
-        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=31' : 'script.js?v=31';
+        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=32' : 'script.js?v=32';
         document.body.appendChild(amzScript);
     </script>
 </body>

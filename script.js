@@ -22,7 +22,10 @@ const SAVE_TRAY_SECTIONS = {
     role: 'Moderacao',
     audit: 'Auditoria',
     security: 'Seguranca',
-    automations: 'Automacoes'
+    automations: 'Automacoes',
+    automationRoles: 'Auto cargos',
+    automationMessages: 'Mensagens',
+    automationChannels: 'Canais'
 };
 const MODELO_AVISOS_AMZ = {
     entrada_conteudo: '**Bem-vindo** {mention} **{server_upper}** ! Agora temos **{member_count} Membros.**',
@@ -237,24 +240,36 @@ const automationSettings = [
 ];
 const AUTOMATION_GROUPS = [
     {
-        title: 'Cargos e permissÃµes',
+        section: 'automationRoles',
+        title: 'Cargos e permissões',
         description: 'Tudo que entrega cargo, remove cargo ou envia comunicado por cargo.',
         icon: 'ph-identification-card',
         ids: ['autoRole', 'reactionRole', 'roleAnnouncement']
     },
     {
+        section: 'automationMessages',
         title: 'Mensagens e avisos',
         description: 'Respostas, convites, metas e mensagens programadas.',
         icon: 'ph-chat-centered-text',
         ids: ['inviteTracker', 'autoResponse', 'scheduledMessage', 'memberGoalNotice']
     },
     {
+        section: 'automationChannels',
         title: 'Controle de canais',
         description: 'Regras que organizam canais, threads e uso de comandos.',
         icon: 'ph-sliders-horizontal',
         ids: ['autoThread', 'commandChannelBlock']
     }
 ];
+
+function obterGrupoAutomacaoPorSecao(secao) {
+    return AUTOMATION_GROUPS.find((grupo) => grupo.section === secao) || null;
+}
+
+function secaoEhAutomacao(secao) {
+    return secao === 'automations' || Boolean(obterGrupoAutomacaoPorSecao(secao));
+}
+
 const ROLE_ANNOUNCEMENT_DEFAULTS = {
     roleId: '',
     roleIdName: '',
@@ -587,6 +602,18 @@ const DASHBOARD_SECTIONS = {
     automations: {
         title: 'Automações',
         description: 'Ações automáticas do servidor.'
+    },
+    automationRoles: {
+        title: 'Auto cargos',
+        description: 'Auto cargo, cargos por reação e anúncio por cargo.'
+    },
+    automationMessages: {
+        title: 'Mensagens',
+        description: 'Respostas automáticas, convites, metas e mensagens agendadas.'
+    },
+    automationChannels: {
+        title: 'Canais',
+        description: 'Threads automáticas e bloqueio de comandos por canal.'
     }
 };
 const moderationLogEvents = [
@@ -893,7 +920,10 @@ async function salvarConfiguracaoPendente() {
         role: salvarModeracaoServidor,
         audit: salvarAuditoriaServidor,
         security: salvarSegurancaServidor,
-        automations: salvarAutomacoesServidor
+        automations: salvarAutomacoesServidor,
+        automationRoles: salvarAutomacoesServidor,
+        automationMessages: salvarAutomacoesServidor,
+        automationChannels: salvarAutomacoesServidor
     };
     const acao = acoes[secao] || salvarModeracaoServidor;
 
@@ -1864,9 +1894,9 @@ function selecionarSecaoDashboard(secao = 'setup', opcoes = {}) {
         return;
     }
 
-    if (secao === 'automations') {
+    if (secaoEhAutomacao(secao)) {
         automacaoRegraEditandoId = '';
-        painelSecao.innerHTML = AutomationsPage(serverName);
+        painelSecao.innerHTML = AutomationsPage(serverName, secao);
         carregarModeracaoServidor(secao);
         return;
     }
@@ -3145,7 +3175,7 @@ function adicionarCargoLiberadoAviso() {
     moderacaoAtual.permissoes.cargos_aviso = proximos;
     renderizarCargosLiberadosAviso(proximos);
     select.value = '';
-    marcarConfiguracaoAlterada('automations');
+    marcarConfiguracaoAlterada(obterSecaoDashboardAtiva());
     mostrarStatusModeracao('Cargo adicionado. Clique em salvar configuracao para sincronizar.', 'success');
 }
 
@@ -3154,7 +3184,7 @@ function removerCargoLiberadoAviso(roleId) {
     moderacaoAtual.permissoes = normalizarPermissoesModeracaoLocal(moderacaoAtual.permissoes);
     moderacaoAtual.permissoes.cargos_aviso = proximos;
     renderizarCargosLiberadosAviso(proximos);
-    marcarConfiguracaoAlterada('automations');
+    marcarConfiguracaoAlterada(obterSecaoDashboardAtiva());
 }
 
 function aplicarPermissoesAnuncioCargoDoPainel() {
@@ -3269,7 +3299,7 @@ function configurarPreviewAnuncioCargo() {
         if (!elemento) return;
         const aoAlterar = () => {
             atualizarPreviewAnuncioCargo();
-            marcarConfiguracaoAlterada('automations');
+            marcarConfiguracaoAlterada(obterSecaoDashboardAtiva());
         };
         elemento.oninput = aoAlterar;
         elemento.onchange = aoAlterar;
@@ -3306,10 +3336,6 @@ function AutomationOptionCard(opcao) {
 }
 
 function AutomationGroupSection(grupo) {
-    const opcoes = grupo.ids
-        .map((id) => automationSettings.find((opcao) => opcao.id === id))
-        .filter(Boolean);
-
     return `
         <section class="advanced-section automation-group-section">
             <div class="advanced-section-heading automation-group-heading">
@@ -3319,17 +3345,32 @@ function AutomationGroupSection(grupo) {
                     <p>${escaparHTML(grupo.description)}</p>
                 </div>
             </div>
-            <div class="automation-option-grid">
-                ${opcoes.map(AutomationOptionCard).join('')}
-            </div>
+            ${AutomationGroupCards(grupo)}
         </section>
     `;
 }
 
-function AutomationsPage(serverName) {
+function AutomationGroupCards(grupo) {
+    const opcoes = grupo.ids
+        .map((id) => automationSettings.find((opcao) => opcao.id === id))
+        .filter(Boolean);
+
+    return `
+        <div class="automation-option-grid">
+            ${opcoes.map(AutomationOptionCard).join('')}
+        </div>
+    `;
+}
+
+function AutomationsPage(serverName, secao = 'automations') {
+    const grupoAtual = obterGrupoAutomacaoPorSecao(secao);
+    const titulo = grupoAtual?.title || 'Ações automáticas do servidor';
+    const descricao = grupoAtual?.description || 'Cada card controla uma automacao separada. Ative, preencha os campos e salve.';
+    const icone = grupoAtual?.icon || 'ph-lightning';
+
     return `
         <div class="vm-panel-heading">
-            <span>Automações</span>
+            <span>${escaparHTML(grupoAtual?.title || 'Automações')}</span>
             <strong>${escaparHTML(serverName)}</strong>
         </div>
         <div class="advanced-config-page automations-page">
@@ -3337,10 +3378,10 @@ function AutomationsPage(serverName) {
             <section class="advanced-section">
                 <div class="advanced-section-heading automation-page-heading">
                     <div class="advanced-section-title">
-                        <i class="ph ph-lightning"></i>
+                        <i class="ph ${escaparHTML(icone)}"></i>
                         <div>
-                            <strong>Ações automáticas do servidor</strong>
-                            <p>Cada card controla uma automacao separada. Ative, preencha os campos e salve.</p>
+                            <strong>${escaparHTML(titulo)}</strong>
+                            <p>${escaparHTML(descricao)}</p>
                         </div>
                     </div>
                     <button type="button" class="automation-refresh-button" onclick="atualizarRecursosModeracaoAtual()">
@@ -3348,9 +3389,7 @@ function AutomationsPage(serverName) {
                         Atualizar canais/cargos
                     </button>
                 </div>
-                <div class="automation-group-list">
-                    ${AUTOMATION_GROUPS.map(AutomationGroupSection).join('')}
-                </div>
+                ${grupoAtual ? AutomationGroupCards(grupoAtual) : `<div class="automation-group-list">${AUTOMATION_GROUPS.map(AutomationGroupSection).join('')}</div>`}
             </section>
             <button type="button" onclick="salvarAutomacoesServidor()" class="vm-save-button">
                 <i class="ph ph-lightning" id="mod-save-icon"></i>
@@ -3484,7 +3523,7 @@ function preencherPainelConfiguracaoAtual(secao, canais = [], cargos = []) {
         return;
     }
 
-    if (secao === 'automations') {
+    if (secaoEhAutomacao(secao)) {
         preencherCamposAutomacoes(canais, cargos);
         return;
     }
@@ -3525,9 +3564,12 @@ function coletarCamposAutomacoes() {
     moderacaoAtual.automacoes = normalizarAutomacoesLocal(moderacaoAtual.automacoes);
     moderacaoAtual.automacoes.options = moderacaoAtual.automacoes.options.map((estado) => {
         const base = automationSettings.find((opcao) => opcao.id === estado.id) || {};
+        const toggle = document.getElementById(`automation_enabled_${estado.id}`);
+        if (!toggle) return estado;
+
         const novo = {
             ...estado,
-            enabled: Boolean(document.getElementById(`automation_enabled_${estado.id}`)?.checked),
+            enabled: Boolean(toggle.checked),
             values: { ...(estado.values || {}) }
         };
 
@@ -3635,7 +3677,7 @@ function adicionarOuAtualizarRegraAutoResposta() {
     const resumo = document.getElementById('automation-summary');
     if (resumo) resumo.innerHTML = AutomationSummary();
     mostrarStatusModeracao('Regra pronta. Salve as automações para sincronizar.', 'success');
-    marcarConfiguracaoAlterada('automations');
+    marcarConfiguracaoAlterada(obterSecaoDashboardAtiva());
 }
 
 function editarRegraAutoResposta(id) {
@@ -3672,7 +3714,7 @@ function excluirRegraAutoResposta(id) {
     renderizarListaAutoRespostas();
     const resumo = document.getElementById('automation-summary');
     if (resumo) resumo.innerHTML = AutomationSummary();
-    marcarConfiguracaoAlterada('automations');
+    marcarConfiguracaoAlterada(obterSecaoDashboardAtiva());
 }
 
 function limparEditorAutoResposta(limparStatus = true) {
@@ -4093,7 +4135,7 @@ function adicionarOuAtualizarReactionRole() {
     const resumo = document.getElementById('automation-summary');
     if (resumo) resumo.innerHTML = AutomationSummary();
     mostrarStatusModeracao('Reaction role pronta. Salve as automações para sincronizar.', 'success');
-    marcarConfiguracaoAlterada('automations');
+    marcarConfiguracaoAlterada(obterSecaoDashboardAtiva());
     return true;
 }
 
@@ -4124,7 +4166,7 @@ function excluirReactionRole(id) {
     renderizarListaReactionRoles();
     const resumo = document.getElementById('automation-summary');
     if (resumo) resumo.innerHTML = AutomationSummary();
-    marcarConfiguracaoAlterada('automations');
+    marcarConfiguracaoAlterada(obterSecaoDashboardAtiva());
 }
 
 function limparEditorReactionRole(limparStatus = true) {
@@ -4228,7 +4270,7 @@ function adicionarOuAtualizarBloqueioComando() {
     const resumo = document.getElementById('automation-summary');
     if (resumo) resumo.innerHTML = AutomationSummary();
     mostrarStatusModeracao('Bloqueio pronto. Salve as automacoes para sincronizar.', 'success');
-    marcarConfiguracaoAlterada('automations');
+    marcarConfiguracaoAlterada(obterSecaoDashboardAtiva());
 }
 
 function editarBloqueioComando(id) {
@@ -4253,7 +4295,7 @@ function excluirBloqueioComando(id) {
     renderizarListaBloqueiosComando();
     const resumo = document.getElementById('automation-summary');
     if (resumo) resumo.innerHTML = AutomationSummary();
-    marcarConfiguracaoAlterada('automations');
+    marcarConfiguracaoAlterada(obterSecaoDashboardAtiva());
 }
 
 function limparEditorBloqueioComando(limparStatus = true) {
