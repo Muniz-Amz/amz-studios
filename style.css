@@ -3174,35 +3174,6 @@ section {
     font-size: 17px;
 }
 
-.automation-refresh-button {
-    min-height: 36px;
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    background: rgba(255, 255, 255, 0.04);
-    color: #ffffff;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 0 12px;
-    font-size: 10px;
-    font-weight: 900;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.automation-refresh-button:hover {
-    border-color: rgba(255, 255, 255, 0.45);
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.automation-refresh-button i {
-    width: auto;
-    height: auto;
-    border: 0;
-    font-size: 14px;
-}
-
 .advanced-card-heading,
 .audit-event-main {
     display: flex;
@@ -4061,10 +4032,6 @@ section {
     .automation-page-heading {
         align-items: stretch;
         flex-direction: column;
-    }
-
-    .automation-refresh-button {
-        width: 100%;
     }
 
     .invite-tracker-panel-head,

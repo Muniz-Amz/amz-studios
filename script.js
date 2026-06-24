@@ -11,6 +11,7 @@ const DISCORD_BOT_PERMISSIONS = '8';
 const DISCORD_PERMISSION_ADMINISTRATOR = BigInt(0x8);
 const DISCORD_PERMISSION_MANAGE_GUILD = BigInt(0x20);
 const DISCORD_USER_KEY = 'discord_usuario_amz';
+const DASHBOARD_SERVER_KEY = 'amz_dashboard_server_atual';
 const MAX_MINUTOS_LIMPEZA = 1440;
 const ADMIN_TOKEN_KEY = 'amz_admin_token';
 const SITE_THEME_KEY = 'amz_site_theme';
@@ -414,6 +415,8 @@ let comandoBloqueioEditandoId = '';
 let reactionRoleEditandoId = '';
 let moderacaoServidorCarregadoId = '';
 let moderacaoRecursosAtual = { canais: [], cargos: [], atualizadoEm: 0 };
+let servidorDashboardRestaurado = false;
+const sincronizacoesRecursosServidor = new Map();
 let saveTrayListenerAtivo = false;
 let saveTrayToastTimer = null;
 let adminLogsTimer = null;
@@ -549,6 +552,31 @@ function salvarServidoresCache(servidores = []) {
     localStorage.setItem('servidores_amz', JSON.stringify(servidores));
 }
 
+function obterServidorDashboardSalvo() {
+    try {
+        return JSON.parse(localStorage.getItem(DASHBOARD_SERVER_KEY) || 'null');
+    } catch (erro) {
+        console.warn('Servidor atual do dashboard invalido:', erro);
+        return null;
+    }
+}
+
+function salvarServidorDashboardAtual(serverId, serverName, serverIcon = '', section = 'setup') {
+    if (!serverId) return;
+    localStorage.setItem(DASHBOARD_SERVER_KEY, JSON.stringify({
+        id: String(serverId),
+        nome: String(serverName || ''),
+        icon: String(serverIcon || ''),
+        section: DASHBOARD_SECTIONS[section] ? section : 'setup'
+    }));
+}
+
+function atualizarSecaoServidorDashboardSalvo(section) {
+    const servidor = obterServidorDashboardSalvo();
+    if (!servidor?.id || !DASHBOARD_SECTIONS[section]) return;
+    salvarServidorDashboardAtual(servidor.id, servidor.nome, servidor.icon, section);
+}
+
 function obterUsuarioDiscordCache() {
     try {
         return JSON.parse(localStorage.getItem(DISCORD_USER_KEY) || 'null');
@@ -571,6 +599,8 @@ function limparSessaoDiscord() {
     localStorage.removeItem('discord_token');
     localStorage.removeItem('servidores_amz');
     localStorage.removeItem(DISCORD_USER_KEY);
+    localStorage.removeItem(DASHBOARD_SERVER_KEY);
+    servidorDashboardRestaurado = false;
     renderizarPerfilDiscordPainel();
 }
 
@@ -1709,6 +1739,24 @@ function renderizarMenuServidor(filtro = '') {
     });
 }
 
+function restaurarServidorDashboard(servidores = []) {
+    if (servidorDashboardRestaurado) return;
+
+    const salvo = obterServidorDashboardSalvo();
+    if (!salvo?.id) return;
+
+    const servidor = servidores.find((item) => String(item.id) === String(salvo.id));
+    if (!servidor) return;
+
+    servidorDashboardRestaurado = true;
+    configurarServidor(
+        servidor.id,
+        servidor.nome || salvo.nome,
+        obterIconeServidor(servidor) || salvo.icon || '',
+        { section: salvo.section || 'setup' }
+    );
+}
+
 function renderizarServidores(servidores) {
     const container = document.getElementById('container-servidores');
     renderizarPerfilDiscordPainel();
@@ -1749,12 +1797,13 @@ function renderizarServidores(servidores) {
     });
 
     renderizarMenuServidor();
+    restaurarServidorDashboard(servidores);
 }
 
 // ==========================================
 // CONFIGURAÇÕES DO SERVIDOR
 // ==========================================
-function configurarServidor(id, nome, iconUrl = '') {
+function configurarServidor(id, nome, iconUrl = '', opcoes = {}) {
     if (moderacaoServidorCarregadoId !== id) {
         moderacaoAtual = normalizarModeracaoLocal(clonarConfig(MODERACAO_PADRAO));
         moderacaoServidorCarregadoId = '';
@@ -1781,7 +1830,12 @@ function configurarServidor(id, nome, iconUrl = '') {
         painelSecao.dataset.serverIcon = iconUrl;
     }
 
-    selecionarSecaoDashboard('setup');
+    const secaoInicial = DASHBOARD_SECTIONS[opcoes.section] ? opcoes.section : 'setup';
+    salvarServidorDashboardAtual(id, nome, iconUrl, secaoInicial);
+    sincronizarRecursosServidorAutomaticamente(id, { forcar: true }).catch((erro) => {
+        console.warn('Sincronizacao automatica inicial falhou:', erro);
+    });
+    selecionarSecaoDashboard(secaoInicial);
 }
 
 function atualizarServidorAtualNaSidebar(nome, iconUrl = '', serverId = '') {
@@ -1823,6 +1877,7 @@ function selecionarSecaoDashboard(secao = 'setup', opcoes = {}) {
 
     const serverId = painelSecao.dataset.serverId || '';
     const serverName = painelSecao.dataset.serverName || document.getElementById('nome-servidor-atual')?.innerText || '---';
+    if (serverId) atualizarSecaoServidorDashboardSalvo(secao);
 
     if (secao === 'setup') {
         painelSecao.innerHTML = `
@@ -3419,10 +3474,6 @@ function AutomationsPage(serverName, secao = 'automations') {
                             <p>${escaparHTML(descricao)}</p>
                         </div>
                     </div>
-                    <button type="button" class="automation-refresh-button" onclick="atualizarRecursosModeracaoAtual()">
-                        <i class="ph ph-arrows-clockwise"></i>
-                        Atualizar canais/cargos
-                    </button>
                 </div>
                 ${grupoAtual ? AutomationGroupCards(grupoAtual) : `<div class="automation-group-list">${AUTOMATION_GROUPS.map(AutomationGroupSection).join('')}</div>`}
             </section>
@@ -4541,6 +4592,10 @@ function chaveModeracaoRecursosCache(serverId) {
     return `moderacao_recursos_cache_${serverId}`;
 }
 
+function chaveCanaisServidorCache(serverId) {
+    return `canais_servidor_cache_${serverId}`;
+}
+
 function obterModeracaoCache(serverId) {
     try {
         return JSON.parse(localStorage.getItem(chaveModeracaoCache(serverId)) || 'null');
@@ -4572,13 +4627,30 @@ function salvarRecursosModeracaoCache(serverId, canais = [], cargos = []) {
     localStorage.setItem(chaveModeracaoRecursosCache(serverId), JSON.stringify({ canais, cargos, atualizadoEm: Date.now() }));
 }
 
+function obterCanaisServidorCache(serverId) {
+    try {
+        const cache = JSON.parse(localStorage.getItem(chaveCanaisServidorCache(serverId)) || '{}');
+        return {
+            canais: Array.isArray(cache.canais) ? cache.canais : [],
+            atualizadoEm: Number.parseInt(cache.atualizadoEm || '0', 10) || 0
+        };
+    } catch {
+        return { canais: [], atualizadoEm: 0 };
+    }
+}
+
+function salvarCanaisServidorCache(serverId, canais = []) {
+    if (!serverId) return;
+    localStorage.setItem(chaveCanaisServidorCache(serverId), JSON.stringify({ canais, atualizadoEm: Date.now() }));
+}
+
 function recursosModeracaoRecentes(recursos = {}) {
     return Date.now() - Number(recursos.atualizadoEm || 0) < MODERACAO_RECURSOS_CACHE_MS;
 }
 
 async function buscarRecursosModeracaoServidor(serverId, token) {
     const [responseCanais, responseCargos] = await Promise.all([
-        fetch(urlSemCache(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/canais`), {
+        fetch(urlSemCache(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/canais?incluir_calls=1`), {
             headers: { 'Authorization': `Bearer ${token}` },
             cache: 'no-store'
         }),
@@ -4591,6 +4663,10 @@ async function buscarRecursosModeracaoServidor(serverId, token) {
     const resultadoCanais = await lerJsonResposta(responseCanais);
     const resultadoCargos = await lerJsonResposta(responseCargos);
 
+    if (responseCanais.status === 401 || responseCargos.status === 401) {
+        limparSessaoDiscord();
+    }
+
     if (!responseCanais.ok || resultadoCanais.status !== 'sucesso') {
         throw new Error(resultadoCanais.mensagem || resultadoCanais.erro || 'Nao foi possivel carregar os canais.');
     }
@@ -4599,10 +4675,72 @@ async function buscarRecursosModeracaoServidor(serverId, token) {
         throw new Error(resultadoCargos.mensagem || resultadoCargos.erro || 'Nao foi possivel carregar os cargos.');
     }
 
+    const canaisTodos = resultadoCanais.canais || [];
     return {
-        canais: resultadoCanais.canais || [],
-        cargos: resultadoCargos.cargos || []
+        canais: canaisTodos.filter((canal) => canal.tipo !== 'call'),
+        canaisTodos,
+        cargos: resultadoCargos.cargos || [],
+        atualizadoEm: Date.now()
     };
+}
+
+async function sincronizarRecursosServidorAutomaticamente(serverId, opcoes = {}) {
+    const token = localStorage.getItem('discord_token');
+    const chave = String(serverId || '');
+
+    if (!chave) throw new Error('Servidor nao identificado.');
+
+    if (token === 'demo-token') {
+        const canaisTodos = obterCanaisDemo();
+        const recursos = {
+            canais: canaisTodos.filter((canal) => canal.tipo !== 'call'),
+            canaisTodos,
+            cargos: obterCargosDemo(),
+            atualizadoEm: Date.now()
+        };
+        salvarRecursosModeracaoCache(chave, recursos.canais, recursos.cargos);
+        salvarCanaisServidorCache(chave, recursos.canaisTodos);
+        return recursos;
+    }
+
+    if (!token) throw new Error('Sessao expirada. Entre novamente com o Discord.');
+
+    if (sincronizacoesRecursosServidor.has(chave)) {
+        return sincronizacoesRecursosServidor.get(chave);
+    }
+
+    const recursosCache = obterRecursosModeracaoCache(chave);
+    const canaisCache = obterCanaisServidorCache(chave);
+    if (!opcoes.forcar && recursosModeracaoRecentes(recursosCache) && recursosModeracaoRecentes(canaisCache)) {
+        return {
+            canais: recursosCache.canais,
+            canaisTodos: canaisCache.canais,
+            cargos: recursosCache.cargos,
+            atualizadoEm: Math.max(recursosCache.atualizadoEm, canaisCache.atualizadoEm)
+        };
+    }
+
+    const sincronizacao = buscarRecursosModeracaoServidor(chave, token)
+        .then((recursos) => {
+            salvarRecursosModeracaoCache(chave, recursos.canais, recursos.cargos);
+            salvarCanaisServidorCache(chave, recursos.canaisTodos);
+
+            if (obterServidorAtualId() === chave) {
+                moderacaoRecursosAtual = {
+                    canais: recursos.canais,
+                    cargos: recursos.cargos,
+                    atualizadoEm: recursos.atualizadoEm
+                };
+            }
+
+            return recursos;
+        })
+        .finally(() => {
+            sincronizacoesRecursosServidor.delete(chave);
+        });
+
+    sincronizacoesRecursosServidor.set(chave, sincronizacao);
+    return sincronizacao;
 }
 
 async function carregarModeracaoServidor(secao) {
@@ -4663,7 +4801,7 @@ async function carregarModeracaoServidor(secao) {
             fetch(`${API_URL}/api/config/${encodeURIComponent(serverId)}/moderacao`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }),
-            buscarRecursosModeracaoServidor(serverId, token)
+            sincronizarRecursosServidorAutomaticamente(serverId)
         ]);
         const resultadoConfig = await lerJsonResposta(responseConfig);
 
@@ -4693,46 +4831,6 @@ async function carregarModeracaoServidor(secao) {
         moderacaoAtual = normalizarModeracaoLocal(clonarConfig(MODERACAO_PADRAO));
         preencherPainelConfiguracaoAtual(secao, [], []);
         mostrarStatusModeracao('Erro ao conectar na API.');
-    }
-}
-
-async function atualizarRecursosModeracaoAtual() {
-    const painelSecao = document.getElementById('dashboard-section-panel');
-    const serverId = painelSecao?.dataset.serverId || '';
-    const token = localStorage.getItem('discord_token');
-    const secaoAtual = obterSecaoDashboardAtiva();
-
-    if (!serverId) {
-        mostrarStatusModeracao('Servidor nao identificado.');
-        return;
-    }
-
-    if (token === 'demo-token') {
-        const canais = obterCanaisDemo();
-        const cargos = obterCargosDemo();
-        moderacaoRecursosAtual = { canais, cargos, atualizadoEm: Date.now() };
-        preencherPainelConfiguracaoAtual(secaoAtual, canais, cargos);
-        mostrarStatusModeracao('Lista de teste atualizada no navegador.', 'success');
-        return;
-    }
-
-    if (!token) {
-        mostrarStatusModeracao('Sessao expirada. Entre novamente com o Discord.');
-        return;
-    }
-
-    try {
-        mostrarStatusModeracao('Atualizando canais e cargos direto do Discord...', 'success');
-        const recursos = await buscarRecursosModeracaoServidor(serverId, token);
-        const canais = recursos.canais || [];
-        const cargos = recursos.cargos || [];
-        moderacaoRecursosAtual = { canais, cargos, atualizadoEm: Date.now() };
-        salvarRecursosModeracaoCache(serverId, canais, cargos);
-        preencherPainelConfiguracaoAtual(secaoAtual, canais, cargos);
-        mostrarStatusModeracao('Canais e cargos atualizados.', 'success');
-    } catch (erro) {
-        console.error('Erro ao atualizar recursos de moderacao:', erro);
-        mostrarStatusModeracao(erro.message || 'Nao foi possivel atualizar canais e cargos agora.');
     }
 }
 
@@ -5151,10 +5249,19 @@ async function carregarBoasVindasServidor() {
         return;
     }
 
+    const recursosCache = obterRecursosModeracaoCache(serverId);
+    if (recursosCache.canais.length) {
+        renderizarSelectBoasVindas('welcome_canal_entrada', recursosCache.canais, config.canal_entrada_id);
+        renderizarSelectBoasVindas('welcome_canal_saida', recursosCache.canais, config.canal_saida_id);
+    }
+
     try {
-        const responseConfig = await fetch(`${API_URL}/api/config/${encodeURIComponent(serverId)}/boas-vindas`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const [responseConfig, recursos] = await Promise.all([
+            fetch(`${API_URL}/api/config/${encodeURIComponent(serverId)}/boas-vindas`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }),
+            sincronizarRecursosServidorAutomaticamente(serverId)
+        ]);
         const resultadoConfig = await lerJsonResposta(responseConfig);
 
         if (responseConfig.ok && resultadoConfig.status === 'sucesso') {
@@ -5170,38 +5277,22 @@ async function carregarBoasVindasServidor() {
             mostrarStatusBoasVindas(resultadoConfig.mensagem || resultadoConfig.erro || 'Nao foi possivel carregar os avisos.');
         }
 
-        const responseCanais = await fetch(urlSemCache(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/canais`), {
-            headers: { 'Authorization': `Bearer ${token}` },
-            cache: 'no-store'
-        });
-        const resultadoCanais = await lerJsonResposta(responseCanais);
-
-        if (responseCanais.ok && resultadoCanais.status === 'sucesso') {
-            const canais = resultadoCanais.canais || [];
-            renderizarSelectBoasVindas('welcome_canal_entrada', canais, config.canal_entrada_id);
-            renderizarSelectBoasVindas('welcome_canal_saida', canais, config.canal_saida_id);
-            preencherFormularioBoasVindas(config);
-            if (!canais.length) {
-                mostrarStatusBoasVindas('Nenhum canal de texto foi encontrado. Confira se o bot esta no servidor e consegue ver os canais.');
-                return;
-            }
-            mostrarStatusBoasVindas('Avisos carregados.', 'success');
+        const canais = recursos.canais || [];
+        renderizarSelectBoasVindas('welcome_canal_entrada', canais, config.canal_entrada_id);
+        renderizarSelectBoasVindas('welcome_canal_saida', canais, config.canal_saida_id);
+        preencherFormularioBoasVindas(config);
+        if (!canais.length) {
+            mostrarStatusBoasVindas('Nenhum canal de texto foi encontrado. Confira se o bot esta no servidor e consegue ver os canais.');
             return;
         }
-
-        if (responseCanais.status === 401) {
-            limparSessaoDiscord();
-        }
-
-        preencherFormularioBoasVindas(config);
-        renderizarEstadoSelectBoasVindas('welcome_canal_entrada', 'Canais indisponiveis');
-        renderizarEstadoSelectBoasVindas('welcome_canal_saida', 'Canais indisponiveis');
-        mostrarStatusBoasVindas(resultadoCanais.mensagem || resultadoCanais.erro || 'Nao foi possivel carregar os canais.');
+        mostrarStatusBoasVindas('Avisos carregados.', 'success');
     } catch (erro) {
         console.error('Erro ao carregar avisos:', erro);
-        renderizarEstadoSelectBoasVindas('welcome_canal_entrada', 'Erro ao carregar canais');
-        renderizarEstadoSelectBoasVindas('welcome_canal_saida', 'Erro ao carregar canais');
-        mostrarStatusBoasVindas('Erro ao conectar na API para carregar os avisos.');
+        if (!recursosCache.canais.length) {
+            renderizarEstadoSelectBoasVindas('welcome_canal_entrada', 'Erro ao carregar canais');
+            renderizarEstadoSelectBoasVindas('welcome_canal_saida', 'Erro ao carregar canais');
+        }
+        mostrarStatusBoasVindas(erro.message || 'Erro ao conectar na API para carregar os avisos.');
     }
 }
 
@@ -5430,8 +5521,13 @@ async function carregarCanaisServidor() {
 
     if (!serverId || !select) return;
 
-    select.innerHTML = '<option value="">Carregando canais...</option>';
-    select.disabled = true;
+    const cache = obterCanaisServidorCache(serverId);
+    if (cache.canais.length) {
+        renderizarSelectCanais(cache.canais);
+    } else {
+        select.innerHTML = '<option value="">Carregando canais...</option>';
+        select.disabled = true;
+    }
 
     if (token === 'demo-token') {
         renderizarSelectCanais(obterCanaisDemo());
@@ -5444,27 +5540,13 @@ async function carregarCanaisServidor() {
     }
 
     try {
-        const response = await fetch(urlSemCache(`${API_URL}/api/servidores/${encodeURIComponent(serverId)}/canais?incluir_calls=1`), {
-            headers: { 'Authorization': `Bearer ${token}` },
-            cache: 'no-store'
-        });
-        const resultado = await lerJsonResposta(response);
-
-        if (response.ok && resultado.status === 'sucesso') {
-            renderizarSelectCanais(resultado.canais || []);
-            return;
-        }
-
-        if (response.status === 401) {
-            limparSessaoDiscord();
-            renderizarErroCanais(resultado.mensagem || 'Sessao expirada. Entre novamente com o Discord.', true);
-            return;
-        }
-
-        renderizarErroCanais(resultado.mensagem || resultado.erro || 'Nao foi possivel carregar os canais.');
+        const recursos = await sincronizarRecursosServidorAutomaticamente(serverId);
+        renderizarSelectCanais(recursos.canaisTodos || []);
     } catch (erro) {
         console.error('Erro ao carregar canais:', erro);
-        renderizarErroCanais('Erro ao conectar na API para carregar os canais.');
+        if (!cache.canais.length) {
+            renderizarErroCanais(erro.message || 'Erro ao conectar na API para carregar os canais.');
+        }
     }
 }
 
