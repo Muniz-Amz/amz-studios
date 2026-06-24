@@ -175,7 +175,7 @@ const automationSettings = [
     {
         id: 'roleAnnouncement',
         title: 'Mensagem de anúncio',
-        description: 'Filtra membros por cargo e envia um anúncio bonito no privado e/ou em um canal escolhido.',
+        description: 'Publica um anúncio geral no canal ou filtra por cargo para também enviar no privado.',
         enabled: false,
         type: 'role-announcement',
         notes: ['Use para avisos importantes, eventos e comunicados por cargo.', 'O envio por privado tem limite por disparo e alguns membros podem bloquear DMs.'],
@@ -2924,8 +2924,8 @@ function RoleAnnouncementPanel() {
             <div class="advanced-section-heading">
                 <i class="ph ph-megaphone-simple"></i>
                 <div>
-                    <strong>Anúncio filtrado por cargo</strong>
-                    <p>Escolha um cargo, monte uma mensagem bonita e envie no canal de anúncio e no privado de quem tem esse cargo.</p>
+                    <strong>Mensagem de anúncio</strong>
+                    <p>Envie um anúncio geral no canal ou selecione um cargo para também mandar no privado dos membros filtrados.</p>
                 </div>
             </div>
             <div class="role-announcement-layout">
@@ -2940,7 +2940,7 @@ function RoleAnnouncementPanel() {
                     <label class="advanced-toggle-inline">
                         <span>
                             Enviar no privado
-                            <small>Tenta mandar uma DM individual para cada membro do cargo.</small>
+                            <small id="role_announcement_dm_hint">Disponível quando um cargo filtrado for selecionado.</small>
                         </span>
                         ${ToggleSwitch('role_announcement_send_dm', true)}
                     </label>
@@ -2957,9 +2957,9 @@ function RoleAnnouncementPanel() {
                         <small>Administradores sempre podem usar. A lista salva libera apenas o comando /aviso.</small>
                     </div>
                     <label class="advanced-field">
-                        <span>Cargo filtrado</span>
+                        <span>Cargo filtrado (opcional)</span>
                         ${RoleSelect({ id: 'role_announcement_role' })}
-                        <small>Somente membros com este cargo entram no envio privado.</small>
+                        <small id="role_announcement_role_hint">Sem cargo, o bot publica um anúncio geral somente no canal.</small>
                     </label>
                     <label class="advanced-field">
                         <span>Canal de anúncio</span>
@@ -3045,7 +3045,7 @@ function RoleAnnouncementPanel() {
                         </div>
                     </div>
                     <div class="role-announcement-stats">
-                        <span><i class="ph ph-user-list"></i> Filtra por cargo</span>
+                        <span id="role_announcement_mode_stat"><i class="ph ph-user-list"></i> Cargo opcional</span>
                         <span><i class="ph ph-timer"></i> Envio em lotes</span>
                         <span><i class="ph ph-shield-check"></i> Trava duplicada</span>
                     </div>
@@ -3236,7 +3236,7 @@ function coletarAnuncioCargoDoPainel() {
     aplicarPermissoesAnuncioCargoDoPainel();
 }
 
-function textoPreviewAnuncioCargo(texto) {
+function textoPreviewAnuncioCargo(texto, roleName = '') {
     const substituicoes = {
         '{user}': 'Usuario1',
         '{username}': 'Usuario1',
@@ -3246,8 +3246,8 @@ function textoPreviewAnuncioCargo(texto) {
         '{server}': 'Silent Ocean',
         '{server_upper}': 'SILENT OCEAN',
         '{member_count}': '121',
-        '{role}': 'Membro',
-        '{role_mention}': '@Membro'
+        '{role}': roleName || 'Todos',
+        '{role_mention}': roleName ? `@${roleName}` : '@everyone'
     };
     let mensagem = texto || ROLE_ANNOUNCEMENT_DEFAULTS.message;
     Object.entries(substituicoes).forEach(([chave, valor]) => {
@@ -3256,8 +3256,43 @@ function textoPreviewAnuncioCargo(texto) {
     return mensagem;
 }
 
+function atualizarModoAnuncioCargo() {
+    const cargo = document.getElementById('role_announcement_role');
+    const enviarDm = document.getElementById('role_announcement_send_dm');
+    const dicaDm = document.getElementById('role_announcement_dm_hint');
+    const dicaCargo = document.getElementById('role_announcement_role_hint');
+    const indicador = document.getElementById('role_announcement_mode_stat');
+    const temCargo = Boolean(cargo?.value);
+
+    if (enviarDm) {
+        enviarDm.disabled = !temCargo;
+        if (!temCargo) enviarDm.checked = false;
+    }
+
+    if (dicaDm) {
+        dicaDm.textContent = temCargo
+            ? 'Tenta mandar uma DM individual para cada membro do cargo.'
+            : 'Desativado no anúncio geral. Selecione um cargo para liberar DMs.';
+    }
+
+    if (dicaCargo) {
+        dicaCargo.textContent = temCargo
+            ? 'Somente membros com este cargo entram no envio privado.'
+            : 'Sem cargo, o bot publica um anúncio geral somente no canal.';
+    }
+
+    if (indicador) {
+        indicador.innerHTML = temCargo
+            ? '<i class="ph ph-user-list"></i> Filtrado por cargo'
+            : '<i class="ph ph-megaphone"></i> Anúncio geral';
+    }
+
+    return temCargo;
+}
+
 function atualizarPreviewAnuncioCargo() {
     if (!document.getElementById('role_announcement_panel')) return;
+    const temCargo = atualizarModoAnuncioCargo();
     const config = obterConfigAnuncioCargoDoPainel();
     const titulo = document.getElementById('role_announcement_preview_title');
     const mensagem = document.getElementById('role_announcement_preview_message');
@@ -3266,12 +3301,12 @@ function atualizarPreviewAnuncioCargo() {
     const embed = document.getElementById('role_announcement_embed_preview');
     const destinos = [
         config.sendChannel && config.channelId ? `#${config.channelIdName || config.channelId}` : '',
-        config.sendDm ? `DM para @${config.roleIdName || config.roleId || 'cargo'}` : '',
+        temCargo && config.sendDm ? `DM para @${config.roleIdName || config.roleId}` : '',
         config.sendDm ? `${config.batchSize} por lote / pausa ${config.batchPauseSeconds}s` : ''
     ].filter(Boolean);
 
     if (titulo) titulo.textContent = config.title || ROLE_ANNOUNCEMENT_DEFAULTS.title;
-    if (mensagem) mensagem.textContent = textoPreviewAnuncioCargo(config.message);
+    if (mensagem) mensagem.textContent = textoPreviewAnuncioCargo(config.message, temCargo ? (config.roleIdName || config.roleId) : '');
     if (rodape) rodape.textContent = config.footer || ROLE_ANNOUNCEMENT_DEFAULTS.footer;
     if (alvo) alvo.textContent = destinos.length ? destinos.join(' + ') : 'Nenhum destino ativo';
     if (embed) embed.style.borderLeftColor = config.color || ROLE_ANNOUNCEMENT_DEFAULTS.color;
@@ -3956,10 +3991,12 @@ async function publicarAnuncioCargoDiscord() {
     const botao = document.getElementById('role_announcement_send_now');
     const botaoHtml = botao?.innerHTML || '';
     const config = obterConfigAnuncioCargoDoPainel();
+    const anuncioGeral = !config.roleId;
 
-    if (!config.roleId) {
-        mostrarStatusModeracao('Escolha o cargo que recebera o anuncio.');
-        return false;
+    if (anuncioGeral) {
+        config.sendDm = false;
+        const enviarDm = document.getElementById('role_announcement_send_dm');
+        if (enviarDm) enviarDm.checked = false;
     }
 
     if (config.sendChannel && !config.channelId) {
@@ -3968,7 +4005,11 @@ async function publicarAnuncioCargoDiscord() {
     }
 
     if (!config.sendChannel && !config.sendDm) {
-        mostrarStatusModeracao('Ative pelo menos um destino: canal ou privado.');
+        mostrarStatusModeracao(
+            anuncioGeral
+                ? 'Sem cargo selecionado, ative o envio no canal para publicar o anuncio geral.'
+                : 'Ative pelo menos um destino: canal ou privado.'
+        );
         return false;
     }
 
@@ -4017,7 +4058,11 @@ async function publicarAnuncioCargoDiscord() {
 
         const envio = resultado.resultado || {};
         if (envio.status === 'queued') {
-            mostrarStatusModeracao(`Envio seguro iniciado. Lote de ${envio.batchSize || config.batchSize}, pausa de ${envio.batchPauseSeconds || config.batchPauseSeconds}s. Acompanhe o progresso nos logs do painel ADM.`, 'success');
+            if (envio.mode === 'general') {
+                mostrarStatusModeracao('Anuncio geral iniciado no canal selecionado.', 'success');
+            } else {
+                mostrarStatusModeracao(`Envio seguro iniciado. Lote de ${envio.batchSize || config.batchSize}, pausa de ${envio.batchPauseSeconds || config.batchPauseSeconds}s. Acompanhe o progresso nos logs do painel ADM.`, 'success');
+            }
         } else {
             mostrarStatusModeracao(resultado.mensagem || 'Envio seguro iniciado.', 'success');
         }

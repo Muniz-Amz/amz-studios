@@ -87,8 +87,10 @@ def normalizar_delay_dm_anuncio(valor):
 
 
 def substituir_variaveis_anuncio(texto, guild, role, member=None):
-    usuario_nome = getattr(member, "display_name", "membro do cargo")
+    usuario_nome = getattr(member, "display_name", "membro do cargo" if role else "membro")
     usuario_tag = str(member) if member else "usuario#0000"
+    role_name = getattr(role, "name", "Todos")
+    role_mention = getattr(role, "mention", "@everyone")
     substituicoes = {
         "{user}": usuario_nome,
         "{username}": usuario_nome,
@@ -98,8 +100,8 @@ def substituir_variaveis_anuncio(texto, guild, role, member=None):
         "{server}": guild.name,
         "{server_upper}": guild.name.upper(),
         "{member_count}": str(guild.member_count or len(guild.members)),
-        "{role}": role.name,
-        "{role_mention}": role.mention,
+        "{role}": role_name,
+        "{role_mention}": role_mention,
     }
 
     mensagem = str(texto or "")
@@ -109,20 +111,25 @@ def substituir_variaveis_anuncio(texto, guild, role, member=None):
 
 
 def preparar_config_anuncio_cargo(guild, dados):
-    try:
-        role_id = int(dados.get("roleId") or 0)
-    except (TypeError, ValueError):
-        return None, "Escolha um cargo valido para filtrar os membros."
+    role = None
+    role_id_bruto = str(dados.get("roleId") or "").strip()
+    if role_id_bruto:
+        try:
+            role_id = int(role_id_bruto)
+        except (TypeError, ValueError):
+            return None, "Escolha um cargo valido para filtrar os membros."
 
-    role = guild.get_role(role_id)
-    if not role or role.is_default():
-        return None, "Cargo nao encontrado ou invalido para filtro."
+        role = guild.get_role(role_id)
+        if not role or role.is_default():
+            return None, "Cargo nao encontrado ou invalido para filtro."
 
     enviar_canal = normalizar_bool_anuncio(dados.get("sendChannel"), True)
-    enviar_dm = normalizar_bool_anuncio(dados.get("sendDm"), True)
+    enviar_dm = normalizar_bool_anuncio(dados.get("sendDm"), True) and role is not None
     incluir_bots = normalizar_bool_anuncio(dados.get("includeBots"), False)
 
     if not enviar_canal and not enviar_dm:
+        if role is None:
+            return None, "Sem cargo selecionado, ative o envio no canal para publicar um anuncio geral."
         return None, "Ative pelo menos um destino: canal de anuncio ou privado dos membros."
 
     canal = None
@@ -182,7 +189,8 @@ def construir_embed_anuncio_cargo(guild, config, member=None):
         timestamp=datetime.now(timezone.utc),
     )
     embed.add_field(name="Servidor", value=guild.name, inline=True)
-    embed.add_field(name="Cargo", value=role.name, inline=True)
+    if role:
+        embed.add_field(name="Cargo", value=role.name, inline=True)
     if config["imageUrl"]:
         embed.set_image(url=config["imageUrl"])
     if config["footer"]:
@@ -240,15 +248,18 @@ async def executar_envio_anuncio_cargo_seguro(server_id, config, job_id, job_key
     dms_enviadas = 0
     dms_falharam = 0
     membros = []
+    role = config["role"]
+    alvo_nome = f"@{role.name}" if role else "anuncio geral"
+    role_id = getattr(role, "id", None)
 
     try:
         if hasattr(bot, "registrar_evento"):
             bot.registrar_evento(
                 "role_announcement_started",
-                f"Envio seguro de anuncio iniciado para @{config['role'].name}.",
+                f"Envio seguro iniciado para {alvo_nome}.",
                 guild_id=guild.id,
                 channel_id=getattr(canal, "id", None),
-                role_id=config["role"].id,
+                role_id=role_id,
                 job_id=job_id,
                 batch_size=config["batchSize"],
                 batch_pause_seconds=config["batchPauseSeconds"],
@@ -271,10 +282,10 @@ async def executar_envio_anuncio_cargo_seguro(server_id, config, job_id, job_key
             mensagem_canal_id = str(mensagem_canal.id)
             jump_url = mensagem_canal.jump_url
 
-        if config["sendDm"]:
+        if config["sendDm"] and role:
             membros = await coletar_membros_anuncio_cargo(
                 guild,
-                config["role"],
+                role,
                 config["includeBots"],
                 config["maxRecipients"],
             )
@@ -298,7 +309,7 @@ async def executar_envio_anuncio_cargo_seguro(server_id, config, job_id, job_key
                         f"Anuncio por cargo em progresso: {indice}/{total_membros} membro(s) processado(s).",
                         guild_id=guild.id,
                         channel_id=getattr(canal, "id", None),
-                        role_id=config["role"].id,
+                        role_id=role_id,
                         job_id=job_id,
                         processed=indice,
                         total=total_membros,
@@ -317,10 +328,10 @@ async def executar_envio_anuncio_cargo_seguro(server_id, config, job_id, job_key
         if hasattr(bot, "registrar_evento"):
             bot.registrar_evento(
                 "role_announcement_sent",
-                f"Anuncio por cargo concluido para @{config['role'].name}.",
+                f"Envio concluido para {alvo_nome}.",
                 guild_id=guild.id,
                 channel_id=getattr(canal, "id", None),
-                role_id=config["role"].id,
+                role_id=role_id,
                 job_id=job_id,
                 channel_sent=canal_enviado,
                 message_id=mensagem_canal_id,
@@ -353,15 +364,18 @@ async def iniciar_anuncio_cargo_async(server_id, dados):
     if erro:
         return None, erro
 
-    job_key = f"{guild.id}:{config['role'].id}"
+    role = config["role"]
+    role_id = str(role.id) if role else ""
+    role_name = role.name if role else ""
+    job_key = f"{guild.id}:{role_id or 'geral'}:{getattr(config['canal'], 'id', 'sem-canal')}"
     if job_key in ROLE_ANNOUNCEMENT_ACTIVE_JOBS:
-        return None, "Ja existe um anuncio em envio para esse cargo. Aguarde terminar antes de iniciar outro."
+        return None, "Ja existe um anuncio igual em envio. Aguarde terminar antes de iniciar outro."
 
     job_id = uuid.uuid4().hex[:12]
     ROLE_ANNOUNCEMENT_ACTIVE_JOBS[job_key] = {
         "jobId": job_id,
         "guildId": str(guild.id),
-        "roleId": str(config["role"].id),
+        "roleId": role_id,
         "startedAt": agora_iso(),
     }
     asyncio.create_task(executar_envio_anuncio_cargo_seguro(server_id, config, job_id, job_key))
@@ -369,8 +383,9 @@ async def iniciar_anuncio_cargo_async(server_id, dados):
     return {
         "jobId": job_id,
         "status": "queued",
-        "roleId": str(config["role"].id),
-        "roleName": config["role"].name,
+        "roleId": role_id,
+        "roleName": role_name,
+        "mode": "role" if role else "general",
         "channelId": str(config["canal"].id) if config["canal"] else "",
         "channelName": config["canal"].name if config["canal"] else "",
         "sendChannel": config["sendChannel"],
