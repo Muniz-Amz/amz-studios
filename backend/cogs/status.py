@@ -9,20 +9,29 @@ from security.discord_permissions import usuario_e_admin_ou_dono
 
 
 COMANDOS_HELP = {
-    "Administracao": [
-        ("/amz info", "Mostra status resumido do bot, Discord e banco de dados."),
+    "Administracao e status": [
+        ("/amz info", "Mostra status, uptime, sincronizacao slash e banco de dados."),
         ("/amz ajuda", "Mostra esta central de comandos para administradores."),
         ("/admin deploy", "Solicita redeploy no Render quando o deploy hook estiver configurado."),
         ("@AMZ Bot", "Envia o link do site/dashboard no canal."),
     ],
     "Moderacao": [
-        ("/mod limpar quantidade", "Apaga de 1 a 1000 mensagens recentes do canal atual."),
-        ("/mod advertir usuario motivo", "Registra uma advertencia e envia o log no canal configurado."),
+        ("/mod limpar quantidade", "Apaga mensagens recentes sem remover mensagens fixadas."),
+        ("/mod advertir usuario motivo", "Registra advertencia, envia DM e publica o log configurado."),
         ("/mod advertencias usuario", "Consulta as advertencias ativas de um membro."),
         ("/mod remover-advertencia usuario id motivo", "Remove uma advertencia pelo ID."),
-        ("/aviso cargo mensagem canal imagem", "Envia aviso por cargo com canal e imagem opcionais."),
         ("Painel ADM", "Banir, expulsar, castigar e consultar membros pelo site."),
-        ("Logs", "Registra mensagens apagadas/editadas, bans, castigos, canais e cargos."),
+    ],
+    "Anuncios e mensagens": [
+        ("/aviso cargo mensagem [canal] [imagem]", "Envia aviso ao cargo; canal e imagem sao opcionais."),
+        ("Anuncio pelo painel", "Sem cargo publica no canal; com cargo pode enviar DMs em lotes."),
+        ("Entrada e saida", "Mensagens automaticas configuradas pelo dashboard."),
+    ],
+    "Automacoes do painel": [
+        ("Auto cargos", "Cargo de entrada e cargos entregues por reacao."),
+        ("Mensagens", "Auto respostas, convites, metas e mensagens agendadas."),
+        ("Canais", "Auto threads, limpeza e bloqueio de comandos por canal."),
+        ("Auditoria e seguranca", "Logs por evento, anti-raid e protecao contra links suspeitos."),
     ],
     "Midia": [
         ("/midia gifimagem arquivo", "Transforma uma imagem enviada em GIF."),
@@ -94,16 +103,27 @@ class StatusCog(commands.Cog):
     def usuario_autorizado(self, guild, usuario):
         return usuario_e_admin_ou_dono(guild, usuario)
 
+    def contar_comandos_slash(self):
+        def contar(comando):
+            filhos = list(getattr(comando, "commands", []) or [])
+            if filhos:
+                return sum(contar(filho) for filho in filhos)
+            return 1
+
+        return sum(contar(comando) for comando in self.bot.tree.get_commands())
+
     async def montar_embed_info(self, guild=None, solicitante=None):
         banco = await status_banco_dados()
         latencia = self.bot.latency * 1000 if self.bot.latency is not None else None
         total_membros = sum((server.member_count or len(server.members)) for server in self.bot.guilds)
         total_canais = sum(len(server.channels) for server in self.bot.guilds)
+        total_comandos = self.contar_comandos_slash()
+        guilds_sincronizadas = len(getattr(self.bot, "slash_synced_guilds", set()))
         avatar_bot = str(self.bot.user.display_avatar.url) if self.bot.user else None
 
         embed = discord.Embed(
             title="AMZ Bot | Status",
-            description="Resumo rapido de saude e performance.",
+            description="Saude do bot, sincronizacao dos comandos e recursos disponiveis.",
             color=discord.Color.from_rgb(255, 255, 255),
             timestamp=datetime.now(timezone.utc),
         )
@@ -143,6 +163,38 @@ class StatusCog(commands.Cog):
             ),
             inline=True,
         )
+        embed.add_field(
+            name="Comandos e modulos",
+            value=(
+                f"Slash commands: {formatar_numero(total_comandos)}\n"
+                f"Modulos carregados: {formatar_numero(len(self.bot.cogs))}\n"
+                f"Servidores sincronizados: {formatar_numero(guilds_sincronizadas)}\n"
+                f"Ultima sincronizacao: {formatar_data_discord(getattr(self.bot, 'last_slash_sync_at', None))}"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="Recursos principais",
+            value=(
+                "Advertencias persistentes e logs por evento\n"
+                "Anuncios gerais ou filtrados por cargo\n"
+                "Auto cargo, cargos por reacao e auto respostas\n"
+                "Entrada/saida, anti-raid, limpeza e auditoria"
+            ),
+            inline=False,
+        )
+
+        if guild:
+            embed.add_field(
+                name="Servidor atual",
+                value=(
+                    f"Nome: {guild.name}\n"
+                    f"ID: `{guild.id}`\n"
+                    f"Membros: {formatar_numero(guild.member_count or len(guild.members))}\n"
+                    f"Canais: {formatar_numero(len(guild.channels))}"
+                ),
+                inline=False,
+            )
 
         if not banco.get("online") and banco.get("erro"):
             embed.add_field(name="Erro do banco", value=str(banco.get("erro"))[:900], inline=False)
@@ -154,7 +206,10 @@ class StatusCog(commands.Cog):
     def montar_embed_help(self, solicitante=None):
         embed = discord.Embed(
             title="AMZ Bot | Help",
-            description="Central de comandos do bot. Visivel apenas para administradores.",
+            description=(
+                "Central atualizada de comandos e recursos. "
+                "Parametros entre `[colchetes]` sao opcionais."
+            ),
             color=discord.Color.from_rgb(255, 255, 255),
             timestamp=datetime.now(timezone.utc),
         )
