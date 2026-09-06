@@ -861,22 +861,24 @@ async def atualizar_status_limpeza(server_id, canal_id, status, motivo=""):
     agora = _agora_iso()
     atualizacao = {
         "$set": {
-            "limpezas.$[limpeza].status": status,
-            "limpezas.$[limpeza].status_at": agora,
+            "limpezas.$.status": status,
+            "limpezas.$.status_at": agora,
             "atualizado_em": agora,
         }
     }
 
     if motivo:
-        atualizacao["$set"]["limpezas.$[limpeza].status_motivo"] = motivo
+        atualizacao["$set"]["limpezas.$.status_motivo"] = motivo
     else:
-        atualizacao["$unset"] = {"limpezas.$[limpeza].status_motivo": ""}
+        atualizacao["$unset"] = {"limpezas.$.status_motivo": ""}
 
-    await collection.update_one(
-        {"id": server_id},
+    # O operador posicional so atualiza quando a limpeza existe. Isso tambem
+    # evita erro em documentos antigos que ainda nao possuem o campo `limpezas`.
+    resultado = await collection.update_one(
+        {"id": server_id, "limpezas.canal_id": canal_id},
         atualizacao,
-        array_filters=[{"limpeza.canal_id": canal_id}],
     )
+    return bool(resultado.matched_count)
 
 
 async def salvar_boas_vindas(server_id, dados):
