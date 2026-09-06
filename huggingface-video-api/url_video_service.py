@@ -181,8 +181,18 @@ class UrlVideoService:
         if "unable to download api page" in texto_lower or "connection reset" in texto_lower:
             return "A plataforma recusou a conexao agora. Tente novamente ou use outro link publico."
 
+        if (
+            "unexpected response from webpage request" in texto_lower
+            or "unable to extract webpage video data" in texto_lower
+            or "unable to extract universal data" in texto_lower
+        ):
+            return (
+                "O TikTok bloqueou temporariamente a extracao desse video. "
+                "O servidor ja esta atualizado; tente outro link publico ou aguarde uma correcao do TikTok/yt-dlp."
+            )
+
         if "yt-dlp -u" in texto_lower or "latest version" in texto_lower:
-            return "O servidor precisa atualizar o yt-dlp. Reinicie/rebuild o Space e tente novamente."
+            return "O yt-dlp informou que precisa de uma versao mais nova. Rebuild o Space e tente novamente."
 
         detalhe = texto[-260:] if texto else "erro desconhecido"
         return f"Nao consegui {acao}. {detalhe}"

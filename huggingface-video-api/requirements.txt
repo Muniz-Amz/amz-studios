@@ -3,4 +3,4 @@ flask-cors
 gunicorn
 imageio-ffmpeg
 Pillow
-yt-dlp
+yt-dlp[default,curl-cffi]
