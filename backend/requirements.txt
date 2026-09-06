@@ -3,7 +3,6 @@ flask
 flask-cors
 imageio-ffmpeg
 motor
-Pillow
 pymongo
 python-dotenv
 requests

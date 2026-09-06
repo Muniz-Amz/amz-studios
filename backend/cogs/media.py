@@ -65,43 +65,28 @@ class MediaCog(commands.Cog):
         await attachment.save(input_path)
         return input_path
 
-    async def converter_anexo(self, attachment, modo, temp_dir):
+    async def converter_anexo_audio(self, attachment, temp_dir):
         media_type = tipo_anexo(attachment)
 
-        if modo == "image_gif" and media_type != "image":
-            raise MediaError("Envie uma imagem para usar esse comando.")
-
-        if modo in {"video_gif", "audio"} and media_type != "video":
+        if media_type != "video":
             raise MediaError("Envie um video para usar esse comando.")
-
-        if modo == "auto" and media_type not in {"image", "video"}:
-            raise MediaError("Envie uma imagem ou video.")
 
         input_path = await self.salvar_anexo(attachment, temp_dir)
         base = Path(nome_seguro(Path(attachment.filename).stem)).stem or "amz"
 
-        if modo == "image_gif" or (modo == "auto" and media_type == "image"):
-            output_path = Path(temp_dir) / f"{base}.gif"
-            await asyncio.to_thread(self.service.imagem_para_gif, input_path, output_path)
-            legenda = "Imagem convertida para GIF."
-        elif modo == "video_gif" or (modo == "auto" and media_type == "video"):
-            output_path = Path(temp_dir) / f"{base}.gif"
-            await asyncio.to_thread(self.service.video_para_gif, input_path, output_path)
-            legenda = f"Video convertido para GIF com limite de {self.limits.max_video_seconds}s."
-        else:
-            output_path = Path(temp_dir) / f"{base}.mp3"
-            await asyncio.to_thread(self.service.video_para_audio, input_path, output_path)
-            legenda = f"Audio extraido com limite de {formatar_limite_segundos(self.limits.max_audio_seconds)}."
+        output_path = Path(temp_dir) / f"{base}.mp3"
+        await asyncio.to_thread(self.service.video_para_audio, input_path, output_path)
+        legenda = f"Audio extraido com limite de {formatar_limite_segundos(self.limits.max_audio_seconds)}."
 
         return legenda, output_path
 
-    async def processar_slash(self, interaction, attachment, modo):
+    async def processar_audio(self, interaction, attachment):
         await interaction.response.defer(thinking=True)
 
         try:
             async with self.semaphore:
                 with tempfile.TemporaryDirectory() as temp_dir:
-                    legenda, output_path = await self.converter_anexo(attachment, modo, temp_dir)
+                    legenda, output_path = await self.converter_anexo_audio(attachment, temp_dir)
                     await interaction.followup.send(
                         f"Pronto: {legenda}",
                         file=discord.File(output_path, filename=output_path.name),
@@ -118,20 +103,10 @@ class MediaCog(commands.Cog):
                 ephemeral=True,
             )
 
-    @midia.command(name="gifimagem", description="Transforma uma imagem enviada em GIF.")
-    @app_commands.describe(arquivo="Imagem que sera transformada em GIF.")
-    async def midia_gifimagem(self, interaction: discord.Interaction, arquivo: discord.Attachment):
-        await self.processar_slash(interaction, arquivo, "image_gif")
-
-    @midia.command(name="gifvideo", description="Transforma um video enviado em GIF.")
-    @app_commands.describe(arquivo="Video que sera transformado em GIF.")
-    async def midia_gifvideo(self, interaction: discord.Interaction, arquivo: discord.Attachment):
-        await self.processar_slash(interaction, arquivo, "video_gif")
-
     @midia.command(name="audio", description="Extrai o audio de um video enviado.")
     @app_commands.describe(arquivo="Video de onde o audio sera extraido.")
     async def midia_audio(self, interaction: discord.Interaction, arquivo: discord.Attachment):
-        await self.processar_slash(interaction, arquivo, "audio")
+        await self.processar_audio(interaction, arquivo)
 
     @midia.command(name="limites", description="Mostra os limites dos comandos de midia.")
     async def midia_limites_grupo(self, interaction: discord.Interaction):
@@ -139,7 +114,6 @@ class MediaCog(commands.Cog):
             "Limites de midia:\n"
             f"- Entrada: {self.limits.max_input_mb} MB\n"
             f"- Saida: {self.limits.max_output_mb} MB\n"
-            f"- Video para GIF: {self.limits.max_video_seconds}s, {self.limits.gif_fps} FPS, largura {self.limits.max_width}px\n"
             f"- Video para audio: {formatar_limite_segundos(self.limits.max_audio_seconds)}\n"
             f"- Conversoes simultaneas: 1 por padrao",
             ephemeral=True,

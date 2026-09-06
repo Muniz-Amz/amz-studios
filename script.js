@@ -17,6 +17,7 @@ const ADMIN_TOKEN_KEY = 'amz_admin_token';
 const SITE_THEME_KEY = 'amz_site_theme';
 const SITE_THEMES = new Set(['dark', 'light']);
 const MODERACAO_RECURSOS_CACHE_MS = 5000;
+const ADMIN_STATUS_CACHE_MS = 30 * 1000;
 const SAVE_TRAY_SECTIONS = {
     setup: 'Limpeza',
     server: 'Avisos',
@@ -420,6 +421,7 @@ const sincronizacoesRecursosServidor = new Map();
 let saveTrayListenerAtivo = false;
 let saveTrayToastTimer = null;
 let adminLogsTimer = null;
+let adminStatusCache = { token: '', dados: null, atualizadoEm: 0 };
 let adminLogsCache = [];
 let adminLogFiltroAtual = 'todos';
 let saveTrayEstado = {
@@ -1250,7 +1252,33 @@ async function criarJobDownloadSite(url) {
         throw new Error(normalizarErroDownloadSite(dados?.mensagem || dados?.erro || 'Nao consegui iniciar esse download.'));
     }
 
+    mostrarProgressoDownloadSite({
+        etapa: dados.job.etapa || dados.job.status || 'fila',
+        progresso: dados.job.progresso || 10,
+        mensagem: mensagemAndamentoDownloadSite(dados.job)
+    });
+
     return dados.job;
+}
+
+function formatarTempoEstimadoDownloadSite(segundos) {
+    const total = Math.max(0, Math.round(Number(segundos) || 0));
+    if (!total) return 'deve começar agora';
+    if (total < 60) return `cerca de ${total}s`;
+
+    const minutos = Math.floor(total / 60);
+    const resto = total % 60;
+    return resto ? `cerca de ${minutos} min ${resto}s` : `cerca de ${minutos} min`;
+}
+
+function mensagemAndamentoDownloadSite(job) {
+    const posicao = Math.max(0, Number.parseInt(job?.posicao_fila, 10) || 0);
+
+    if (job?.status === 'queued' && posicao) {
+        return `Posição ${posicao} na fila · ${formatarTempoEstimadoDownloadSite(job.tempo_estimado_segundos)}.`;
+    }
+
+    return job?.mensagem || 'Processando no servidor...';
 }
 
 async function aguardarJobDownloadSite(jobId) {
@@ -1270,7 +1298,7 @@ async function aguardarJobDownloadSite(jobId) {
         mostrarProgressoDownloadSite({
             etapa: job.etapa || job.status || 'processando',
             progresso: job.progresso || 20,
-            mensagem: job.mensagem || 'Processando no servidor...'
+            mensagem: mensagemAndamentoDownloadSite(job)
         });
 
         if (job.status === 'done') return job;
@@ -5895,8 +5923,6 @@ function inicializarAplicacao() {
     configurarNavegacaoTopo();
     configurarDownloadsSite();
     configurarBarraSalvamento();
-    carregarStatusPublico();
-
     const urlParams = new URLSearchParams(window.location.search);
 
     if (hashAtualNormalizado() === '#amz-admin') {
@@ -5955,42 +5981,6 @@ function formatarDuracao(segundos) {
     return `${Math.max(minutos, 1)}m`;
 }
 
-function definirStatusPublico(dados = null, erro = false) {
-    const strip = document.getElementById('bot-status-publico');
-    const dot = document.getElementById('bot-status-dot');
-    const label = document.getElementById('bot-status-label');
-    const servidores = document.getElementById('bot-status-servidores');
-    const sync = document.getElementById('bot-status-sync');
-
-    if (!strip || !dot || !label || !servidores || !sync) return;
-
-    const online = Boolean(dados?.online) && !erro;
-    strip.classList.toggle('online', online);
-    strip.classList.toggle('offline', !online);
-    dot.classList.toggle('online', online);
-
-    label.innerText = online ? 'Bot online' : 'Bot offline';
-    servidores.innerText = `Servidores: ${online ? dados.servidores ?? 0 : '--'}`;
-    sync.innerText = `Ultima sincronizacao: ${formatarDataHora(dados?.ultima_sincronizacao_em)}`;
-}
-
-async function carregarStatusPublico() {
-    try {
-        const response = await fetch(`${API_URL}/api/status`);
-        const dados = await lerJsonResposta(response);
-
-        if (response.ok && dados.status === 'sucesso') {
-            definirStatusPublico(dados);
-            return;
-        }
-
-        definirStatusPublico(null, true);
-    } catch (erro) {
-        console.warn('Nao foi possivel carregar status publico do bot:', erro);
-        definirStatusPublico(null, true);
-    }
-}
-
 function obterAdminToken() {
     return localStorage.getItem(ADMIN_TOKEN_KEY);
 }
@@ -6001,6 +5991,7 @@ function salvarAdminToken(token) {
 
 function limparAdminToken() {
     localStorage.removeItem(ADMIN_TOKEN_KEY);
+    adminStatusCache = { token: '', dados: null, atualizadoEm: 0 };
 }
 
 function mostrarStatusLoginAdmin(mensagem, tipo = 'error') {
@@ -6105,6 +6096,15 @@ async function carregarStatusAdmin() {
     document.getElementById('admin-dashboard')?.classList.remove('hidden');
     atualizarModoLoginAdmin(false);
 
+    const cacheValido = adminStatusCache.token === token
+        && adminStatusCache.dados
+        && Date.now() - adminStatusCache.atualizadoEm < ADMIN_STATUS_CACHE_MS;
+
+    if (cacheValido) {
+        renderizarAdminDashboard(adminStatusCache.dados);
+        return;
+    }
+
     const lista = document.getElementById('admin-server-list');
     const resumo = document.getElementById('admin-summary-grid');
     const saude = document.getElementById('admin-health-panel');
@@ -6120,6 +6120,7 @@ async function carregarStatusAdmin() {
         const dados = await lerJsonResposta(response);
 
         if (response.ok && dados.status === 'sucesso') {
+            adminStatusCache = { token, dados, atualizadoEm: Date.now() };
             renderizarAdminDashboard(dados);
             return;
         }
@@ -7011,5 +7012,3 @@ document.addEventListener('keydown', (evento) => {
         fecharServidorDropdown();
     }
 });
-
-window.setInterval(carregarStatusPublico, 60000);

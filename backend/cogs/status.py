@@ -34,8 +34,6 @@ COMANDOS_HELP = {
         ("Auditoria e seguranca", "Logs por evento, anti-raid e protecao contra links suspeitos."),
     ],
     "Midia": [
-        ("/midia gifimagem arquivo", "Transforma uma imagem enviada em GIF."),
-        ("/midia gifvideo arquivo", "Transforma um video enviado em GIF."),
         ("/midia audio arquivo", "Extrai o audio de um video enviado."),
         ("/midia baixar url", "Baixa um video por link (Reels/Shorts) e envia como arquivo."),
         ("/midia limites", "Mostra os limites de conversao do bot."),

@@ -1,4 +1,5 @@
 import io
+import os
 import shutil
 import tempfile
 import threading
@@ -20,6 +21,8 @@ video_service = UrlVideoService()
 JOBS = {}
 JOBS_LOCK = threading.Lock()
 JOB_TTL_SECONDS = 60 * 30
+AUDIO_ESTIMATE_DEFAULT_SECONDS = max(20, int(os.getenv("AMZ_AUDIO_ESTIMATE_SECONDS", "75")))
+AUDIO_AVERAGE_SECONDS = float(AUDIO_ESTIMATE_DEFAULT_SECONDS)
 # Um unico worker evita que varios ffmpeg/yt-dlp concorram pela CPU e memoria
 # limitada do Space. Novos pedidos continuam recebendo progresso de fila.
 VIDEO_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="amz-video")
@@ -58,7 +61,31 @@ def atualizar_job(job_id, **campos):
         job["atualizado_em_ts"] = time.time()
 
 
+def estimativa_fila(job_id):
+    with JOBS_LOCK:
+        job = JOBS.get(job_id)
+        if not job or job.get("status") != "queued":
+            return 0, 0
+
+        fila = sorted(
+            (item for item in JOBS.values() if item.get("status") == "queued"),
+            key=lambda item: float(item.get("criado_em_ts", 0)),
+        )
+        posicao = next((indice for indice, item in enumerate(fila, start=1) if item.get("id") == job_id), 0)
+        ha_execucao = any(item.get("status") == "running" for item in JOBS.values())
+        espera_unidades = posicao if ha_execucao else max(posicao - 1, 0)
+        return posicao, max(0, round(espera_unidades * AUDIO_AVERAGE_SECONDS))
+
+
+def registrar_tempo_audio(segundos):
+    global AUDIO_AVERAGE_SECONDS
+    tempo = max(20, min(float(segundos), 300))
+    with JOBS_LOCK:
+        AUDIO_AVERAGE_SECONDS = (AUDIO_AVERAGE_SECONDS * 0.7) + (tempo * 0.3)
+
+
 def payload_job(job):
+    posicao_fila, tempo_estimado_segundos = estimativa_fila(job.get("id"))
     return {
         "id": job.get("id"),
         "status": job.get("status"),
@@ -68,6 +95,8 @@ def payload_job(job):
         "erro": job.get("erro", ""),
         "filename": job.get("filename", ""),
         "mimetype": job.get("mimetype", ""),
+        "posicao_fila": posicao_fila,
+        "tempo_estimado_segundos": tempo_estimado_segundos,
         "download_url": f"/api/video/jobs/{job.get('id')}/download" if job.get("status") == "done" else None,
     }
 
@@ -92,12 +121,16 @@ def processar_job_video(job_id, url, modo):
         temp_dir=temp_dir,
         mimetype=mimetype,
         filename=filename,
+        iniciado_em_ts=time.time(),
     )
 
     try:
         limite_bytes = video_service.limits.max_output_bytes
 
         output_path = video_service.download_audio(url, temp_dir, max_bytes=limite_bytes, progress_callback=progresso)
+        job = obter_job(job_id)
+        if job and job.get("iniciado_em_ts"):
+            registrar_tempo_audio(time.time() - float(job["iniciado_em_ts"]))
 
         atualizar_job(
             job_id,
