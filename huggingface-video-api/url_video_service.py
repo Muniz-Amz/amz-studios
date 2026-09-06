@@ -117,6 +117,19 @@ class UrlVideoService:
         except ValueError:
             return 2
 
+    def _timeout_audio(self):
+        try:
+            configurado = int(os.getenv("AMZ_URLAUDIO_TIMEOUT_SECONDS", "240"))
+            return max(30, min(configurado, int(self.limits.timeout_seconds)))
+        except ValueError:
+            return min(240, int(self.limits.timeout_seconds))
+
+    def _fragmentos_audio(self):
+        try:
+            return max(1, min(int(os.getenv("AMZ_URLAUDIO_CONCURRENT_FRAGMENTS", "2")), 4))
+        except ValueError:
+            return 2
+
     def _texto_erro_ytdlp(self, erro):
         return " ".join(linha.strip() for linha in str(erro).splitlines() if linha.strip())
 
@@ -528,7 +541,7 @@ class UrlVideoService:
             return None
 
         ydl_opts = {
-            **self._opcoes_rede_ytdlp(),
+            **self._opcoes_rede_ytdlp(timeout_seconds=self._timeout_audio()),
             **self._opcoes_plataforma(url),
             "outtmpl": outtmpl,
             # Equivalente a: yt-dlp -x --audio-format mp3 <link>
@@ -540,6 +553,9 @@ class UrlVideoService:
             "max_filesize": limite_bytes,
             "match_filter": filtro_por_duracao,
             "progress_hooks": [self._criar_hook_download(progress_callback)],
+            # Dois fragmentos aceleram HLS sem disputar a pouca memoria do Space.
+            "concurrent_fragment_downloads": self._fragmentos_audio(),
+            "cachedir": False,
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",

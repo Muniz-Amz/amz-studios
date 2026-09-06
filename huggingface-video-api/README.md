@@ -1,6 +1,6 @@
 ---
-title: AMZ Video API
-emoji: 🎬
+title: AMZ Audio API
+emoji: 🎵
 colorFrom: blue
 colorTo: gray
 sdk: docker
@@ -9,9 +9,9 @@ pinned: false
 license: mit
 ---
 
-# AMZ Video API
+# AMZ Audio API
 
-API isolada para a pagina `Baixar Videos` do site AMZ Studios.
+API isolada para a pagina `Baixar MP3` do site AMZ Studios.
 
 Limites padrao do Space:
 
@@ -23,26 +23,21 @@ Limites padrao do Space:
 
 - `GET /` verifica se a API esta online.
 - `GET /api/status` mostra limites do servidor.
-- `POST /api/video/check` verifica titulo/duracao antes do download pesado.
 - `POST /api/video/jobs` cria um download com progresso.
 - `GET /api/video/jobs/<job_id>` mostra etapa/progresso do download.
 - `GET /api/video/jobs/<job_id>/download` baixa o arquivo pronto.
-- `POST /api/video/download` baixa/converte links em MP4 ou MP3.
+- `POST /api/video/download` baixa áudio em MP3 para compatibilidade com versões anteriores do site.
 
 ## Payload
 
 ```json
 {
-  "url": "https://vt.tiktok.com/...",
-  "modo": "video_hd"
+  "url": "https://exemplo.com/conteudo-publico",
+  "modo": "mp3"
 }
 ```
 
-Modos aceitos:
-
-- `video_hd`
-- `video`
-- `mp3`
+O único modo aceito é `mp3`. Pedidos idênticos em andamento reutilizam a mesma fila.
 
 ## Hugging Face Space
 

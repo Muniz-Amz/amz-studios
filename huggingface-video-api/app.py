@@ -73,11 +73,7 @@ def payload_job(job):
 
 
 def configurar_saida_download(modo):
-    if modo == "mp3":
-        return "audio/mpeg", "amz-audio.mp3"
-    if modo == "video":
-        return "video/mp4", "amz-video.mp4"
-    return "video/mp4", "amz-video-hd.mp4"
+    return "audio/mpeg", "amz-audio.mp3"
 
 
 def processar_job_video(job_id, url, modo):
@@ -101,12 +97,7 @@ def processar_job_video(job_id, url, modo):
     try:
         limite_bytes = video_service.limits.max_output_bytes
 
-        if modo == "mp3":
-            output_path = video_service.download_audio(url, temp_dir, max_bytes=limite_bytes, progress_callback=progresso)
-        elif modo == "video":
-            output_path = video_service.download_video(url, temp_dir, max_bytes=limite_bytes, max_width=540, progress_callback=progresso)
-        else:
-            output_path = video_service.download_video(url, temp_dir, max_bytes=limite_bytes, max_width=720, progress_callback=progresso)
+        output_path = video_service.download_audio(url, temp_dir, max_bytes=limite_bytes, progress_callback=progresso)
 
         atualizar_job(
             job_id,
@@ -136,7 +127,7 @@ def processar_job_video(job_id, url, modo):
 def root():
     return jsonify({
         "status": "online",
-        "service": "amz-video-api",
+        "service": "amz-audio-api",
         "routes": ["/api/status", "/api/video/check", "/api/video/jobs", "/api/video/download"],
     })
 
@@ -151,6 +142,7 @@ def status():
         "fps": video_service.limits.fps,
         "check_timeout_seconds": video_service.limits.check_timeout_seconds,
         "yt_dlp_version": video_service.versao_ytdlp(),
+        "output_mode": "mp3",
     })
 
 
@@ -186,11 +178,22 @@ def criar_job_video():
     limpar_jobs_antigos()
     dados = request.get_json(silent=True) or {}
     url = str(dados.get("url") or "").strip()
-    modo = str(dados.get("modo") or "video_hd").strip()
-    modo = modo if modo in {"video_hd", "video", "mp3"} else "video_hd"
+    modo = str(dados.get("modo") or "mp3").strip().lower()
 
     if not url:
         return jsonify({"status": "erro", "mensagem": "Envie um link para baixar."}), 400
+
+    if modo != "mp3":
+        return jsonify({"status": "erro", "mensagem": "Este serviço processa somente áudio MP3."}), 400
+
+    with JOBS_LOCK:
+        job_existente = next((
+            dict(job) for job in JOBS.values()
+            if job.get("url") == url and job.get("modo") == modo and job.get("status") in {"queued", "running"}
+        ), None)
+
+    if job_existente:
+        return jsonify({"status": "sucesso", "job": payload_job(job_existente), "reutilizado": True}), 202
 
     job_id = uuid.uuid4().hex
     job = {
@@ -198,10 +201,12 @@ def criar_job_video():
         "status": "queued",
         "etapa": "fila",
         "progresso": 1,
-        "mensagem": "Download entrou na fila prioritaria do servidor.",
+        "mensagem": "Áudio entrou na fila prioritária.",
         "erro": "",
         "criado_em_ts": time.time(),
         "atualizado_em_ts": time.time(),
+        "url": url,
+        "modo": modo,
     }
 
     with JOBS_LOCK:
@@ -245,9 +250,8 @@ def baixar_resultado_job(job_id):
     if not output_path.exists():
         return jsonify({"status": "erro", "mensagem": "Arquivo expirou. Baixe novamente."}), 410
 
-    conteudo = output_path.read_bytes()
     resposta = send_file(
-        io.BytesIO(conteudo),
+        output_path,
         mimetype=job.get("mimetype") or "application/octet-stream",
         as_attachment=True,
         download_name=job.get("filename") or output_path.name,
@@ -260,28 +264,22 @@ def baixar_resultado_job(job_id):
 def baixar_video():
     dados = request.get_json(silent=True) or {}
     url = str(dados.get("url") or "").strip()
-    modo = str(dados.get("modo") or "video_hd").strip()
+    modo = str(dados.get("modo") or "mp3").strip().lower()
 
     if not url:
         return jsonify({"status": "erro", "mensagem": "Envie um link para baixar."}), 400
+
+    if modo != "mp3":
+        return jsonify({"status": "erro", "mensagem": "Este serviço processa somente áudio MP3."}), 400
 
     temp_dir = tempfile.mkdtemp(prefix="amz-video-")
 
     try:
         limite_bytes = video_service.limits.max_output_bytes
 
-        if modo == "mp3":
-            output_path = video_service.download_audio(url, temp_dir, max_bytes=limite_bytes)
-            mimetype = "audio/mpeg"
-            filename = "amz-audio.mp3"
-        elif modo == "video":
-            output_path = video_service.download_video(url, temp_dir, max_bytes=limite_bytes, max_width=540)
-            mimetype = "video/mp4"
-            filename = "amz-video.mp4"
-        else:
-            output_path = video_service.download_video(url, temp_dir, max_bytes=limite_bytes, max_width=720)
-            mimetype = "video/mp4"
-            filename = "amz-video-hd.mp4"
+        output_path = video_service.download_audio(url, temp_dir, max_bytes=limite_bytes)
+        mimetype = "audio/mpeg"
+        filename = "amz-audio.mp3"
 
         conteudo = Path(output_path).read_bytes()
         resposta = send_file(
