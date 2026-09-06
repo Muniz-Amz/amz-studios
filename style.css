@@ -2085,7 +2085,8 @@ section {
 
 @media (max-width: 640px) {
     .site-navbar {
-        height: auto;
+        /* Sobrescreve a classe h-20 do Tailwind, que era aplicada depois do CSS. */
+        height: auto !important;
         min-height: 80px;
         align-items: flex-start;
         flex-direction: column;
@@ -4189,7 +4190,7 @@ section {
     }
 
     .site-navbar {
-        height: auto;
+        height: auto !important;
         min-height: 104px;
         align-items: stretch;
         flex-direction: column;
@@ -4684,7 +4685,7 @@ section {
     }
 
     .site-nav-links {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 6px;
     }
 
