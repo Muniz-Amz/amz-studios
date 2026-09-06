@@ -124,6 +124,9 @@ class UrlVideoService:
             "fragment_retries": int(os.getenv("AMZ_YTDLP_FRAGMENT_RETRIES", "2")),
             "extractor_retries": int(os.getenv("AMZ_YTDLP_EXTRACTOR_RETRIES", "2")),
             "file_access_retries": int(os.getenv("AMZ_YTDLP_FILE_RETRIES", "2")),
+            # YouTube usa desafios em JavaScript para liberar formatos de áudio.
+            # O Dockerfile instala o Node para o yt-dlp resolver esses desafios.
+            "js_runtimes": {"node": {}},
         }
 
         if attempts is not None:

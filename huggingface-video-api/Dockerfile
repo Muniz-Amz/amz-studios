@@ -10,7 +10,7 @@ ENV AMZ_URLVIDEO_MAX_WIDTH=720
 ENV AMZ_URLVIDEO_FPS=24
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates ffmpeg \
+    && apt-get install -y --no-install-recommends ca-certificates ffmpeg nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
