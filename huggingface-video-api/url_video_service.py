@@ -79,9 +79,12 @@ class UrlVideoService:
     def _opcoes_plataforma(self, url: str):
         """Ajustes para plataformas que bloqueiam clientes sem um navegador real."""
         host = (urlparse(url).hostname or "").lower()
-        usar_impersonacao = os.getenv("AMZ_YTDLP_IMPERSONATE", "chrome").strip()
+        usar_impersonacao_global = os.getenv("AMZ_YTDLP_IMPERSONATE", "").strip()
 
         if host == "tiktok.com" or host.endswith(".tiktok.com"):
+            usar_impersonacao = usar_impersonacao_global or os.getenv(
+                "AMZ_YTDLP_TIKTOK_IMPERSONATE", "chrome-131:android-14"
+            ).strip()
             opcoes = {
                 "http_headers": {
                     "User-Agent": (
@@ -96,11 +99,14 @@ class UrlVideoService:
             return opcoes
 
         if host in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}:
+            usar_impersonacao = usar_impersonacao_global or os.getenv(
+                "AMZ_YTDLP_YOUTUBE_IMPERSONATE", "chrome-136:macos-15"
+            ).strip()
             opcoes = {
                 "http_headers": {
                     "User-Agent": (
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
                     ),
                     "Referer": "https://www.youtube.com/",
                 }
