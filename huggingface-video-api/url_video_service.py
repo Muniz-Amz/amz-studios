@@ -76,13 +76,28 @@ class UrlVideoService:
             raise UrlVideoError("Envie um link valido (http/https).")
         return parsed.geturl()
 
+    def _opcoes_plataforma(self, url: str):
+        """Ajustes leves para plataformas que rejeitam clientes sem referer."""
+        host = (urlparse(url).hostname or "").lower()
+        if host == "tiktok.com" or host.endswith(".tiktok.com"):
+            return {
+                "http_headers": {
+                    "User-Agent": (
+                        "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36"
+                    ),
+                    "Referer": "https://www.tiktok.com/",
+                }
+            }
+        return {}
+
     def _opcoes_rede_ytdlp(self, timeout_seconds=None, attempts=None):
         opcoes = {
             "socket_timeout": int(timeout_seconds or self.limits.timeout_seconds),
-            "retries": int(os.getenv("AMZ_YTDLP_RETRIES", "4")),
-            "fragment_retries": int(os.getenv("AMZ_YTDLP_FRAGMENT_RETRIES", "4")),
-            "extractor_retries": int(os.getenv("AMZ_YTDLP_EXTRACTOR_RETRIES", "3")),
-            "file_access_retries": int(os.getenv("AMZ_YTDLP_FILE_RETRIES", "3")),
+            "retries": int(os.getenv("AMZ_YTDLP_RETRIES", "2")),
+            "fragment_retries": int(os.getenv("AMZ_YTDLP_FRAGMENT_RETRIES", "2")),
+            "extractor_retries": int(os.getenv("AMZ_YTDLP_EXTRACTOR_RETRIES", "2")),
+            "file_access_retries": int(os.getenv("AMZ_YTDLP_FILE_RETRIES", "2")),
         }
 
         if attempts is not None:
@@ -98,9 +113,9 @@ class UrlVideoService:
 
     def _max_tentativas_ytdlp(self):
         try:
-            return max(1, min(int(os.getenv("AMZ_YTDLP_ATTEMPTS", "3")), 5))
+            return max(1, min(int(os.getenv("AMZ_YTDLP_ATTEMPTS", "2")), 5))
         except ValueError:
-            return 3
+            return 2
 
     def _texto_erro_ytdlp(self, erro):
         return " ".join(linha.strip() for linha in str(erro).splitlines() if linha.strip())
@@ -445,10 +460,13 @@ class UrlVideoService:
 
         ydl_opts = {
             **self._opcoes_rede_ytdlp(),
+            **self._opcoes_plataforma(url),
             "outtmpl": outtmpl,
+            # Equivalente a `yt-dlp <link>` para HD; no modo leve, pede uma
+            # faixa menor diretamente ao provedor em vez de reencodar depois.
             "format": os.getenv(
-                "AMZ_URLVIDEO_FORMAT",
-                "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
+                "AMZ_URLVIDEO_LIGHT_FORMAT" if max_width else "AMZ_URLVIDEO_FORMAT",
+                "bv*[height<=540]+ba/b[height<=540]/b" if max_width else "bv*+ba/b",
             ),
             "merge_output_format": "mp4",
             "ffmpeg_location": self.ffmpeg,
@@ -479,7 +497,9 @@ class UrlVideoService:
         if not candidato.exists():
             raise UrlVideoError("Nao consegui gerar o arquivo final do video.")
 
-        convertido = self._converter_para_mp4(candidato, temp_dir, max_width=max_width, progress_callback=progress_callback)
+        convertido = candidato
+        if candidato.suffix.lower() != ".mp4":
+            convertido = self._converter_para_mp4(candidato, temp_dir, max_width=max_width, progress_callback=progress_callback)
         self._notificar_progresso(progress_callback, "finalizando", 94, "Validando tamanho final...")
         self._validar_tamanho_saida(convertido, limite_bytes)
 
@@ -509,14 +529,21 @@ class UrlVideoService:
 
         ydl_opts = {
             **self._opcoes_rede_ytdlp(),
+            **self._opcoes_plataforma(url),
             "outtmpl": outtmpl,
-            "format": os.getenv("AMZ_URLAUDIO_FORMAT", "ba/b"),
+            # Equivalente a: yt-dlp -x --audio-format mp3 <link>
+            "format": os.getenv("AMZ_URLAUDIO_FORMAT", "bestaudio/best"),
             "ffmpeg_location": self.ffmpeg,
             "noplaylist": True,
             "quiet": True,
             "no_warnings": True,
+            "max_filesize": limite_bytes,
             "match_filter": filtro_por_duracao,
             "progress_hooks": [self._criar_hook_download(progress_callback)],
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+            }],
             "overwrites": True,
         }
 
@@ -534,18 +561,9 @@ class UrlVideoService:
         if not arquivos:
             raise UrlVideoError("Nao consegui gerar o arquivo de audio.")
 
-        output_path = Path(temp_dir) / "amz-audio.mp3"
-        self._notificar_progresso(progress_callback, "convertendo", 72, "Convertendo para MP3...")
-        self._run_ffmpeg([
-            "-i",
-            str(arquivos[0]),
-            "-vn",
-            "-b:a",
-            "128k",
-            "-map",
-            "0:a:0?",
-            str(output_path),
-        ])
+        output_path = next((arquivo for arquivo in arquivos if arquivo.suffix.lower() == ".mp3"), None)
+        if output_path is None:
+            raise UrlVideoError("Nao consegui converter o audio para MP3.")
         self._notificar_progresso(progress_callback, "finalizando", 94, "Validando tamanho final...")
         self._validar_tamanho_saida(output_path, limite_bytes)
 

@@ -1218,6 +1218,15 @@ function ehLinkYoutubeDownloadSite(url) {
     }
 }
 
+function ehLinkTikTokDownloadSite(url) {
+    try {
+        const host = new URL(url).hostname.toLowerCase();
+        return host === 'tiktok.com' || host.endsWith('.tiktok.com');
+    } catch {
+        return false;
+    }
+}
+
 function validarLinkDownloadSite(url) {
     let parsed;
 
@@ -1264,11 +1273,11 @@ function baixarBlobSite(blob, nomeArquivo) {
 }
 
 async function verificarLinkDownloadSite(url) {
-    if (ehLinkYoutubeDownloadSite(url)) {
+    if (ehLinkYoutubeDownloadSite(url) || ehLinkTikTokDownloadSite(url)) {
         mostrarProgressoDownloadSite({
             etapa: 'validando',
             progresso: 6,
-            mensagem: 'YouTube pode bloquear a verificacao previa. Indo direto para a fila...'
+            mensagem: 'Indo direto para a fila prioritaria para evitar uma consulta extra na plataforma...'
         });
         return null;
     }
@@ -1307,7 +1316,7 @@ async function criarJobDownloadSite(url, modo) {
     mostrarProgressoDownloadSite({
         etapa: 'fila',
         progresso: 10,
-        mensagem: 'Criando download no servidor...'
+        mensagem: 'Criando download na fila prioritaria do servidor...'
     });
 
     const response = await fetch(montarUrlVideoApi('/api/video/jobs'), {

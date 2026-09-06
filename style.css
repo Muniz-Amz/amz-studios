@@ -1098,6 +1098,67 @@ html[data-site-theme] body {
     }
 }
 
+/* Leitura confortável sem precisar alterar o zoom do navegador. */
+#site-principal {
+    overflow-x: clip;
+}
+
+#site-principal .max-w-6xl {
+    width: min(100%, 1180px);
+}
+
+#site-principal .site-downloads-heading p,
+#site-principal .site-downloads-info li,
+#site-principal .site-downloads-info small,
+#site-principal .site-seo-card p,
+#site-principal .site-faq-list p {
+    overflow-wrap: anywhere;
+}
+
+@media (min-width: 821px) and (max-width: 1100px) {
+    #site-principal .site-downloads-layout {
+        grid-template-columns: 1fr;
+    }
+
+    #site-principal .site-downloads-info {
+        display: grid;
+        grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
+        column-gap: 24px;
+        align-items: start;
+    }
+
+    #site-principal .site-downloads-info small {
+        grid-column: 2;
+    }
+}
+
+@media (max-width: 620px) {
+    #site-principal .site-downloads-platforms span,
+    #site-principal .site-downloads-quick-actions button {
+        flex: 1 1 100%;
+        min-height: 44px;
+    }
+
+    #site-principal .site-downloads-input input {
+        min-height: 52px;
+        font-size: 16px;
+    }
+
+    #site-principal .site-download-mode {
+        min-height: 112px;
+        padding: 18px;
+    }
+
+    #site-principal .site-download-mode strong {
+        font-size: 14px;
+    }
+
+    #site-principal .site-download-mode span,
+    #site-principal .site-downloads-status {
+        font-size: 12px;
+    }
+}
+
 @media (max-width: 420px) {
     .seo-navbar {
         padding: 12px;

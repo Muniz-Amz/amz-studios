@@ -1265,28 +1265,39 @@ class ModerationCog(commands.Cog):
 
         return None
 
-    async def buscar_auditoria_recente(self, guild, member_id, actions):
+    async def buscar_auditoria_recente(self, guild, member_id, actions, tentativas=3, atraso=0.7):
         if not guild.me or not guild.me.guild_permissions.view_audit_log:
             return None
 
-        for action in [acao for acao in actions if acao]:
-            try:
-                async for entry in guild.audit_logs(limit=8, action=action):
-                    criada_em = entry.created_at
-                    if criada_em and criada_em.tzinfo is None:
-                        criada_em = criada_em.replace(tzinfo=timezone.utc)
+        acoes = [acao for acao in actions if acao]
+        if not acoes:
+            return None
 
-                    if criada_em and (datetime.now(timezone.utc) - criada_em).total_seconds() > 30:
-                        continue
+        for tentativa in range(max(1, int(tentativas))):
+            for action in acoes:
+                try:
+                    async for entry in guild.audit_logs(limit=8, action=action):
+                        criada_em = entry.created_at
+                        if criada_em and criada_em.tzinfo is None:
+                            criada_em = criada_em.replace(tzinfo=timezone.utc)
 
-                    target_id = getattr(entry.target, "id", None)
-                    extra_user = getattr(getattr(entry, "extra", None), "user", None)
-                    extra_user_id = getattr(extra_user, "id", None)
+                        if criada_em and (datetime.now(timezone.utc) - criada_em).total_seconds() > 30:
+                            continue
 
-                    if target_id in (None, member_id) or extra_user_id == member_id:
-                        return entry
-            except (discord.Forbidden, discord.HTTPException):
-                continue
+                        target_id = getattr(entry.target, "id", None)
+                        extra_user = getattr(getattr(entry, "extra", None), "user", None)
+                        extra_user_id = getattr(extra_user, "id", None)
+
+                        # O registro de auditoria do Discord pode aparecer alguns
+                        # instantes depois do evento. Nunca associe um movimento a
+                        # outro membro apenas porque a API nao informou o alvo.
+                        if target_id == member_id or extra_user_id == member_id:
+                            return entry
+                except (discord.Forbidden, discord.HTTPException):
+                    continue
+
+            if tentativa < max(1, int(tentativas)) - 1:
+                await asyncio.sleep(max(0.1, float(atraso)))
 
         return None
 
@@ -2044,15 +2055,13 @@ class ModerationCog(commands.Cog):
             if not registrar_saida and not registrar_desconexao:
                 return
 
-            entry = None
-            if registrar_desconexao:
-                entry = await self.buscar_auditoria_recente(
-                    member.guild,
-                    member.id,
-                    [getattr(discord.AuditLogAction, "member_disconnect", None)],
-                )
+            entry = await self.buscar_auditoria_recente(
+                member.guild,
+                member.id,
+                [getattr(discord.AuditLogAction, "member_disconnect", None)],
+            )
             responsavel = entry.user if entry else None
-            desconectado_por_outro = responsavel and responsavel.id != member.id
+            desconectado_por_outro = bool(responsavel and responsavel.id != member.id)
             event_id = "voz_desconectado" if desconectado_por_outro else "voz_saida"
             if not self.auditoria_evento_ativo(config, event_id):
                 return
@@ -2087,15 +2096,17 @@ class ModerationCog(commands.Cog):
                 [getattr(discord.AuditLogAction, "member_move", None)],
             )
             responsavel = entry.user if entry else None
+            movido_por_outro = bool(responsavel and responsavel.id != member.id)
             await self.enviar_log_voz(
                 member.guild,
                 config,
                 "voz_movido",
-                "[VOZ] Usuario movido de call",
-                f"Usuario movido: {member.mention}",
+                "[VOZ] Usuario movido de call" if movido_por_outro else "[VOZ] Usuario trocou de call",
+                f"Usuario afetado: {member.mention}",
                 [
-                    ("Responsavel", str(responsavel or "Acao voluntaria ou desconhecida"), True),
-                    ("Usuario movido", f"{member} (`{member.id}`)", True),
+                    ("Responsavel", str(responsavel or "Acao voluntaria"), True),
+                    ("Tipo da acao", "Movido por moderador" if movido_por_outro else "Troca voluntaria de canal", True),
+                    ("Usuario afetado", f"{member} (`{member.id}`)", True),
                     ("De", canal_antes.name, True),
                     ("Para", canal_depois.name, True),
                     ("Data", data_hora, True),

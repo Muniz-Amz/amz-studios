@@ -99,6 +99,20 @@ class UrlVideoService:
             raise UrlVideoError("Envie um link valido (http/https).")
         return parsed.geturl()
 
+    def _opcoes_plataforma(self, url: str):
+        host = (urlparse(url).hostname or "").lower()
+        if host == "tiktok.com" or host.endswith(".tiktok.com"):
+            return {
+                "http_headers": {
+                    "User-Agent": (
+                        "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36"
+                    ),
+                    "Referer": "https://www.tiktok.com/",
+                }
+            }
+        return {}
+
     def _run_ffmpeg(self, args):
         comando = [self.ffmpeg, "-hide_banner", "-loglevel", "error", "-y", *args]
         try:
@@ -275,10 +289,11 @@ class UrlVideoService:
             return None
 
         ydl_opts = {
+            **self._opcoes_plataforma(url),
             "outtmpl": outtmpl,
             "format": os.getenv(
-                "AMZ_URLVIDEO_FORMAT",
-                "bv*[vcodec^=avc1][ext=mp4]+ba[ext=m4a]/b[vcodec^=avc1][ext=mp4]/bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
+                "AMZ_URLVIDEO_LIGHT_FORMAT" if max_width else "AMZ_URLVIDEO_FORMAT",
+                "bv*[height<=540]+ba/b[height<=540]/b" if max_width else "bv*+ba/b",
             ),
             "merge_output_format": "mp4",
             "ffmpeg_location": self.ffmpeg,
@@ -315,7 +330,9 @@ class UrlVideoService:
         if not candidato.exists():
             raise UrlVideoError("Nao consegui gerar o arquivo final do video.")
 
-        convertido = self._converter_para_discord(candidato, temp_dir, max_width=max_width)
+        convertido = candidato
+        if candidato.suffix.lower() != ".mp4":
+            convertido = self._converter_para_discord(candidato, temp_dir, max_width=max_width)
         self._validar_tamanho_saida(convertido, limite_bytes)
 
         return convertido
@@ -341,8 +358,10 @@ class UrlVideoService:
             return None
 
         ydl_opts = {
+            **self._opcoes_plataforma(url),
             "outtmpl": outtmpl,
-            "format": os.getenv("AMZ_URLAUDIO_FORMAT", "ba/b"),
+            # Equivalente a: yt-dlp -x --audio-format mp3 <link>
+            "format": os.getenv("AMZ_URLAUDIO_FORMAT", "bestaudio/best"),
             "ffmpeg_location": self.ffmpeg,
             "noplaylist": True,
             "quiet": True,
@@ -350,7 +369,12 @@ class UrlVideoService:
             "retries": 2,
             "fragment_retries": 2,
             "socket_timeout": int(self.limits.timeout_seconds),
+            "max_filesize": limite_bytes,
             "match_filter": filtro_por_duracao,
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+            }],
             "overwrites": True,
         }
 
@@ -372,17 +396,9 @@ class UrlVideoService:
         if not arquivos:
             raise UrlVideoError("Nao consegui gerar o arquivo de audio.")
 
-        output_path = Path(temp_dir) / "amz-audio.mp3"
-        self._run_ffmpeg([
-            "-i",
-            str(arquivos[0]),
-            "-vn",
-            "-b:a",
-            "128k",
-            "-map",
-            "0:a:0?",
-            str(output_path),
-        ])
+        output_path = next((arquivo for arquivo in arquivos if arquivo.suffix.lower() == ".mp3"), None)
+        if output_path is None:
+            raise UrlVideoError("Nao consegui converter o audio para MP3.")
         self._validar_tamanho_saida(output_path, limite_bytes)
 
         return output_path

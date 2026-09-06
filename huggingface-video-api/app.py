@@ -4,6 +4,7 @@ import tempfile
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_file
@@ -19,6 +20,9 @@ video_service = UrlVideoService()
 JOBS = {}
 JOBS_LOCK = threading.Lock()
 JOB_TTL_SECONDS = 60 * 30
+# Um unico worker evita que varios ffmpeg/yt-dlp concorram pela CPU e memoria
+# limitada do Space. Novos pedidos continuam recebendo progresso de fila.
+VIDEO_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="amz-video")
 
 
 def limpar_jobs_antigos():
@@ -194,7 +198,7 @@ def criar_job_video():
         "status": "queued",
         "etapa": "fila",
         "progresso": 1,
-        "mensagem": "Download entrou na fila.",
+        "mensagem": "Download entrou na fila prioritaria do servidor.",
         "erro": "",
         "criado_em_ts": time.time(),
         "atualizado_em_ts": time.time(),
@@ -203,8 +207,7 @@ def criar_job_video():
     with JOBS_LOCK:
         JOBS[job_id] = job
 
-    thread = threading.Thread(target=processar_job_video, args=(job_id, url, modo), daemon=True)
-    thread.start()
+    VIDEO_EXECUTOR.submit(processar_job_video, job_id, url, modo)
 
     return jsonify({
         "status": "sucesso",
