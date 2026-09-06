@@ -552,6 +552,7 @@ html[data-site-theme] body {
 }
 
 .site-download-progress-bar {
+    position: relative;
     height: 8px;
     overflow: hidden;
     background: rgba(127, 127, 127, 0.18);
@@ -559,10 +560,34 @@ html[data-site-theme] body {
 }
 
 .site-download-progress-bar span {
+    position: relative;
+    z-index: 1;
     display: block;
     height: 100%;
     background: var(--site-button-bg);
     transition: width 0.35s ease;
+}
+
+.site-download-progress-bar.is-active::after {
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 34%;
+    content: '';
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.62), transparent);
+    animation: site-download-progress-sweep 1.15s ease-in-out infinite;
+}
+
+@keyframes site-download-progress-sweep {
+    from { transform: translateX(-120%); }
+    to { transform: translateX(395%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .site-download-progress-bar.is-active::after { animation: none; }
 }
 
 .site-downloads-status small {

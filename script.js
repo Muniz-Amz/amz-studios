@@ -1097,6 +1097,7 @@ function mostrarProgressoDownloadSite({ etapa = 'preparando', progresso = 0, men
 
     const valor = Math.max(0, Math.min(Number.parseInt(progresso, 10) || 0, 100));
     const rotuloEtapa = String(etapa || 'preparando').replace(/_/g, ' ');
+    const emAndamento = valor < 100 && tipo !== 'error';
 
     status.classList.remove('hidden', 'success', 'error');
     if (tipo === 'success' || tipo === 'error') {
@@ -1108,7 +1109,7 @@ function mostrarProgressoDownloadSite({ etapa = 'preparando', progresso = 0, men
             <strong>${escaparHTML(rotuloEtapa)}</strong>
             <span>${valor}%</span>
         </div>
-        <div class="site-download-progress-bar" aria-hidden="true">
+        <div class="site-download-progress-bar${emAndamento ? ' is-active' : ''}" role="progressbar" aria-label="Progresso do download" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${valor}">
             <span style="width: ${valor}%"></span>
         </div>
         <small>${escaparHTML(mensagem || 'Processando download...')}</small>
