@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import math
 import time
 from collections import defaultdict
@@ -18,7 +19,9 @@ from security.discord_permissions import usuario_e_admin_ou_dono
 from services.cleanup_service import INTERVALO_LIMPEZA_MINUTOS, executar_limpezas
 
 
-MAX_LIMPAR_MENSAGENS = 250
+MAX_LIMPAR_MENSAGENS = 1000
+LIMPEZA_LOTE_MENSAGENS = 100
+PAUSA_ENTRE_LOTES_SEGUNDOS = 2
 COOLDOWN_LIMPEZA_SEGUNDOS = 20
 RATE_LIMIT_PADRAO_SEGUNDOS = 30
 
@@ -221,14 +224,31 @@ class CleanupCog(commands.Cog):
         if lock.locked():
             return None, "Ja existe uma limpeza em andamento neste canal. Aguarde terminar.", limite
 
+        # O Discord aceita no maximo 100 mensagens por exclusao em lote. A pausa
+        # evita concentrar leituras e exclusoes quando forem solicitadas 1.000.
+        # Mensagens com mais de 14 dias nao entram porque nao podem ser apagadas
+        # em lote pela API do Discord.
+        limite_bulk = discord.utils.utcnow() - datetime.timedelta(days=14)
+        apagadas = []
+
         async with lock:
             try:
-                apagadas = await channel.purge(
-                    limit=limite,
-                    check=lambda mensagem: not mensagem.pinned,
-                    bulk=True,
-                    reason=f"Limpeza manual AMZ solicitada por {interaction.user} ({interaction.user.id})",
-                )
+                while len(apagadas) < limite:
+                    lote = await channel.purge(
+                        limit=min(LIMPEZA_LOTE_MENSAGENS, limite - len(apagadas)),
+                        check=lambda mensagem: not mensagem.pinned,
+                        after=limite_bulk,
+                        bulk=True,
+                        reason=f"Limpeza manual AMZ solicitada por {interaction.user} ({interaction.user.id})",
+                    )
+
+                    if not lote:
+                        break
+
+                    apagadas.extend(lote)
+
+                    if len(apagadas) < limite:
+                        await asyncio.sleep(PAUSA_ENTRE_LOTES_SEGUNDOS)
             except discord.Forbidden:
                 return None, "O Discord negou a limpeza. Confira a hierarquia/permissoes do cargo do bot.", limite
             except discord.HTTPException as erro:
@@ -244,7 +264,7 @@ class CleanupCog(commands.Cog):
         return len(apagadas), None, limite
 
     @mod.command(name="limpar", description="Apaga mensagens recentes do canal atual.")
-    @app_commands.describe(quantidade="Quantidade de mensagens para apagar. Acima de 250 sera limitado por seguranca.")
+    @app_commands.describe(quantidade="Quantidade de mensagens recentes para apagar (ate 1000, em lotes lentos).")
     @app_commands.default_permissions(administrator=True)
     @app_commands.guild_only()
     async def mod_limpar(self, interaction: discord.Interaction, quantidade: app_commands.Range[int, 1, 1000]):
@@ -273,7 +293,12 @@ class CleanupCog(commands.Cog):
         embed.add_field(name="Apagadas", value=str(apagadas), inline=True)
         if limite and int(quantidade) > limite:
             embed.add_field(name="Limite aplicado", value=f"{limite} por execucao para evitar rate limit.", inline=False)
-        embed.set_footer(text=f"Comando organizado: /mod limpar | Limite: {MAX_LIMPAR_MENSAGENS}")
+        embed.set_footer(
+            text=(
+                f"/mod limpar | Limite: {MAX_LIMPAR_MENSAGENS} | "
+                f"Lotes de {LIMPEZA_LOTE_MENSAGENS} a cada {PAUSA_ENTRE_LOTES_SEGUNDOS}s"
+            )
+        )
 
         await self.responder_seguro(interaction, embed=embed, ephemeral=True)
 
