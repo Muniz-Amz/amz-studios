@@ -150,8 +150,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-<link rel="stylesheet" href="style.css?v=47">
-<link rel="stylesheet" href="/amz-studios/style.css?v=47">
+<link rel="stylesheet" href="style.css?v=48">
+<link rel="stylesheet" href="/amz-studios/style.css?v=48">
 </head>
 <body class="flex flex-col min-h-screen overflow-x-hidden bg-black">
 
@@ -247,15 +247,14 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
 
                         <article class="site-seo-card">
                             <i class="ph ph-download-simple" aria-hidden="true"></i>
-                            <h3>Baixar vídeos e MP3</h3>
+                            <h3>Baixar MP3</h3>
                             <p>
-                                A área de downloads permite converter links de Instagram, TikTok e YouTube curto de até 5 minutos para vídeo MP4
-                                compatível com navegador, celular e Discord, além de extrair MP3 quando possível.
+                                A área de downloads extrai áudio em MP3 de links permitidos, pronta para usar no celular ou importar no MusicAmz.
                             </p>
                             <ul>
-                                <li>MP4 otimizado para abrir no Discord.</li>
-                                <li>Opções de vídeo leve, vídeo HD e MP3.</li>
-                                <li>Processamento externo para proteger o site no GitHub Pages.</li>
+                                <li>Um único formato: MP3.</li>
+                                <li>Fila dedicada para iniciar o áudio sem etapas extras.</li>
+                                <li>Processamento externo para manter o site leve.</li>
                             </ul>
                             <a class="site-card-link" href="./downloads/">Ver página de downloads</a>
                         </article>
@@ -283,22 +282,16 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                     <div class="site-downloads-heading">
                         <div>
                             <span class="site-chip font-mono text-[10px] border border-neutral-700 text-neutral-500 px-3 py-1 uppercase tracking-widest">GitHub Pages Tool</span>
-                            <h2>Baixar Videos</h2>
-                            <p>Cole links de Instagram, TikTok ou YouTube curto de até 5 minutos e escolha o formato de saída.</p>
+                            <h2>Baixar MP3</h2>
+                            <p>Cole um link público e extraia apenas o áudio em MP3.</p>
                         </div>
                     </div>
 
                     <div class="site-downloads-layout">
                         <div class="site-downloads-tool">
-                            <div class="site-downloads-platforms" aria-label="Plataformas suportadas">
-                                <span><i class="ph ph-instagram-logo" aria-hidden="true"></i> Instagram</span>
-                                <span><i class="ph ph-tiktok-logo" aria-hidden="true"></i> TikTok</span>
-                                <span><i class="ph ph-youtube-logo" aria-hidden="true"></i> YouTube até 5min</span>
-                            </div>
-
                             <label class="site-downloads-input" for="site-download-url">
-                                <span>Link do video</span>
-                                <input id="site-download-url" type="url" placeholder="Cole link do Instagram, TikTok ou YouTube curto" autocomplete="off">
+                                <span>Link para extrair o áudio</span>
+                                <input id="site-download-url" type="url" placeholder="Cole o link do conteúdo público" autocomplete="off">
                             </label>
 
                             <div class="site-downloads-quick-actions">
@@ -312,26 +305,8 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                                 </button>
                             </div>
 
-                            <div class="site-downloads-mode-grid" aria-label="Formato do download">
-                                <button type="button" class="site-download-mode active" data-download-mode="video_hd" onclick="selecionarModoDownloadSite('video_hd')" aria-pressed="true">
-                                    <i class="ph ph-video" aria-hidden="true"></i>
-                                    <strong>Baixar vídeo HD</strong>
-                                    <span>Melhor qualidade em MP4</span>
-                                </button>
-                                <button type="button" class="site-download-mode" data-download-mode="video" onclick="selecionarModoDownloadSite('video')" aria-pressed="false">
-                                    <i class="ph ph-download-simple" aria-hidden="true"></i>
-                                    <strong>Baixar vídeo leve</strong>
-                                    <span>MP4 mais leve e compativel</span>
-                                </button>
-                                <button type="button" class="site-download-mode" data-download-mode="mp3" onclick="selecionarModoDownloadSite('mp3')" aria-pressed="false">
-                                    <i class="ph ph-music-notes" aria-hidden="true"></i>
-                                    <strong>Extrair MP3</strong>
-                                    <span>Ideal para importar no MusicAmz</span>
-                                </button>
-                            </div>
-
-                            <button type="button" class="site-downloads-submit" onclick="baixarVideoSite()">
-                                <span>Baixar agora</span>
+                            <button type="button" class="site-downloads-submit" onclick="baixarAudioSite()">
+                                <span>Baixar MP3</span>
                                 <i class="ph ph-arrow-line-down" aria-hidden="true"></i>
                             </button>
 
@@ -339,14 +314,14 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                         </div>
 
                         <aside class="site-downloads-info">
-                            <span class="site-downloads-info-kicker">Funcoes</span>
+                            <span class="site-downloads-info-kicker">Áudio MP3</span>
                             <ul>
-                                <li><i class="ph ph-check-circle" aria-hidden="true"></i> Tenta baixar sem marca d'agua quando a plataforma libera o arquivo limpo.</li>
-                                <li><i class="ph ph-check-circle" aria-hidden="true"></i> Converte video para MP4 compativel com navegador e Discord.</li>
-                                <li><i class="ph ph-check-circle" aria-hidden="true"></i> Baixa MP3 direto do link para usar no MusicAmz quando o conteúdo permite.</li>
-                                <li><i class="ph ph-check-circle" aria-hidden="true"></i> Aceita vídeos curtos de até 5 minutos e limita arquivos grandes para evitar travamentos.</li>
+                                <li><i class="ph ph-check-circle" aria-hidden="true"></i> Extrai apenas o áudio em MP3.</li>
+                                <li><i class="ph ph-check-circle" aria-hidden="true"></i> Entra diretamente na fila prioritária de áudio.</li>
+                                <li><i class="ph ph-check-circle" aria-hidden="true"></i> Arquivo pronto para importar no MusicAmz.</li>
+                                <li><i class="ph ph-check-circle" aria-hidden="true"></i> Indicador de progresso durante todo o processamento.</li>
                             </ul>
-                            <small>Use apenas conteúdos seus, livres ou permitidos. O site fica no GitHub Pages; o processamento pesado usa o servidor de vídeos no Hugging Face porque GitHub Pages não executa ffmpeg/yt-dlp.</small>
+                            <small>Use apenas conteúdos seus, livres ou permitidos. O áudio é processado em uma fila externa para manter o site rápido.</small>
                         </aside>
                     </div>
                 </div>
@@ -402,7 +377,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                     <div class="site-faq-list">
                         <article>
                             <h3>O que é a AMZ Studios?</h3>
-                            <p>A AMZ Studios é um hub de desenvolvimento com bot Discord, automações, painel administrativo, downloads de vídeos e aplicativos próprios.</p>
+                            <p>A AMZ Studios é um hub de desenvolvimento com bot Discord, automações, painel administrativo, downloads de áudio e aplicativos próprios.</p>
                         </article>
                         <article>
                             <h3>O AMZ Bot funciona para servidores Discord?</h3>
@@ -417,8 +392,8 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                             <p>MusicAmz é um player de música para Android com importação de faixas, filtros e reprodução local.</p>
                         </article>
                         <article>
-                            <h3>O site baixa vídeos de quais plataformas?</h3>
-                            <p>A ferramenta aceita links de Instagram, TikTok e YouTube curto de até 5 minutos, com saída em MP4 ou MP3 quando o servidor consegue processar o link.</p>
+                            <h3>Qual formato o site baixa?</h3>
+                            <p>A ferramenta é focada exclusivamente em MP3, para facilitar o uso na biblioteca local e no MusicAmz.</p>
                         </article>
                     </div>
                 </div>
@@ -786,7 +761,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
 
     <script>
         const amzScript = document.createElement('script');
-        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=35' : 'script.js?v=35';
+        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=36' : 'script.js?v=36';
         document.body.appendChild(amzScript);
     </script>
 </body>

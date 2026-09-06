@@ -1062,12 +1062,9 @@ function configurarNavegacaoTopo() {
     });
 }
 
-let modoDownloadSiteAtual = 'video_hd';
-const DOWNLOAD_SITE_MAX_SEGUNDOS = 300;
+const MODO_DOWNLOAD_SITE = 'mp3';
 
 function configurarDownloadsSite() {
-    selecionarModoDownloadSite(modoDownloadSiteAtual);
-
     const input = document.getElementById('site-download-url');
     if (!input || input.dataset.downloadConfigurado === 'true') return;
 
@@ -1075,7 +1072,7 @@ function configurarDownloadsSite() {
     input.addEventListener('keydown', (evento) => {
         if (evento.key !== 'Enter') return;
         evento.preventDefault();
-        baixarVideoSite();
+        baixarAudioSite();
     });
 }
 
@@ -1116,16 +1113,6 @@ function mostrarProgressoDownloadSite({ etapa = 'preparando', progresso = 0, men
     `;
 }
 
-function selecionarModoDownloadSite(modo = 'video_hd') {
-    modoDownloadSiteAtual = ['video_hd', 'video', 'mp3'].includes(modo) ? modo : 'video_hd';
-
-    document.querySelectorAll('[data-download-mode]').forEach((botao) => {
-        const ativo = botao.dataset.downloadMode === modoDownloadSiteAtual;
-        botao.classList.toggle('active', ativo);
-        botao.setAttribute('aria-pressed', String(ativo));
-    });
-}
-
 async function colarLinkDownloadSite() {
     const input = document.getElementById('site-download-url');
     if (!input) return;
@@ -1134,7 +1121,7 @@ async function colarLinkDownloadSite() {
         const texto = await navigator.clipboard.readText();
         input.value = texto.trim();
         input.focus();
-        mostrarStatusDownloadSite('Link colado. Escolha o formato e baixe.');
+        mostrarStatusDownloadSite('Link colado. Baixe o áudio em MP3.');
     } catch {
         mostrarStatusDownloadSite('Nao consegui ler a area de transferencia. Cole o link manualmente.', 'error');
         input.focus();
@@ -1166,15 +1153,6 @@ function obterNomeArquivoResposta(response, fallback) {
     }
 }
 
-function formatarDuracaoDownloadSite(segundos) {
-    const total = Number.parseInt(segundos, 10) || 0;
-    const minutos = Math.floor(total / 60);
-    const resto = total % 60;
-
-    if (minutos <= 0) return `${resto}s`;
-    return `${minutos}m ${String(resto).padStart(2, '0')}s`;
-}
-
 function normalizarErroDownloadSite(mensagem = '') {
     const texto = String(mensagem || '').trim();
     const textoNormalizado = texto.toLowerCase();
@@ -1184,11 +1162,11 @@ function normalizarErroDownloadSite(mensagem = '') {
     }
 
     if (textoNormalizado.includes('confirm you') && textoNormalizado.includes('not a bot')) {
-        return 'YouTube bloqueou este link com verificacao anti-bot. Tente outro video publico ou use TikTok/Instagram.';
+        return 'A plataforma pediu uma verificação. Tente outro conteúdo público.';
     }
 
     if (textoNormalizado.includes('sign in to confirm')) {
-        return 'YouTube pediu login para este video. Use um link publico que nao exija conta.';
+        return 'Esse conteúdo exige login. Use um link público que não exija conta.';
     }
 
     if (textoNormalizado.includes('unexpected_eof_while_reading') || textoNormalizado.includes('eof occurred in violation of protocol') || textoNormalizado.includes('ssl:')) {
@@ -1196,11 +1174,11 @@ function normalizarErroDownloadSite(mensagem = '') {
     }
 
     if (textoNormalizado.includes('private video') || textoNormalizado.includes('video is private')) {
-        return 'Este video e privado ou exige login. Use um link publico.';
+        return 'Esse conteúdo é privado ou exige login. Use um link público.';
     }
 
     if (textoNormalizado.includes('unsupported url')) {
-        return 'Esse tipo de link ainda nao e suportado. Use Instagram, TikTok ou YouTube publico.';
+        return 'Esse tipo de link ainda não é suportado. Use um conteúdo público permitido.';
     }
 
     if (textoNormalizado.includes('requested format is not available')) {
@@ -1208,24 +1186,6 @@ function normalizarErroDownloadSite(mensagem = '') {
     }
 
     return texto.replace(/^ERROR:\s*/i, '').slice(0, 260);
-}
-
-function ehLinkYoutubeDownloadSite(url) {
-    try {
-        const host = new URL(url).hostname.toLowerCase();
-        return host === 'youtu.be' || host.endsWith('.youtu.be') || host === 'youtube.com' || host.endsWith('.youtube.com');
-    } catch {
-        return false;
-    }
-}
-
-function ehLinkTikTokDownloadSite(url) {
-    try {
-        const host = new URL(url).hostname.toLowerCase();
-        return host === 'tiktok.com' || host.endsWith('.tiktok.com');
-    } catch {
-        return false;
-    }
 }
 
 function validarLinkDownloadSite(url) {
@@ -1246,11 +1206,7 @@ function validarLinkDownloadSite(url) {
     const suportado = plataformas.some((dominio) => host === dominio || host.endsWith(`.${dominio}`));
 
     if (!suportado) {
-        return 'Por enquanto use links de Instagram, TikTok ou YouTube curto.';
-    }
-
-    if (ehLinkYoutubeDownloadSite(url) && parsed.searchParams.has('list')) {
-        return 'Playlists do YouTube nao sao aceitas. Envie o link de um video unico.';
+        return 'Esse link não é aceito para extração de áudio.';
     }
 
     return '';
@@ -1273,57 +1229,17 @@ function baixarBlobSite(blob, nomeArquivo) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1200);
 }
 
-async function verificarLinkDownloadSite(url) {
-    if (ehLinkYoutubeDownloadSite(url) || ehLinkTikTokDownloadSite(url)) {
-        mostrarProgressoDownloadSite({
-            etapa: 'validando',
-            progresso: 6,
-            mensagem: 'Indo direto para a fila prioritaria para evitar uma consulta extra na plataforma...'
-        });
-        return null;
-    }
-
-    mostrarProgressoDownloadSite({
-        etapa: 'validando',
-        progresso: 6,
-        mensagem: 'Verificando duracao antes de iniciar...'
-    });
-
-    const response = await fetch(montarUrlVideoApi('/api/video/check'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-    });
-
-    if (response.status === 404) return null;
-
-    const dados = await lerJsonResposta(response);
-
-    if (!response.ok || dados.status !== 'sucesso') {
-        throw new Error(normalizarErroDownloadSite(dados?.mensagem || dados?.erro || 'Nao consegui verificar esse link.'));
-    }
-
-    const duracao = Number.parseInt(dados.duracao_segundos, 10);
-    const limite = Number.parseInt(dados.limite_segundos, 10) || DOWNLOAD_SITE_MAX_SEGUNDOS;
-
-    if (Number.isFinite(duracao) && duracao > limite) {
-        throw new Error(`Esse video tem ${formatarDuracaoDownloadSite(duracao)}. Limite atual: ${formatarDuracaoDownloadSite(limite)}.`);
-    }
-
-    return dados;
-}
-
-async function criarJobDownloadSite(url, modo) {
+async function criarJobDownloadSite(url) {
     mostrarProgressoDownloadSite({
         etapa: 'fila',
         progresso: 10,
-        mensagem: 'Criando download na fila prioritaria do servidor...'
+        mensagem: 'Enviando para a fila prioritária de áudio...'
     });
 
     const response = await fetch(montarUrlVideoApi('/api/video/jobs'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, modo })
+        body: JSON.stringify({ url, modo: MODO_DOWNLOAD_SITE })
     });
 
     if (response.status === 404) return null;
@@ -1361,7 +1277,7 @@ async function aguardarJobDownloadSite(jobId) {
         if (job.status === 'error') throw new Error(normalizarErroDownloadSite(job.erro || job.mensagem || 'Falha no download.'));
     }
 
-    throw new Error('Download demorou demais. Tente MP3, MP4 leve ou um video menor.');
+    throw new Error('O áudio demorou mais que o esperado. Tente novamente em alguns segundos.');
 }
 
 async function baixarResultadoJobDownloadSite(job, nomeFallback) {
@@ -1386,11 +1302,11 @@ async function baixarResultadoJobDownloadSite(job, nomeFallback) {
     baixarBlobSite(blob, nomeArquivo);
 }
 
-async function baixarVideoSiteLegado(url, modoEscolhido, nomeFallback, signal) {
+async function baixarAudioSiteLegado(url, nomeFallback, signal) {
     const response = await fetch(`${VIDEO_API_URL}/api/video/download`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, modo: modoEscolhido }),
+        body: JSON.stringify({ url, modo: MODO_DOWNLOAD_SITE }),
         signal
     });
 
@@ -1404,16 +1320,11 @@ async function baixarVideoSiteLegado(url, modoEscolhido, nomeFallback, signal) {
     baixarBlobSite(blob, nomeArquivo);
 }
 
-async function baixarVideoSite(modo = '') {
-    const modoEscolhido = modo || modoDownloadSiteAtual || 'video_hd';
+async function baixarAudioSite() {
     const input = document.getElementById('site-download-url');
     const url = input?.value?.trim() || '';
     const botoes = document.querySelectorAll('.site-downloads-tool button');
-    const nomes = {
-        mp3: 'amz-audio.mp3',
-        video: 'amz-video.mp4',
-        video_hd: 'amz-video-hd.mp4'
-    };
+    const nomeArquivo = 'amz-audio.mp3';
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     let timeoutDownload = null;
 
@@ -1436,7 +1347,7 @@ async function baixarVideoSite(modo = '') {
     mostrarProgressoDownloadSite({
         etapa: 'preparando',
         progresso: 2,
-        mensagem: 'Preparando download...'
+        mensagem: 'Preparando extração de áudio...'
     });
 
     try {
@@ -1444,26 +1355,17 @@ async function baixarVideoSite(modo = '') {
             controller?.abort();
         }, 430000);
 
-        const info = await verificarLinkDownloadSite(url);
-        if (info?.duracao_segundos) {
-            mostrarProgressoDownloadSite({
-                etapa: 'validado',
-                progresso: 8,
-                mensagem: `Duracao detectada: ${formatarDuracaoDownloadSite(info.duracao_segundos)}.`
-            });
-        }
-
-        const job = await criarJobDownloadSite(url, modoEscolhido);
+        const job = await criarJobDownloadSite(url);
         if (job) {
             const jobFinal = await aguardarJobDownloadSite(job.id);
-            await baixarResultadoJobDownloadSite(jobFinal, nomes[modoEscolhido] || nomes.video_hd);
+            await baixarResultadoJobDownloadSite(jobFinal, nomeArquivo);
         } else {
             mostrarProgressoDownloadSite({
                 etapa: 'baixando',
                 progresso: 20,
-                mensagem: 'Servidor antigo detectado. Usando download direto...'
+                mensagem: 'Processando o áudio diretamente...'
             });
-            await baixarVideoSiteLegado(url, modoEscolhido, nomes[modoEscolhido] || nomes.video_hd, controller?.signal);
+            await baixarAudioSiteLegado(url, nomeArquivo, controller?.signal);
         }
 
         mostrarProgressoDownloadSite({
@@ -1474,7 +1376,7 @@ async function baixarVideoSite(modo = '') {
     } catch (erro) {
         console.error('Erro no download do site:', erro);
         const mensagem = erro.name === 'AbortError'
-            ? 'Demorou demais para baixar esse link. Tente MP3, MP4 leve ou um video menor.'
+            ? 'A extração de áudio demorou mais que o esperado. Tente novamente em alguns segundos.'
             : normalizarErroDownloadSite(erro.message || 'Nao consegui baixar esse link agora.');
         mostrarStatusDownloadSite(mensagem, 'error');
     } finally {
