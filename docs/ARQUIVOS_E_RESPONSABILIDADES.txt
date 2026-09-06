@@ -2,8 +2,8 @@ AMZ STUDIOS - ARQUIVOS E RESPONSABILIDADES
 ==========================================
 
 Este arquivo explica o que cada pasta e arquivo principal da pasta AMZ faz.
-Ele serve para manter o projeto organizado sem quebrar o site, o bot, o chat
-secreto, os downloads ou a API de videos.
+Ele serve para manter o projeto organizado sem quebrar o site, o bot, os
+downloads ou a API de videos.
 
 
 PASTAS DA RAIZ
@@ -12,11 +12,6 @@ PASTAS DA RAIZ
 .git/
   Pasta interna do Git. Guarda historico, commits, branches e configuracoes do
   repositorio. Nao editar manualmente.
-
-amz-chat-secreto/
-  Pagina privada/escondida do chat secreto. Responsavel por login, conversa,
-  envio de imagens/videos, criptografia ponta-a-ponta, Supabase e chamadas de
-  voz/video via WebRTC.
 
 assets/
   Arquivos publicos usados pelo site no GitHub Pages, como logo, favicon e
@@ -87,46 +82,6 @@ style.css
   dashboard, downloads e responsividade.
 
 
-PASTA amz-chat-secreto/
-=======================
-
-amz-chat-secreto/app.js
-  Logica principal do chat secreto. Faz login, restaura sessao, conecta no
-  Supabase, envia/recebe mensagens, criptografa textos/midias, limpa arquivos
-  antigos e controla chamadas de voz/video via WebRTC.
-
-amz-chat-secreto/config.js
-  Configuracoes do chat secreto. Guarda URL/chave publica do Supabase, usuarios,
-  hashes de senha, tempo de sessao, limite de midias, criptografia e servidores
-  STUN das chamadas.
-
-amz-chat-secreto/index.html
-  Estrutura visual do chat secreto. Contem tela de login, sidebar, conversa,
-  botoes de midia e painel de chamada.
-
-amz-chat-secreto/README.md
-  Documentacao especifica do chat secreto. Explica ativacao, Supabase,
-  privacidade, criptografia e chamadas.
-
-amz-chat-secreto/style.css
-  CSS do chat secreto. Controla visual escuro, login, sidebar, mensagens,
-  midias, composer e painel de chamadas.
-
-amz-chat-secreto/supabase.sql
-  Script base do Supabase. Cria tabelas, indices, policies RLS, bucket de midia
-  e funcoes de limpeza.
-
-amz-chat-secreto/supabase-cleanup-schedule-10h.sql
-  Script que agenda limpeza periodica no Supabase. Cria controle de limpeza e
-  roda a checagem pelo cron.
-
-amz-chat-secreto/supabase-e2ee-hotfix.sql
-  Hotfix para aceitar arquivos criptografados no Storage do Supabase.
-
-amz-chat-secreto/supabase-storage-hotfix.sql
-  Hotfix da limpeza de midias. Usa fila e Storage API para evitar erro de
-  delecao direta em tabelas internas do Storage.
-
 
 PASTA assets/
 =============
@@ -135,7 +90,7 @@ assets/logo.ico
   Favicon do site AMZ Studios.
 
 assets/logo.png
-  Logo principal usada no site, chat secreto e cards.
+  Logo principal usada no site e nos cards.
 
 assets/README.md
   Documentacao curta da pasta assets.

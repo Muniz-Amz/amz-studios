@@ -15,18 +15,6 @@ Este arquivo serve como mapa para mexer no projeto sem baguncar caminhos publico
 - `logo.png` e `logo.ico`: identidade visual usada pelo site.
 - `meu-site-downloads/`: arquivos publicados para download no site.
 
-## `amz-chat-secreto/`
-
-Pagina escondida com login, Supabase, mensagens criptografadas, midias, limpeza e chamadas WebRTC.
-
-Arquivos principais:
-
-- `index.html`: tela de login e conversa.
-- `app.js`: login, criptografia, mensagens, midias, Supabase Realtime e chamadas.
-- `config.js`: configuracoes do chat e usuarios.
-- `style.css`: visual do chat.
-- `supabase*.sql`: scripts para configurar banco, Storage e limpeza.
-
 ## `backend/`
 
 Servidor do painel/API e bot Discord.
