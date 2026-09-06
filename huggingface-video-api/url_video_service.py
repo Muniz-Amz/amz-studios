@@ -77,10 +77,12 @@ class UrlVideoService:
         return parsed.geturl()
 
     def _opcoes_plataforma(self, url: str):
-        """Ajustes leves para plataformas que rejeitam clientes sem referer."""
+        """Ajustes para plataformas que bloqueiam clientes sem um navegador real."""
         host = (urlparse(url).hostname or "").lower()
+        usar_impersonacao = os.getenv("AMZ_YTDLP_IMPERSONATE", "chrome").strip()
+
         if host == "tiktok.com" or host.endswith(".tiktok.com"):
-            return {
+            opcoes = {
                 "http_headers": {
                     "User-Agent": (
                         "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 "
@@ -89,6 +91,24 @@ class UrlVideoService:
                     "Referer": "https://www.tiktok.com/",
                 }
             }
+            if usar_impersonacao:
+                opcoes["impersonate"] = usar_impersonacao
+            return opcoes
+
+        if host in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}:
+            opcoes = {
+                "http_headers": {
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+                    ),
+                    "Referer": "https://www.youtube.com/",
+                }
+            }
+            if usar_impersonacao:
+                opcoes["impersonate"] = usar_impersonacao
+            return opcoes
+
         return {}
 
     def _opcoes_rede_ytdlp(self, timeout_seconds=None, attempts=None):
@@ -175,7 +195,7 @@ class UrlVideoService:
         ):
             return (
                 "A conexao segura com a plataforma falhou temporariamente. "
-                "Tente novamente em alguns segundos; se repetir, reinicie o Space para atualizar o yt-dlp."
+                "Tente novamente em alguns segundos. Reiniciar o Space nao corrige esse tipo de bloqueio."
             )
 
         if "unable to download api page" in texto_lower or "connection reset" in texto_lower:
