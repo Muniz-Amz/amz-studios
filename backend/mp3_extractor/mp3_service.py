@@ -117,7 +117,10 @@ class Mp3DownloadService:
         if "video longo demais" in lower or "vídeo longo demais" in lower or "duration" in lower and "long" in lower:
             return "O conteúdo é longo demais para este servidor. Tente um vídeo de até 5 minutos."
         if "sign in to confirm" in lower or "confirm you're not a bot" in lower or "not a bot" in lower:
-            return "A plataforma pediu uma verificação. Tente outro conteúdo público."
+            return (
+                "O YouTube exigiu verificação de conta para este vídeo. "
+                "Esse bloqueio é da própria plataforma; tente outro conteúdo público."
+            )
         if "private video" in lower or "this video is private" in lower or "login required" in lower:
             return "Esse conteúdo é privado ou exige login. Use um link público."
         if "unsupported url" in lower:
@@ -147,6 +150,14 @@ class Mp3DownloadService:
     @staticmethod
     def _is_temporary_error(error: Exception) -> bool:
         text = " ".join(line.strip() for line in str(error).splitlines() if line.strip()).lower()
+        # Uma exigência de login/anti-bot não melhora com nova tentativa e não
+        # deve consumir fila, CPU ou novas requisições ao YouTube.
+        if any(term in text for term in (
+            "sign in to confirm",
+            "confirm you're not a bot",
+            "not a bot",
+        )):
+            return False
         return any(term in text for term in (
             "unexpected_eof_while_reading",
             "eof occurred in violation of protocol",
@@ -219,7 +230,10 @@ class Mp3DownloadService:
             "socket_timeout": self.limits.timeout_seconds,
             "retries": self.limits.retries,
             "fragment_retries": self.limits.retries,
-            "extractor_retries": self.limits.retries,
+            # Falhas de extração de metadados tendem a ser determinísticas
+            # (conteúdo privado, bloqueio ou verificação). A repetição de rede
+            # continua coberta por `retries` e pelo retry externo controlado.
+            "extractor_retries": 1,
             "file_access_retries": self.limits.retries,
         }
         if shutil.which("node"):
