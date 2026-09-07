@@ -1,13 +1,13 @@
 # AMZ Studios
 
-Repositorio principal do site AMZ Studios, painel do bot, backend do bot Discord e API isolada de videos.
+Repositorio principal do site AMZ Studios, painel do bot, backend do bot Discord e servico isolado de extracao MP3.
 
 ## Mapa rapido
 
 - `index.html`, `style.css`, `script.js`: site principal publicado no GitHub Pages.
 - `assets/`: logos e arquivos publicos de download.
 - `backend/`: API/painel e bot Discord hospedados fora do GitHub Pages.
-- `huggingface-video-api/`: API Docker separada para baixar/converter videos.
+- `backend/mp3_extractor/`: servico MP3 separado, publicado como servico proprio no Render e removivel sem afetar o bot.
 - `docs/`: documentacao de organizacao, deploy e manutencao.
 
 ## Regras para nao quebrar o site

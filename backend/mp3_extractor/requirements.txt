@@ -1,0 +1,5 @@
+Flask>=3.0,<4
+flask-cors>=4,<7
+gunicorn>=22,<24
+imageio-ffmpeg>=0.5,<1
+yt-dlp[default,curl-cffi]

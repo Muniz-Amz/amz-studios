@@ -16,8 +16,9 @@
 - O `.env` nao deve ser commitado.
 - Reiniciar/deployar o servidor quando mudar `backend/`.
 
-## API de video
+## Servico de extracao MP3
 
-- A pasta `huggingface-video-api/` vai separada para o Hugging Face Space.
-- O site principal usa a URL configurada em `script.js`.
-- Se a URL do Space mudar, atualizar `VIDEO_API_URL`.
+- A raiz do servico no Render e `backend/mp3_extractor/`; ele deve permanecer separado do bot para poder ser removido depois sem alterar o restante do backend.
+- O site principal usa `MP3_API_URL` em `script.js`, apontando para `https://amz-mp3-api.onrender.com`.
+- O contrato publico do site usa `POST /api/mp3/jobs`, `GET /api/mp3/jobs/<id>` e `GET /api/mp3/jobs/<id>/download` para manter fila, estimativa e progresso.
+- Se a URL do servico mudar, atualizar somente `MP3_API_URL`.
