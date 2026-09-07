@@ -2,7 +2,7 @@
 // CONFIGURAÇÕES E URLS
 // ==========================================
 const API_URL = 'https://amz-studios-api.onrender.com';
-const VIDEO_API_URL = 'https://dreadlord007-amz-video-api.hf.space';
+const MP3_API_URL = 'https://amz-mp3-api.onrender.com';
 const DISCORD_CLIENT_ID = '1479103284064026787';
 const DISCORD_REDIRECT_PADRAO = 'https://muniz-amz.github.io/amz-studios/';
 const DISCORD_LOGIN_SCOPES = 'identify guilds';
@@ -1214,8 +1214,8 @@ function validarLinkDownloadSite(url) {
     return '';
 }
 
-function montarUrlVideoApi(caminho) {
-    return `${VIDEO_API_URL}${caminho}`;
+function montarUrlMp3Api(caminho) {
+    return `${MP3_API_URL}${caminho}`;
 }
 
 function baixarBlobSite(blob, nomeArquivo) {
@@ -1238,13 +1238,11 @@ async function criarJobDownloadSite(url) {
         mensagem: 'Enviando para a fila prioritária de áudio...'
     });
 
-    const response = await fetch(montarUrlVideoApi('/api/video/jobs'), {
+    const response = await fetch(montarUrlMp3Api('/api/mp3/jobs'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, modo: MODO_DOWNLOAD_SITE })
     });
-
-    if (response.status === 404) return null;
 
     const dados = await lerJsonResposta(response);
 
@@ -1287,7 +1285,7 @@ async function aguardarJobDownloadSite(jobId) {
     while (Date.now() - iniciadoEm < 430000) {
         await new Promise((resolve) => window.setTimeout(resolve, 1500));
 
-        const response = await fetch(montarUrlVideoApi(`/api/video/jobs/${encodeURIComponent(jobId)}`));
+        const response = await fetch(montarUrlMp3Api(`/api/mp3/jobs/${encodeURIComponent(jobId)}`));
         const dados = await lerJsonResposta(response);
 
         if (!response.ok || dados.status !== 'sucesso') {
@@ -1317,7 +1315,7 @@ async function baixarResultadoJobDownloadSite(job, nomeFallback) {
 
     const downloadUrl = job.download_url?.startsWith('http')
         ? job.download_url
-        : montarUrlVideoApi(job.download_url || `/api/video/jobs/${encodeURIComponent(job.id)}/download`);
+        : montarUrlMp3Api(job.download_url || `/api/mp3/jobs/${encodeURIComponent(job.id)}/download`);
     const response = await fetch(downloadUrl);
 
     if (!response.ok) {
@@ -1330,31 +1328,11 @@ async function baixarResultadoJobDownloadSite(job, nomeFallback) {
     baixarBlobSite(blob, nomeArquivo);
 }
 
-async function baixarAudioSiteLegado(url, nomeFallback, signal) {
-    const response = await fetch(`${VIDEO_API_URL}/api/video/download`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, modo: MODO_DOWNLOAD_SITE }),
-        signal
-    });
-
-    if (!response.ok) {
-        const dados = await lerJsonResposta(response);
-        throw new Error(normalizarErroDownloadSite(dados?.mensagem || dados?.erro || 'Nao consegui baixar esse link.'));
-    }
-
-    const blob = await response.blob();
-    const nomeArquivo = obterNomeArquivoResposta(response, nomeFallback);
-    baixarBlobSite(blob, nomeArquivo);
-}
-
 async function baixarAudioSite() {
     const input = document.getElementById('site-download-url');
     const url = input?.value?.trim() || '';
     const botoes = document.querySelectorAll('.site-downloads-tool button');
     const nomeArquivo = 'amz-audio.mp3';
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    let timeoutDownload = null;
 
     if (!url) {
         mostrarStatusDownloadSite('Cole um link primeiro.', 'error');
@@ -1379,22 +1357,9 @@ async function baixarAudioSite() {
     });
 
     try {
-        timeoutDownload = window.setTimeout(() => {
-            controller?.abort();
-        }, 430000);
-
         const job = await criarJobDownloadSite(url);
-        if (job) {
-            const jobFinal = await aguardarJobDownloadSite(job.id);
-            await baixarResultadoJobDownloadSite(jobFinal, nomeArquivo);
-        } else {
-            mostrarProgressoDownloadSite({
-                etapa: 'baixando',
-                progresso: 20,
-                mensagem: 'Processando o áudio diretamente...'
-            });
-            await baixarAudioSiteLegado(url, nomeArquivo, controller?.signal);
-        }
+        const jobFinal = await aguardarJobDownloadSite(job.id);
+        await baixarResultadoJobDownloadSite(jobFinal, nomeArquivo);
 
         mostrarProgressoDownloadSite({
             etapa: 'concluido',
@@ -1403,12 +1368,9 @@ async function baixarAudioSite() {
         }, 'success');
     } catch (erro) {
         console.error('Erro no download do site:', erro);
-        const mensagem = erro.name === 'AbortError'
-            ? 'A extração de áudio demorou mais que o esperado. Tente novamente em alguns segundos.'
-            : normalizarErroDownloadSite(erro.message || 'Nao consegui baixar esse link agora.');
+        const mensagem = normalizarErroDownloadSite(erro.message || 'Nao consegui baixar esse link agora.');
         mostrarStatusDownloadSite(mensagem, 'error');
     } finally {
-        window.clearTimeout(timeoutDownload);
         botoes.forEach((botao) => {
             botao.disabled = false;
         });
