@@ -188,6 +188,12 @@ def _process_job(job_id: str, url: str) -> None:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+@app.get("/health")
+def health():
+    """Resposta mínima para o health check interno do Render."""
+    return jsonify({"status": "ok"})
+
+
 @app.get("/")
 def root():
     return jsonify({
