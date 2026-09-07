@@ -182,7 +182,9 @@ class Mp3DownloadService:
                 ),
                 "Referer": "https://www.youtube.com/",
             }
-            impersonate = os.getenv("AMZ_MP3_YOUTUBE_IMPERSONATE", "").strip()
+            # O extra curl-cffi já vem no container e oferece o alvo genérico
+            # mais estável disponível na versão instalada do yt-dlp.
+            impersonate = os.getenv("AMZ_MP3_YOUTUBE_IMPERSONATE", "chrome").strip()
         else:
             impersonate = os.getenv("AMZ_MP3_INSTAGRAM_IMPERSONATE", "").strip()
 
