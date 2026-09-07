@@ -240,6 +240,9 @@ class Mp3DownloadService:
                         callback("tentando novamente", 10, f"Conexão instável. Tentando novamente ({attempt + 1}/{self.limits.retries})…")
                     time.sleep(min(attempt * 2, 5))
 
+        # Detalhe fica somente no log privado do Render; a resposta pública é
+        # normalizada abaixo para não expor URLs temporárias ou dados internos.
+        print(f"[MP3] yt-dlp falhou: {type(last_error).__name__}: {str(last_error)[-900:]}")
         raise Mp3DownloadError(self._public_error(last_error or RuntimeError("erro desconhecido")))
 
     def download_audio(self, raw_url: str, temp_dir: str, progress_callback=None) -> Path:
