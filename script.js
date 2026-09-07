@@ -20,13 +20,13 @@ const MODERACAO_RECURSOS_CACHE_MS = 5000;
 const ADMIN_STATUS_CACHE_MS = 30 * 1000;
 const SAVE_TRAY_SECTIONS = {
     setup: 'Limpeza',
-    server: 'Avisos',
-    role: 'Moderacao',
+    server: 'Boas-vindas',
+    role: 'Moderação',
     audit: 'Auditoria',
     security: 'Seguranca',
     automations: 'Automacoes',
-    automationRoles: 'Auto cargos',
-    automationMessages: 'Mensagens',
+    automationRoles: 'Cargos',
+    automationMessages: 'Comunicação',
     automationChannels: 'Canais'
 };
 const MODELO_AVISOS_AMZ = {
@@ -243,22 +243,22 @@ const automationSettings = [
 const AUTOMATION_GROUPS = [
     {
         section: 'automationRoles',
-        title: 'Cargos e permissões',
-        description: 'Tudo que entrega cargo, remove cargo ou envia comunicado por cargo.',
+        title: 'Cargos',
+        description: 'Cargos automáticos e cargos por reação.',
         icon: 'ph-identification-card',
-        ids: ['autoRole', 'reactionRole', 'roleAnnouncement']
+        ids: ['autoRole', 'reactionRole']
     },
     {
         section: 'automationMessages',
-        title: 'Mensagens e avisos',
-        description: 'Respostas, convites, metas e mensagens programadas.',
+        title: 'Comunicação',
+        description: 'Anúncios, respostas, convites, metas e mensagens programadas.',
         icon: 'ph-chat-centered-text',
-        ids: ['inviteTracker', 'autoResponse', 'scheduledMessage', 'memberGoalNotice']
+        ids: ['roleAnnouncement', 'inviteTracker', 'autoResponse', 'scheduledMessage', 'memberGoalNotice']
     },
     {
         section: 'automationChannels',
-        title: 'Controle de canais',
-        description: 'Regras que organizam canais, threads e uso de comandos.',
+        title: 'Canais',
+        description: 'Threads automáticas e regras para uso de comandos por canal.',
         icon: 'ph-sliders-horizontal',
         ids: ['autoThread', 'commandChannelBlock']
     }
@@ -616,62 +616,45 @@ const DASHBOARD_SECTIONS = {
         description: 'Exclusao automatica de mensagens por canal.'
     },
     server: {
-        title: 'Entrada e Saida',
-        description: 'Configure boas-vindas, saida, canal, mensagem e imagem/GIF.'
+        title: 'Boas-vindas',
+        description: 'Mensagens de entrada e saída para os membros do servidor.'
     },
     role: {
         title: 'Moderação',
-        description: 'Logs, punicoes, auditoria e seguranca.'
+        description: 'Equipe, cargos e permissões para ações de moderação.'
     },
     audit: {
         title: 'Auditoria',
-        description: 'Logs personalizados por canal.'
+        description: 'Registros, canais e histórico das ações do servidor.'
     },
     security: {
         title: 'Segurança',
-        description: 'Anti raid e proteção.'
+        description: 'Anti-raid, links suspeitos e ações de proteção.'
     },
     automations: {
         title: 'Automações',
         description: 'Ações automáticas do servidor.'
     },
     automationRoles: {
-        title: 'Auto cargos',
-        description: 'Auto cargo, cargos por reação e anúncio por cargo.'
+        title: 'Cargos',
+        description: 'Cargos automáticos e por reação.'
     },
     automationMessages: {
-        title: 'Mensagens',
-        description: 'Respostas automáticas, convites, metas e mensagens agendadas.'
+        title: 'Comunicação',
+        description: 'Anúncios, respostas, convites, metas e mensagens agendadas.'
     },
     automationChannels: {
         title: 'Canais',
-        description: 'Threads automáticas e bloqueio de comandos por canal.'
+        description: 'Threads automáticas e regras para comandos por canal.'
     }
 };
-const moderationLogEvents = [
-    { path: 'logs.mensagens_deletadas', channelPath: 'logs.canal_mensagens_deletadas_id', namePath: 'logs.canal_mensagens_deletadas_nome', label: 'Mensagens deletadas', hint: 'Registra mensagens apagadas.' },
-    { path: 'logs.mensagens_editadas', channelPath: 'logs.canal_mensagens_editadas_id', namePath: 'logs.canal_mensagens_editadas_nome', label: 'Mensagens editadas', hint: 'Registra mensagens alteradas.' },
-    { path: 'logs.banimentos', channelPath: 'logs.canal_banimentos_id', namePath: 'logs.canal_banimentos_nome', label: 'Banimentos', hint: 'Registra membros banidos.' },
-    { path: 'logs.desbanimentos', channelPath: 'logs.canal_desbanimentos_id', namePath: 'logs.canal_desbanimentos_nome', label: 'Desbanimentos', hint: 'Registra membros desbanidos.' },
-    { path: 'logs.expulsoes', channelPath: 'logs.canal_expulsoes_id', namePath: 'logs.canal_expulsoes_nome', label: 'Expulsoes', hint: 'Registra membros expulsos.' },
-    { path: 'logs.castigos', channelPath: 'logs.canal_castigos_id', namePath: 'logs.canal_castigos_nome', label: 'Castigos', hint: 'Registra castigos aplicados ou removidos.' },
-    { path: 'logs.canais', channelPath: 'logs.canal_canais_id', namePath: 'logs.canal_canais_nome', label: 'Canais criados/deletados', hint: 'Registra alteracoes em canais.' },
-    { path: 'logs.cargos', channelPath: 'logs.canal_cargos_id', namePath: 'logs.canal_cargos_nome', label: 'Cargos criados/deletados', hint: 'Registra alteracoes em cargos.' }
-];
 const MODERACAO_SECTIONS = {
     role: {
-        label: 'Central de Moderacao',
-        description: 'Configure quais eventos o bot deve registrar e para qual canal cada log sera enviado.',
+        label: 'Moderação e permissões',
+        description: 'Defina quais cargos podem usar as ações administrativas e de moderação do bot. As permissões do Discord continuam obrigatórias.',
         fields: [
-            { type: 'toggle', path: 'logs.ativo', label: 'Ativar logs de moderacao', hint: 'Liga os registros automáticos do servidor.' },
-            { type: 'channel', path: 'logs.canal_mensagens_id', namePath: 'logs.canal_mensagens_nome', label: 'Padrao mensagens', hint: 'Usado quando um log de mensagem nao tiver canal especifico.' },
-            { type: 'channel', path: 'logs.canal_moderacao_id', namePath: 'logs.canal_moderacao_nome', label: 'Padrao punicoes', hint: 'Usado quando banimentos, expulsoes ou castigos nao tiverem canal especifico.' },
-            { type: 'channel', path: 'logs.canal_servidor_id', namePath: 'logs.canal_servidor_nome', label: 'Padrao servidor', hint: 'Usado quando logs de canais ou cargos nao tiverem canal especifico.' },
-            ...moderationLogEvents.map((evento) => ({
-                ...evento,
-                type: 'log-event',
-                emptyLabel: 'Usar canal padrao'
-            }))
+            { type: 'role-multi', path: 'permissoes.cargos_admin', label: 'Cargos de administração', hint: 'Podem gerenciar as ações administrativas do bot.' },
+            { type: 'role-multi', path: 'permissoes.cargos_moderador', label: 'Cargos de moderação', hint: 'Podem usar as ações de moderação permitidas pelo bot.' }
         ]
     }
 };
@@ -3516,7 +3499,7 @@ function preencherPainelConfiguracaoAtual(secao, canais = [], cargos = []) {
         return;
     }
 
-    preencherCamposModeracao(canais);
+    preencherCamposModeracao(canais, cargos);
 }
 
 function preservarCamposDashboardAtual() {
@@ -4377,6 +4360,18 @@ function renderizarCampoModeracao(campo) {
         `;
     }
 
+    if (campo.type === 'role-multi') {
+        return `
+            <label class="mod-field mod-field-wide">
+                <span>${escaparHTML(campo.label)}</span>
+                <select ${attrs} multiple size="5" aria-describedby="${id}_hint">
+                    <option value="">Carregando cargos...</option>
+                </select>
+                <small id="${id}_hint">${escaparHTML(campo.hint || 'Use Ctrl ou Cmd para selecionar mais de um cargo.')}</small>
+            </label>
+        `;
+    }
+
     if (campo.type === 'channel') {
         return `
             <label class="mod-field">
@@ -4433,7 +4428,7 @@ function mostrarStatusModeracao(mensagem, tipo = 'error') {
     statusMsg.className = `vm-status-message ${tipo}`;
 }
 
-function preencherCamposModeracao(canais = []) {
+function preencherCamposModeracao(canais = [], cargos = []) {
     document.querySelectorAll('[data-mod-field]').forEach((campo) => {
         const path = campo.dataset.path;
         const tipo = campo.dataset.type;
@@ -4446,6 +4441,17 @@ function preencherCamposModeracao(canais = []) {
 
         if (tipo === 'textarea-list') {
             campo.value = listaParaTexto(valor);
+            return;
+        }
+
+        if (tipo === 'role-multi') {
+            const selecionados = new Set(normalizarListaIds(valor));
+            campo.innerHTML = cargos.length
+                ? cargos.map((cargo) => `<option value="${escaparHTML(cargo.id)}">${escaparHTML(cargo.nome)}</option>`).join('')
+                : '<option value="">Nenhum cargo encontrado</option>';
+            Array.from(campo.options).forEach((option) => {
+                option.selected = selecionados.has(option.value);
+            });
             return;
         }
 
@@ -4472,6 +4478,7 @@ function coletarCamposModeracao() {
         if (tipo === 'toggle') valor = campo.checked;
         if (tipo === 'number') valor = Number.parseInt(campo.value || '0', 10);
         if (tipo === 'textarea-list') valor = textoParaLista(campo.value);
+        if (tipo === 'role-multi') valor = Array.from(campo.selectedOptions).map((option) => option.value).filter(Boolean);
 
         definirValorPath(moderacaoAtual, path, valor);
 
@@ -4836,7 +4843,7 @@ function renderizarTemplateBoasVindas(tipo, titulo, descricao) {
 function renderizarPainelBoasVindas(serverName) {
     return `
         <div class="vm-panel-heading">
-            <span>Entrada e Saida</span>
+            <span>Boas-vindas</span>
             <strong>${escaparHTML(serverName)}</strong>
         </div>
 

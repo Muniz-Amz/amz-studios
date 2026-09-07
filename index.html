@@ -466,13 +466,13 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
 
                         <nav class="vm-sidebar-nav" aria-label="Configuracoes do servidor">
                             <button type="button" class="vm-sidebar-link active" data-dashboard-section="setup" onclick="selecionarSecaoDashboard('setup')">Limpeza</button>
-                            <button type="button" class="vm-sidebar-link" data-dashboard-section="server" onclick="selecionarSecaoDashboard('server')">Entrada e Saida</button>
-                            <button type="button" class="vm-sidebar-link" data-dashboard-section="role" onclick="selecionarSecaoDashboard('role')">Moderação</button>
-                            <button type="button" class="vm-sidebar-link" data-dashboard-section="audit" onclick="selecionarSecaoDashboard('audit')">Auditoria</button>
-                            <button type="button" class="vm-sidebar-link" data-dashboard-section="security" onclick="selecionarSecaoDashboard('security')">Segurança</button>
-                            <button type="button" class="vm-sidebar-link" data-dashboard-section="automationRoles" onclick="selecionarSecaoDashboard('automationRoles')">Auto cargos</button>
-                            <button type="button" class="vm-sidebar-link" data-dashboard-section="automationMessages" onclick="selecionarSecaoDashboard('automationMessages')">Mensagens</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="server" onclick="selecionarSecaoDashboard('server')">Boas-vindas</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="automationRoles" onclick="selecionarSecaoDashboard('automationRoles')">Cargos</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="automationMessages" onclick="selecionarSecaoDashboard('automationMessages')">Comunicação</button>
                             <button type="button" class="vm-sidebar-link" data-dashboard-section="automationChannels" onclick="selecionarSecaoDashboard('automationChannels')">Canais</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="role" onclick="selecionarSecaoDashboard('role')">Moderação</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="security" onclick="selecionarSecaoDashboard('security')">Segurança</button>
+                            <button type="button" class="vm-sidebar-link" data-dashboard-section="audit" onclick="selecionarSecaoDashboard('audit')">Auditoria</button>
                         </nav>
 
                         <div class="vm-sidebar-divider"></div>
@@ -505,7 +505,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                                 <i class="ph ph-broom"></i>
                                 <span>
                                     <strong>Limpeza</strong>
-                                    <small>Exclusao por canal</small>
+                                    <small>Exclusão automática por canal</small>
                                 </span>
                             </button>
                             <button type="button" class="vm-dashboard-card vm-dashboard-card-welcome" data-dashboard-section="server" onclick="selecionarSecaoDashboard('server')">
@@ -514,50 +514,50 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                                     <i class="ph ph-user-minus"></i>
                                 </span>
                                 <span>
-                                    <strong>Entrada e Saida</strong>
-                                    <small>Mensagens automaticas</small>
-                                </span>
-                            </button>
-                            <button type="button" class="vm-dashboard-card" data-dashboard-section="role" onclick="selecionarSecaoDashboard('role')">
-                                <i class="ph ph-shield-check"></i>
-                                <span>
-                                    <strong>Moderação</strong>
-                                    <small>Logs e punições</small>
-                                </span>
-                            </button>
-                            <button type="button" class="vm-dashboard-card" data-dashboard-section="audit" onclick="selecionarSecaoDashboard('audit')">
-                                <i class="ph ph-clipboard-text"></i>
-                                <span>
-                                    <strong>AUDITORIA</strong>
-                                    <small>Logs personalizados por canal</small>
-                                </span>
-                            </button>
-                            <button type="button" class="vm-dashboard-card" data-dashboard-section="security" onclick="selecionarSecaoDashboard('security')">
-                                <i class="ph ph-shield-warning"></i>
-                                <span>
-                                    <strong>SEGURANÇA</strong>
-                                    <small>Anti raid e proteção</small>
+                                    <strong>BOAS-VINDAS</strong>
+                                    <small>Mensagens de entrada e saída</small>
                                 </span>
                             </button>
                             <button type="button" class="vm-dashboard-card" data-dashboard-section="automationRoles" onclick="selecionarSecaoDashboard('automationRoles')">
                                 <i class="ph ph-identification-card"></i>
                                 <span>
-                                    <strong>AUTO CARGOS</strong>
-                                    <small>Cargo por entrada, reação e aviso</small>
+                                    <strong>CARGOS</strong>
+                                    <small>Automáticos e por reação</small>
                                 </span>
                             </button>
                             <button type="button" class="vm-dashboard-card" data-dashboard-section="automationMessages" onclick="selecionarSecaoDashboard('automationMessages')">
                                 <i class="ph ph-chat-centered-text"></i>
                                 <span>
-                                    <strong>MENSAGENS</strong>
-                                    <small>Respostas, convites, metas e agendadas</small>
+                                    <strong>COMUNICAÇÃO</strong>
+                                    <small>Anúncios, respostas e agendados</small>
                                 </span>
                             </button>
                             <button type="button" class="vm-dashboard-card" data-dashboard-section="automationChannels" onclick="selecionarSecaoDashboard('automationChannels')">
                                 <i class="ph ph-sliders-horizontal"></i>
                                 <span>
                                     <strong>CANAIS</strong>
-                                    <small>Threads e bloqueio de comandos</small>
+                                    <small>Threads e regras de comandos</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="role" onclick="selecionarSecaoDashboard('role')">
+                                <i class="ph ph-shield-check"></i>
+                                <span>
+                                    <strong>MODERAÇÃO</strong>
+                                    <small>Equipe e permissões do bot</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="security" onclick="selecionarSecaoDashboard('security')">
+                                <i class="ph ph-shield-warning"></i>
+                                <span>
+                                    <strong>SEGURANÇA</strong>
+                                    <small>Anti-raid e links suspeitos</small>
+                                </span>
+                            </button>
+                            <button type="button" class="vm-dashboard-card" data-dashboard-section="audit" onclick="selecionarSecaoDashboard('audit')">
+                                <i class="ph ph-clipboard-text"></i>
+                                <span>
+                                    <strong>AUDITORIA</strong>
+                                    <small>Registros e histórico do servidor</small>
                                 </span>
                             </button>
                         </div>
@@ -755,7 +755,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
 
     <script>
         const amzScript = document.createElement('script');
-        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=38' : 'script.js?v=38';
+        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=39' : 'script.js?v=39';
         document.body.appendChild(amzScript);
     </script>
 </body>

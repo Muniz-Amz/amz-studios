@@ -3078,6 +3078,15 @@ section {
     min-height: 130px;
 }
 
+.mod-field select[multiple] {
+    min-height: 132px;
+    padding: 6px;
+}
+
+.mod-field select[multiple] option {
+    padding: 7px 8px;
+}
+
 .mod-toggle-row input {
     width: 18px;
     height: 18px;
