@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
-import base64
-import binascii
+import json
+import math
 import os
+import queue
+import re
 import shutil
+import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,9 +25,44 @@ except ImportError:  # pragma: no cover - tratado também em execução
 
 SUPPORTED_DOMAINS = ("youtube.com", "youtu.be", "tiktok.com", "instagram.com")
 
+# O nome do arquivo nunca é usado como prova de que ele é mídia. A extensão e
+# o MIME informado pelo navegador são apenas a primeira barreira; o conteúdo é
+# confirmado via ffprobe antes de ocupar uma vaga na fila.
+SUPPORTED_UPLOAD_EXTENSIONS = frozenset({
+    ".3gp",
+    ".aac",
+    ".aiff",
+    ".avi",
+    ".flac",
+    ".m4a",
+    ".m4v",
+    ".mkv",
+    ".mov",
+    ".mp3",
+    ".mp4",
+    ".mpeg",
+    ".mpg",
+    ".oga",
+    ".ogg",
+    ".opus",
+    ".wav",
+    ".webm",
+    ".wma",
+    ".wmv",
+})
+GENERIC_UPLOAD_MIMETYPES = frozenset({
+    "application/octet-stream",
+    "application/ogg",
+    "application/x-ogg",
+})
+
 
 class Mp3DownloadError(Exception):
     """Erro seguro para exibir a quem solicitou a extração."""
+
+
+class Mp3UploadTooLargeError(Mp3DownloadError):
+    """Upload excedeu o limite de disco antes de chegar ao conversor."""
 
 
 def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
@@ -37,6 +76,9 @@ def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
 @dataclass(frozen=True)
 class Mp3Limits:
     max_output_mb: int = _env_int("AMZ_MP3_MAX_OUTPUT_MB", 50, 5, 200)
+    # O upload e o resultado têm o mesmo teto por padrão: isso mantém duas
+    # cópias temporárias dentro de um uso previsível para o plano free.
+    max_upload_mb: int = _env_int("AMZ_MP3_MAX_UPLOAD_MB", 50, 5, 75)
     max_seconds: int = _env_int("AMZ_MP3_MAX_SECONDS", 300, 30, 1800)
     timeout_seconds: int = _env_int("AMZ_MP3_TIMEOUT_SECONDS", 360, 60, 900)
     retries: int = _env_int("AMZ_MP3_RETRIES", 2, 1, 5)
@@ -46,11 +88,39 @@ class Mp3Limits:
     def max_output_bytes(self) -> int:
         return self.max_output_mb * 1024 * 1024
 
+    @property
+    def max_upload_bytes(self) -> int:
+        return self.max_upload_mb * 1024 * 1024
+
+
+@dataclass(frozen=True)
+class UploadMetadata:
+    """Metadados seguros do arquivo enviado pelo navegador."""
+
+    source_filename: str
+    output_filename: str
+    extension: str
+    mimetype: str
+
+
+@dataclass(frozen=True)
+class UploadedMediaInfo:
+    """Resultado da validação do conteúdo real feita pelo ffprobe."""
+
+    duration_seconds: float
+    format_name: str
+
 
 class Mp3DownloadService:
     def __init__(self, limits: Mp3Limits | None = None):
         self.limits = limits or Mp3Limits()
         self.ffmpeg = os.getenv("FFMPEG_BINARY", "").strip() or shutil.which("ffmpeg") or imageio_ffmpeg.get_ffmpeg_exe()
+        ffmpeg_path = Path(self.ffmpeg)
+        self.ffprobe = (
+            os.getenv("FFPROBE_BINARY", "").strip()
+            or shutil.which("ffprobe")
+            or str(ffmpeg_path.with_name("ffprobe" + ffmpeg_path.suffix))
+        )
 
     def ytdlp_version(self) -> str:
         if YoutubeDL is None:
@@ -88,26 +158,297 @@ class Mp3DownloadService:
 
         return parsed.geturl()
 
-    def _cookies_file(self, temp_dir: str) -> Path | None:
-        path_value = os.getenv("AMZ_MP3_YTDLP_COOKIES_PATH", "").strip()
-        if path_value:
-            path = Path(path_value)
-            if not path.exists():
-                raise Mp3DownloadError("Os cookies configurados para o MP3 não foram encontrados no servidor.")
-            return path
+    def validate_upload_metadata(self, filename: str, mimetype: str | None) -> UploadMetadata:
+        """Valida os metadados enviados pelo navegador antes de gravar o arquivo.
 
-        encoded = os.getenv("AMZ_MP3_YTDLP_COOKIES_B64", "").strip()
-        if not encoded:
-            return None
+        Esta etapa evita receber tipos obviamente incorretos, mas não confia no
+        nome ou no cabeçalho do cliente: ``probe_uploaded_media`` confirma o
+        conteúdo real antes de o job entrar na fila.
+        """
+
+        raw_name = str(filename or "").replace("\\", "/").rsplit("/", 1)[-1].strip()
+        raw_name = "".join(char for char in raw_name if char.isprintable())[:180]
+        if not raw_name:
+            raise Mp3DownloadError("Selecione um arquivo de áudio ou vídeo válido.")
+
+        extension = Path(raw_name).suffix.lower()
+        if extension not in SUPPORTED_UPLOAD_EXTENSIONS:
+            raise Mp3DownloadError(
+                "Formato não aceito. Envie áudio ou vídeo em MP3, M4A, WAV, MP4, MOV, WebM ou formato parecido."
+            )
+
+        normalized_mime = str(mimetype or "").split(";", 1)[0].strip().lower()
+        if normalized_mime and not (
+            normalized_mime.startswith("audio/")
+            or normalized_mime.startswith("video/")
+            or normalized_mime in GENERIC_UPLOAD_MIMETYPES
+        ):
+            raise Mp3DownloadError("Esse arquivo não foi identificado como áudio ou vídeo.")
+
+        stem = Path(raw_name).stem.strip()
+        safe_stem = re.sub(r"[^\w .()\-]+", "_", stem, flags=re.UNICODE).strip(" ._")[:80] or "amz-audio"
+        return UploadMetadata(
+            source_filename=raw_name,
+            output_filename=f"{safe_stem}.mp3",
+            extension=extension,
+            mimetype=normalized_mime,
+        )
+
+    def probe_uploaded_media(self, input_path: str | Path) -> UploadedMediaInfo:
+        """Confirma que o arquivo local contém uma faixa de áudio permitida."""
+
+        source = Path(input_path)
+        if not source.is_file():
+            raise Mp3DownloadError("O arquivo enviado não foi encontrado para conversão.")
+        if not self.ffprobe or not Path(self.ffprobe).is_file() and not shutil.which(self.ffprobe):
+            raise Mp3DownloadError("O servidor não está pronto para validar arquivos enviados.")
+
+        command = [
+            self.ffprobe,
+            "-v",
+            "error",
+            "-probesize",
+            "5M",
+            "-analyzeduration",
+            "5M",
+            "-show_entries",
+            "format=format_name,duration:stream=codec_type,duration",
+            "-of",
+            "json",
+            str(source),
+        ]
+        try:
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=min(45, self.limits.timeout_seconds),
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            print(f"[MP3] ffprobe falhou: {type(error).__name__}: {str(error)[-300:]}")
+            raise Mp3DownloadError("Não consegui validar esse arquivo de mídia.") from error
+
+        if completed.returncode != 0:
+            print(f"[MP3] ffprobe recusou upload: {completed.stderr[-500:]}")
+            raise Mp3DownloadError("Esse arquivo não contém um áudio ou vídeo compatível.")
 
         try:
-            content = base64.b64decode(encoded.encode("utf-8"), validate=True)
-        except (ValueError, binascii.Error) as error:
-            raise Mp3DownloadError("Os cookies configurados para o MP3 são inválidos.") from error
+            probe = json.loads(completed.stdout or "{}")
+        except json.JSONDecodeError as error:
+            raise Mp3DownloadError("Não consegui identificar o conteúdo desse arquivo.") from error
 
-        destination = Path(temp_dir) / "cookies.txt"
-        destination.write_bytes(content)
-        return destination
+        streams = probe.get("streams") if isinstance(probe, dict) else None
+        audio_streams = [item for item in (streams or []) if isinstance(item, dict) and item.get("codec_type") == "audio"]
+        if not audio_streams:
+            raise Mp3DownloadError("Esse vídeo não possui uma faixa de áudio para converter.")
+
+        duration_candidates = []
+        format_data = probe.get("format") if isinstance(probe, dict) else None
+        if isinstance(format_data, dict):
+            duration_candidates.append(format_data.get("duration"))
+        duration_candidates.extend(stream.get("duration") for stream in audio_streams)
+
+        duration = 0.0
+        for value in duration_candidates:
+            try:
+                candidate = float(value)
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(candidate) and candidate > duration:
+                duration = candidate
+
+        if duration <= 0:
+            raise Mp3DownloadError("Não consegui identificar a duração desse arquivo. Envie um arquivo de mídia completo.")
+        if duration > self.limits.max_seconds:
+            minutes = max(1, round(self.limits.max_seconds / 60))
+            raise Mp3DownloadError(f"O arquivo é longo demais. Envie uma mídia de até {minutes} minuto(s).")
+
+        format_name = ""
+        if isinstance(format_data, dict):
+            format_name = str(format_data.get("format_name") or "")[:120]
+        return UploadedMediaInfo(duration_seconds=duration, format_name=format_name)
+
+    def convert_uploaded_media(
+        self,
+        input_path: str | Path,
+        temp_dir: str | Path,
+        duration_seconds: float,
+        progress_callback=None,
+    ) -> Path:
+        """Converte uma mídia já validada para MP3 sem chamar plataformas externas."""
+
+        workspace = Path(temp_dir).resolve()
+        source = Path(input_path).resolve()
+        try:
+            source.relative_to(workspace)
+        except ValueError as error:
+            raise Mp3DownloadError("O arquivo enviado não está em uma área temporária segura.") from error
+
+        if not source.is_file():
+            raise Mp3DownloadError("O arquivo enviado não foi encontrado para conversão.")
+        if source.stat().st_size > self.limits.max_upload_bytes:
+            raise Mp3DownloadError("O arquivo enviado ultrapassa o limite permitido.")
+
+        try:
+            duration = float(duration_seconds)
+        except (TypeError, ValueError) as error:
+            raise Mp3DownloadError("Não consegui identificar a duração desse arquivo.") from error
+        if not math.isfinite(duration) or duration <= 0 or duration > self.limits.max_seconds:
+            raise Mp3DownloadError("A duração desse arquivo não é permitida para conversão.")
+
+        output = workspace / "audio.mp3"
+        bitrate = os.getenv("AMZ_MP3_BITRATE", "192").strip()
+        if not bitrate.isdigit() or not 32 <= int(bitrate) <= 320:
+            bitrate = "192"
+
+        command = [
+            self.ffmpeg,
+            "-hide_banner",
+            "-nostdin",
+            "-y",
+            "-i",
+            str(source),
+            # Defesa adicional caso um arquivo malformado informe duração
+            # incorreta durante a sondagem.
+            "-t",
+            str(self.limits.max_seconds),
+            "-map",
+            "0:a:0",
+            "-vn",
+            "-map_metadata",
+            "-1",
+            "-c:a",
+            "libmp3lame",
+            "-b:a",
+            f"{bitrate}k",
+            "-progress",
+            "pipe:1",
+            "-nostats",
+            "-loglevel",
+            "error",
+            str(output),
+        ]
+
+        if progress_callback:
+            progress_callback("convertendo", 12, "Convertendo seu arquivo para MP3…")
+
+        try:
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+            )
+        except OSError as error:
+            print(f"[MP3] ffmpeg não iniciou: {type(error).__name__}: {str(error)[-300:]}")
+            raise Mp3DownloadError("O conversor de MP3 não está disponível no servidor.") from error
+
+        # O ffmpeg costuma emitir poucas linhas de progresso, mas a fila é
+        # limitada para um arquivo malformado nunca acumular texto na memória.
+        lines: queue.Queue[str | None] = queue.Queue(maxsize=128)
+
+        def read_output() -> None:
+            try:
+                if process.stdout:
+                    for line in iter(process.stdout.readline, ""):
+                        try:
+                            lines.put(line, timeout=0.5)
+                        except queue.Full:
+                            continue
+            finally:
+                try:
+                    lines.put_nowait(None)
+                except queue.Full:
+                    pass
+
+        reader = threading.Thread(target=read_output, name="amz-mp3-ffmpeg", daemon=True)
+        reader.start()
+        deadline = time.monotonic() + self.limits.timeout_seconds
+        last_progress = 12
+        output_tail: list[str] = []
+
+        try:
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    process.kill()
+                    raise Mp3DownloadError("A conversão demorou demais. Tente um arquivo menor.")
+
+                try:
+                    line = lines.get(timeout=min(1.0, remaining))
+                except queue.Empty:
+                    if process.poll() is not None and not reader.is_alive():
+                        break
+                    continue
+
+                if line is None:
+                    break
+
+                normalized = line.strip()
+                if normalized:
+                    output_tail.append(normalized)
+                    if len(output_tail) > 20:
+                        output_tail.pop(0)
+
+                if not normalized.startswith("out_time_us="):
+                    continue
+                try:
+                    processed_seconds = float(normalized.split("=", 1)[1]) / 1_000_000
+                except (TypeError, ValueError):
+                    continue
+
+                progress = min(94, max(12, 12 + int((processed_seconds / duration) * 82)))
+                if progress > last_progress:
+                    last_progress = progress
+                    if progress_callback:
+                        progress_callback("convertendo", progress, f"Convertendo seu arquivo para MP3… {min(99, round((processed_seconds / duration) * 100))}%")
+
+            return_code = process.wait(timeout=5)
+        except Mp3DownloadError:
+            if process.poll() is None:
+                process.kill()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+            raise
+        except Exception as error:
+            if process.poll() is None:
+                process.kill()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+            print(f"[MP3] ffmpeg falhou: {type(error).__name__}: {str(error)[-300:]}")
+            raise Mp3DownloadError("Não consegui converter esse arquivo para MP3.") from error
+        finally:
+            reader.join(timeout=1)
+            if process.stdout:
+                process.stdout.close()
+
+        if return_code != 0 or not output.is_file():
+            detail = " | ".join(output_tail)[-700:]
+            print(f"[MP3] conversão de upload falhou (código {return_code}): {detail}")
+            output.unlink(missing_ok=True)
+            raise Mp3DownloadError("Não consegui converter esse arquivo para MP3.")
+
+        if output.stat().st_size <= 0:
+            output.unlink(missing_ok=True)
+            raise Mp3DownloadError("O MP3 gerado ficou vazio. Tente outro arquivo.")
+        if output.stat().st_size > self.limits.max_output_bytes:
+            output.unlink(missing_ok=True)
+            raise Mp3DownloadError("O MP3 ficou grande demais para este servidor.")
+
+        if progress_callback:
+            progress_callback("finalizando", 94, "Validando o MP3 final…")
+        return output
 
     @staticmethod
     def _public_error(error: Exception) -> str:
@@ -270,7 +611,6 @@ class Mp3DownloadService:
             progress_callback("validando", 4, "Validando link público…")
 
         output_template = str(Path(temp_dir) / "audio.%(ext)s")
-        cookies_file = self._cookies_file(temp_dir)
 
         def filter_duration(info_dict, *, incomplete=False):
             if incomplete:
@@ -301,8 +641,6 @@ class Mp3DownloadService:
             }],
             "overwrites": True,
         }
-        if cookies_file:
-            options["cookiefile"] = str(cookies_file)
 
         if progress_callback:
             progress_callback("baixando", 10, "Iniciando download do áudio…")

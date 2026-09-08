@@ -277,45 +277,95 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                         <div>
                             <span class="site-chip font-mono text-[10px] border border-neutral-700 text-neutral-500 px-3 py-1 uppercase tracking-widest">GitHub Pages Tool</span>
                             <h2>Baixar MP3</h2>
-                            <p>Cole um link público e extraia apenas o áudio em MP3.</p>
+                            <p>Converta para MP3 usando um link público ou um arquivo próprio.</p>
                         </div>
                     </div>
 
                     <div class="site-downloads-layout">
                         <div class="site-downloads-tool">
-                            <label class="site-downloads-input" for="site-download-url">
-                                <span>Link para extrair o áudio</span>
-                                <input id="site-download-url" type="url" placeholder="Cole o link do conteúdo público" autocomplete="off">
-                            </label>
-
-                            <div class="site-downloads-quick-actions">
-                                <button type="button" onclick="colarLinkDownloadSite()">
-                                    <i class="ph ph-clipboard-text" aria-hidden="true"></i>
-                                    Colar link
+                            <div class="site-download-source-toggle" role="tablist" aria-label="Escolha a origem do áudio">
+                                <button id="site-download-source-link" class="site-download-source active" type="button" role="tab" aria-selected="true" aria-controls="site-download-link-panel" onclick="selecionarFonteDownloadSite('link')">
+                                    <i class="ph ph-link-simple" aria-hidden="true"></i>
+                                    <span>
+                                        <strong>Usar link</strong>
+                                        <small>Extrair de conteúdo público</small>
+                                    </span>
                                 </button>
-                                <button type="button" onclick="limparDownloadSite()">
-                                    <i class="ph ph-x" aria-hidden="true"></i>
-                                    Limpar
+                                <button id="site-download-source-upload" class="site-download-source" type="button" role="tab" aria-selected="false" aria-controls="site-download-upload-panel" onclick="selecionarFonteDownloadSite('arquivo')">
+                                    <i class="ph ph-upload-simple" aria-hidden="true"></i>
+                                    <span>
+                                        <strong>Enviar arquivo</strong>
+                                        <small>Converter um arquivo próprio</small>
+                                    </span>
                                 </button>
                             </div>
 
-                            <button type="button" class="site-downloads-submit" onclick="baixarAudioSite()">
-                                <span>Baixar MP3</span>
-                                <i class="ph ph-arrow-line-down" aria-hidden="true"></i>
-                            </button>
+                            <div id="site-download-link-panel" class="site-download-source-panel" role="tabpanel" aria-labelledby="site-download-source-link">
+                                <label class="site-downloads-input" for="site-download-url">
+                                    <span>Link para extrair o áudio</span>
+                                    <input id="site-download-url" type="url" placeholder="Cole o link do conteúdo público" autocomplete="off">
+                                </label>
 
-                            <div id="site-download-status" class="site-downloads-status hidden"></div>
+                                <div class="site-downloads-quick-actions">
+                                    <button type="button" onclick="colarLinkDownloadSite()">
+                                        <i class="ph ph-clipboard-text" aria-hidden="true"></i>
+                                        Colar link
+                                    </button>
+                                    <button type="button" onclick="limparDownloadSite()">
+                                        <i class="ph ph-x" aria-hidden="true"></i>
+                                        Limpar
+                                    </button>
+                                </div>
+
+                                <button type="button" class="site-downloads-submit" onclick="baixarAudioSite()">
+                                    <span>Baixar MP3</span>
+                                    <i class="ph ph-arrow-line-down" aria-hidden="true"></i>
+                                </button>
+                            </div>
+
+                            <div id="site-download-upload-panel" class="site-download-source-panel" role="tabpanel" aria-labelledby="site-download-source-upload" hidden>
+                                <label class="site-upload-picker" for="site-upload-file">
+                                    <span class="site-upload-label">Arquivo próprio</span>
+                                    <span class="site-upload-picker-button">
+                                        <i class="ph ph-file-arrow-up" aria-hidden="true"></i>
+                                        Selecionar arquivo
+                                    </span>
+                                    <input id="site-upload-file" class="site-upload-file-input" type="file" accept=".mp3,.m4a,.aac,.wav,.ogg,.opus,.flac,.mp4,.webm,.mov,audio/mpeg,audio/mp4,audio/aac,audio/wav,audio/ogg,audio/opus,audio/flac,video/mp4,video/webm,video/quicktime" aria-describedby="site-upload-file-summary site-upload-formats">
+                                </label>
+                                <output id="site-upload-file-summary" class="site-upload-file-summary" aria-live="polite">Nenhum arquivo selecionado.</output>
+                                <p id="site-upload-formats" class="site-upload-formats">Formatos aceitos: MP3, M4A, AAC, WAV, OGG, OPUS, FLAC, MP4, WEBM e MOV · até <span data-upload-max-size>50 MB</span>.</p>
+
+                                <div class="site-downloads-quick-actions site-upload-actions">
+                                    <button type="button" onclick="limparArquivoUploadSite()">
+                                        <i class="ph ph-x" aria-hidden="true"></i>
+                                        Remover arquivo
+                                    </button>
+                                </div>
+
+                                <label class="site-upload-consent" for="site-upload-consent">
+                                    <input id="site-upload-consent" type="checkbox">
+                                    <span>Confirmo que o arquivo é meu ou que tenho autorização para convertê-lo.</span>
+                                </label>
+
+                                <button type="button" class="site-downloads-submit" onclick="converterArquivoSite()">
+                                    <span>Converter arquivo em MP3</span>
+                                    <i class="ph ph-file-audio" aria-hidden="true"></i>
+                                </button>
+                            </div>
+
+                            <div id="site-download-status" class="site-downloads-status hidden" role="status" aria-live="polite"></div>
                         </div>
 
                         <aside class="site-downloads-info">
                             <span class="site-downloads-info-kicker">Áudio MP3</span>
                             <ul>
-                                <li><i class="ph ph-check-circle" aria-hidden="true"></i> Extrai apenas o áudio em MP3.</li>
+                                <li><i class="ph ph-check-circle" aria-hidden="true"></i> Escolha entre um link público ou um arquivo próprio.</li>
+                                <li><i class="ph ph-check-circle" aria-hidden="true"></i> Arquivos de até <span data-upload-max-size>50 MB</span> em formatos de áudio e vídeo comuns.</li>
                                 <li><i class="ph ph-check-circle" aria-hidden="true"></i> Entra diretamente na fila prioritária de áudio.</li>
                                 <li><i class="ph ph-check-circle" aria-hidden="true"></i> Arquivo pronto para importar no MusicAmz.</li>
                                 <li><i class="ph ph-check-circle" aria-hidden="true"></i> Indicador de progresso durante todo o processamento.</li>
                             </ul>
-                            <small>Use apenas conteúdos seus, livres ou permitidos. O áudio é processado em uma fila externa para manter o site rápido.</small>
+                            <small>Envie somente arquivos seus, livres ou autorizados. O áudio é processado em uma fila externa para manter o site rápido.</small>
                         </aside>
                     </div>
                 </div>
@@ -755,7 +805,7 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
 
     <script>
         const amzScript = document.createElement('script');
-        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=39' : 'script.js?v=39';
+        amzScript.src = window.location.hostname === 'muniz-amz.github.io' ? '/amz-studios/script.js?v=40' : 'script.js?v=40';
         document.body.appendChild(amzScript);
     </script>
 </body>

@@ -1048,17 +1048,196 @@ function configurarNavegacaoTopo() {
 }
 
 const MODO_DOWNLOAD_SITE = 'mp3';
+const ENDPOINT_UPLOAD_MP3_SITE = '/api/mp3/uploads';
+const LIMITE_UPLOAD_MP3_PADRAO_MB = 50;
+const CHAVE_JOB_MP3_PENDENTE = 'amz_mp3_job_pendente';
+const TEMPO_MAXIMO_ACOMPANHAMENTO_MP3_MS = 55 * 60 * 1000;
+const TEMPO_MAXIMO_RETOMADA_MP3_MS = 90 * 60 * 1000;
+const EXTENSOES_UPLOAD_MP3_SITE = new Set(['.mp3', '.m4a', '.aac', '.wav', '.ogg', '.opus', '.flac', '.mp4', '.webm', '.mov']);
+const TIPOS_UPLOAD_MP3_SITE = new Set([
+    'audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/aac', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'audio/opus', 'audio/flac',
+    'video/mp4', 'video/webm', 'video/quicktime'
+]);
+let limiteUploadMp3SiteMb = LIMITE_UPLOAD_MP3_PADRAO_MB;
+let sincronizacaoLimiteUploadMp3Site = null;
+let retomandoJobMp3Site = false;
+
+function salvarJobMp3PendenteSite(job, nomeFallback = 'amz-audio.mp3') {
+    const id = String(job?.id || '').trim();
+    if (!/^[a-f0-9]{16,64}$/i.test(id)) return;
+
+    try {
+        sessionStorage.setItem(CHAVE_JOB_MP3_PENDENTE, JSON.stringify({
+            id,
+            nomeFallback: String(nomeFallback || 'amz-audio.mp3').slice(0, 180),
+            iniciadoEm: Date.now()
+        }));
+    } catch {
+        // A conversão continua funcionando mesmo se o navegador bloquear storage.
+    }
+}
+
+function obterJobMp3PendenteSite() {
+    try {
+        const raw = sessionStorage.getItem(CHAVE_JOB_MP3_PENDENTE);
+        const job = raw ? JSON.parse(raw) : null;
+        const id = String(job?.id || '').trim();
+        const iniciadoEm = Number(job?.iniciadoEm || 0);
+
+        if (!/^[a-f0-9]{16,64}$/i.test(id) || !Number.isFinite(iniciadoEm)) {
+            sessionStorage.removeItem(CHAVE_JOB_MP3_PENDENTE);
+            return null;
+        }
+
+        if (Date.now() - iniciadoEm > TEMPO_MAXIMO_RETOMADA_MP3_MS) {
+            sessionStorage.removeItem(CHAVE_JOB_MP3_PENDENTE);
+            return null;
+        }
+
+        return {
+            id,
+            iniciadoEm,
+            nomeFallback: String(job?.nomeFallback || 'amz-audio.mp3')
+        };
+    } catch {
+        return null;
+    }
+}
+
+function limparJobMp3PendenteSite() {
+    try {
+        sessionStorage.removeItem(CHAVE_JOB_MP3_PENDENTE);
+    } catch {
+        // Sem ação: não há dado sensível e o navegador pode bloquear storage.
+    }
+}
+
+function obterLimiteUploadMp3SiteBytes() {
+    return limiteUploadMp3SiteMb * 1024 * 1024;
+}
+
+function formatarTamanhoArquivoDownloadSite(bytes) {
+    const tamanho = Math.max(0, Number(bytes) || 0);
+    if (tamanho < 1024 * 1024) {
+        return `${Math.max(1, Math.round(tamanho / 1024))} KB`;
+    }
+
+    return `${(tamanho / (1024 * 1024)).toLocaleString('pt-BR', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1
+    })} MB`;
+}
+
+function atualizarLimiteUploadMp3Site(maximoMb) {
+    const limite = Number(maximoMb);
+    if (!Number.isFinite(limite) || limite < 1 || limite > 500) return;
+
+    limiteUploadMp3SiteMb = limite;
+    document.querySelectorAll('[data-upload-max-size]').forEach((elemento) => {
+        elemento.textContent = `${limite} MB`;
+    });
+    atualizarResumoArquivoUploadSite();
+}
+
+function obterExtensaoArquivoDownloadSite(nomeArquivo = '') {
+    const resultado = String(nomeArquivo).toLowerCase().match(/(\.[a-z0-9]+)$/i);
+    return resultado ? resultado[1] : '';
+}
+
+function validarArquivoUploadSite(arquivo) {
+    if (!arquivo) return 'Selecione um arquivo para converter.';
+    if (!arquivo.size) return 'Esse arquivo está vazio. Escolha outro arquivo.';
+
+    if (arquivo.size > obterLimiteUploadMp3SiteBytes()) {
+        return `O arquivo passa do limite de ${limiteUploadMp3SiteMb} MB.`;
+    }
+
+    const extensao = obterExtensaoArquivoDownloadSite(arquivo.name);
+    const tipo = String(arquivo.type || '').toLowerCase();
+    if (!EXTENSOES_UPLOAD_MP3_SITE.has(extensao) && !TIPOS_UPLOAD_MP3_SITE.has(tipo)) {
+        return 'Formato não aceito. Envie MP3, M4A, AAC, WAV, OGG, OPUS, FLAC, MP4, WEBM ou MOV.';
+    }
+
+    return '';
+}
+
+function atualizarResumoArquivoUploadSite() {
+    const input = document.getElementById('site-upload-file');
+    const resumo = document.getElementById('site-upload-file-summary');
+    if (!resumo) return;
+
+    const arquivo = input?.files?.[0];
+    if (!arquivo) {
+        resumo.textContent = 'Nenhum arquivo selecionado.';
+        resumo.classList.remove('error');
+        return;
+    }
+
+    const erro = validarArquivoUploadSite(arquivo);
+    resumo.textContent = erro || `Selecionado: ${arquivo.name} · ${formatarTamanhoArquivoDownloadSite(arquivo.size)}.`;
+    resumo.classList.toggle('error', Boolean(erro));
+}
+
+function selecionarFonteDownloadSite(fonte) {
+    const fonteSelecionada = fonte === 'arquivo' ? 'arquivo' : 'link';
+    const painelLink = document.getElementById('site-download-link-panel');
+    const painelArquivo = document.getElementById('site-download-upload-panel');
+    const botaoLink = document.getElementById('site-download-source-link');
+    const botaoArquivo = document.getElementById('site-download-source-upload');
+
+    if (!painelLink || !painelArquivo || !botaoLink || !botaoArquivo) return;
+
+    const usarArquivo = fonteSelecionada === 'arquivo';
+    painelLink.hidden = usarArquivo;
+    painelArquivo.hidden = !usarArquivo;
+    botaoLink.classList.toggle('active', !usarArquivo);
+    botaoArquivo.classList.toggle('active', usarArquivo);
+    botaoLink.setAttribute('aria-selected', String(!usarArquivo));
+    botaoArquivo.setAttribute('aria-selected', String(usarArquivo));
+
+    if (usarArquivo) {
+        void sincronizarLimiteUploadMp3Site();
+    }
+}
+
+function sincronizarLimiteUploadMp3Site() {
+    if (sincronizacaoLimiteUploadMp3Site) return sincronizacaoLimiteUploadMp3Site;
+
+    sincronizacaoLimiteUploadMp3Site = (async () => {
+        try {
+            const resposta = await fetch(montarUrlMp3Api('/api/mp3/status'));
+            if (!resposta.ok) return;
+
+            const dados = await lerJsonResposta(resposta);
+            atualizarLimiteUploadMp3Site(dados?.max_upload_mb);
+        } catch {
+            // O limite padrão continua disponível se o serviço estiver iniciando ou indisponível.
+        }
+    })();
+
+    return sincronizacaoLimiteUploadMp3Site;
+}
 
 function configurarDownloadsSite() {
-    const input = document.getElementById('site-download-url');
-    if (!input || input.dataset.downloadConfigurado === 'true') return;
+    const ferramenta = document.querySelector('.site-downloads-tool');
+    if (!ferramenta || ferramenta.dataset.downloadConfigurado === 'true') return;
 
-    input.dataset.downloadConfigurado = 'true';
-    input.addEventListener('keydown', (evento) => {
+    ferramenta.dataset.downloadConfigurado = 'true';
+
+    const inputLink = document.getElementById('site-download-url');
+    inputLink?.addEventListener('keydown', (evento) => {
         if (evento.key !== 'Enter') return;
         evento.preventDefault();
         baixarAudioSite();
     });
+
+    const inputArquivo = document.getElementById('site-upload-file');
+    inputArquivo?.addEventListener('change', atualizarResumoArquivoUploadSite);
+    atualizarResumoArquivoUploadSite();
+
+    // Só consulta o Render ao abrir o site se existe uma conversão iniciada
+    // por esta mesma pessoa e que ainda pode ser retomada.
+    void retomarJobMp3PendenteSite();
 }
 
 function mostrarStatusDownloadSite(mensagem, tipo = 'info') {
@@ -1170,7 +1349,41 @@ function normalizarErroDownloadSite(mensagem = '') {
         return 'A plataforma nao liberou um formato compativel para baixar esse arquivo.';
     }
 
+    if (textoNormalizado.includes('payload too large') || textoNormalizado.includes('request entity too large') || textoNormalizado.includes('file too large')) {
+        return `O arquivo passa do limite de ${limiteUploadMp3SiteMb} MB.`;
+    }
+
+    if (textoNormalizado.includes('too many requests') || textoNormalizado.includes('rate limit')) {
+        return 'Muitas conversões foram iniciadas. Aguarde alguns minutos e tente novamente.';
+    }
+
+    if (textoNormalizado.includes('expired') || textoNormalizado.includes('expirou')) {
+        return 'O arquivo pronto expirou. Inicie a conversão novamente.';
+    }
+
     return texto.replace(/^ERROR:\s*/i, '').slice(0, 260);
+}
+
+function normalizarErroRespostaMp3Site(status, dados = {}, mensagemPadrao = '') {
+    const codigo = Number(status) || 0;
+
+    if (codigo === 413) {
+        return `O arquivo passa do limite de ${limiteUploadMp3SiteMb} MB.`;
+    }
+
+    if (codigo === 429) {
+        return 'A fila está ocupada ou houve muitas tentativas. Aguarde alguns minutos e tente novamente.';
+    }
+
+    if (codigo === 410) {
+        return 'O arquivo pronto expirou. Inicie a conversão novamente.';
+    }
+
+    if ([502, 503, 504].includes(codigo)) {
+        return 'O servidor de MP3 está iniciando ou indisponível. Aguarde alguns segundos e tente novamente.';
+    }
+
+    return normalizarErroDownloadSite(dados?.mensagem || dados?.erro || mensagemPadrao);
 }
 
 function validarLinkDownloadSite(url) {
@@ -1214,6 +1427,12 @@ function baixarBlobSite(blob, nomeArquivo) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1200);
 }
 
+function definirControlesDownloadSiteBloqueados(bloqueados) {
+    document.querySelectorAll('.site-downloads-tool button, .site-downloads-tool input').forEach((controle) => {
+        controle.disabled = bloqueados;
+    });
+}
+
 async function criarJobDownloadSite(url) {
     mostrarProgressoDownloadSite({
         etapa: 'fila',
@@ -1230,7 +1449,83 @@ async function criarJobDownloadSite(url) {
     const dados = await lerJsonResposta(response);
 
     if (!response.ok || dados.status !== 'sucesso' || !dados.job?.id) {
-        throw new Error(normalizarErroDownloadSite(dados?.mensagem || dados?.erro || 'Nao consegui iniciar esse download.'));
+        throw new Error(normalizarErroRespostaMp3Site(response.status, dados, 'Nao consegui iniciar esse download.'));
+    }
+
+    mostrarProgressoDownloadSite({
+        etapa: dados.job.etapa || dados.job.status || 'fila',
+        progresso: dados.job.progresso || 10,
+        mensagem: mensagemAndamentoDownloadSite(dados.job)
+    });
+
+    return dados.job;
+}
+
+function enviarArquivoUploadSite(arquivo) {
+    return new Promise((resolve, reject) => {
+        const dadosFormulario = new FormData();
+        dadosFormulario.append('file', arquivo, arquivo.name);
+
+        const requisicao = new XMLHttpRequest();
+        requisicao.open('POST', montarUrlMp3Api(ENDPOINT_UPLOAD_MP3_SITE), true);
+
+        requisicao.upload.addEventListener('loadstart', () => {
+            mostrarProgressoDownloadSite({
+                etapa: 'enviando arquivo',
+                progresso: 2,
+                mensagem: 'Enviando o arquivo para a fila de conversão...'
+            });
+        });
+
+        requisicao.upload.addEventListener('progress', (evento) => {
+            if (!evento.lengthComputable) return;
+
+            const percentualEnvio = Math.max(0, Math.min(100, Math.round((evento.loaded / evento.total) * 100)));
+            mostrarProgressoDownloadSite({
+                etapa: 'enviando arquivo',
+                progresso: 2 + Math.round(percentualEnvio * 0.08),
+                mensagem: `Enviando arquivo: ${percentualEnvio}% concluído.`
+            });
+        });
+
+        requisicao.addEventListener('load', () => {
+            let dados = {};
+            try {
+                dados = JSON.parse(requisicao.responseText || '{}');
+            } catch {
+                dados = {};
+            }
+
+            if (requisicao.status >= 200 && requisicao.status < 300) {
+                resolve(dados);
+                return;
+            }
+
+            reject(new Error(normalizarErroRespostaMp3Site(
+                requisicao.status,
+                dados,
+                'Não consegui enviar esse arquivo para conversão.'
+            )));
+        });
+
+        requisicao.addEventListener('error', () => {
+            reject(new Error('Não consegui conectar ao servidor de MP3. Aguarde alguns segundos e tente novamente.'));
+        });
+
+        requisicao.addEventListener('abort', () => {
+            reject(new Error('O envio do arquivo foi cancelado.'));
+        });
+
+        // Não definir Content-Type manualmente: o navegador inclui o limite multipart correto.
+        requisicao.send(dadosFormulario);
+    });
+}
+
+async function criarJobUploadSite(arquivo) {
+    const dados = await enviarArquivoUploadSite(arquivo);
+
+    if (dados.status !== 'sucesso' || !dados.job?.id) {
+        throw new Error(normalizarErroDownloadSite(dados?.mensagem || dados?.erro || 'Não consegui iniciar essa conversão.'));
     }
 
     mostrarProgressoDownloadSite({
@@ -1262,17 +1557,30 @@ function mensagemAndamentoDownloadSite(job) {
     return job?.mensagem || 'Processando no servidor...';
 }
 
+function intervaloAcompanhamentoJobMp3Site(job = {}) {
+    if (job.status === 'uploading' || job.status === 'queued') {
+        const posicao = Math.max(0, Number.parseInt(job.posicao_fila, 10) || 0);
+        return Math.min(8000, 3500 + Math.max(0, posicao - 1) * 700);
+    }
+
+    return 1800;
+}
+
 async function aguardarJobDownloadSite(jobId) {
     const iniciadoEm = Date.now();
+    let intervalo = 1200;
 
-    while (Date.now() - iniciadoEm < 430000) {
-        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+    while (Date.now() - iniciadoEm < TEMPO_MAXIMO_ACOMPANHAMENTO_MP3_MS) {
+        await new Promise((resolve) => window.setTimeout(resolve, intervalo));
 
         const response = await fetch(montarUrlMp3Api(`/api/mp3/jobs/${encodeURIComponent(jobId)}`));
         const dados = await lerJsonResposta(response);
 
         if (!response.ok || dados.status !== 'sucesso') {
-            throw new Error(normalizarErroDownloadSite(dados?.mensagem || dados?.erro || 'Nao consegui acompanhar esse download.'));
+            if ([404, 410].includes(response.status)) {
+                limparJobMp3PendenteSite();
+            }
+            throw new Error(normalizarErroRespostaMp3Site(response.status, dados, 'Nao consegui acompanhar esse download.'));
         }
 
         const job = dados.job || {};
@@ -1283,10 +1591,15 @@ async function aguardarJobDownloadSite(jobId) {
         });
 
         if (job.status === 'done') return job;
-        if (job.status === 'error') throw new Error(normalizarErroDownloadSite(job.erro || job.mensagem || 'Falha no download.'));
+        if (job.status === 'error') {
+            limparJobMp3PendenteSite();
+            throw new Error(normalizarErroDownloadSite(job.erro || job.mensagem || 'Falha no download.'));
+        }
+
+        intervalo = intervaloAcompanhamentoJobMp3Site(job);
     }
 
-    throw new Error('O áudio demorou mais que o esperado. Tente novamente em alguns segundos.');
+    throw new Error('A conversão ainda está na fila. Volte a esta página mais tarde para retomar o acompanhamento enquanto o arquivo não expirar.');
 }
 
 async function baixarResultadoJobDownloadSite(job, nomeFallback) {
@@ -1303,7 +1616,7 @@ async function baixarResultadoJobDownloadSite(job, nomeFallback) {
 
     if (!response.ok) {
         const dados = await lerJsonResposta(response);
-        throw new Error(normalizarErroDownloadSite(dados?.mensagem || dados?.erro || 'Nao consegui baixar o arquivo pronto.'));
+        throw new Error(normalizarErroRespostaMp3Site(response.status, dados, 'Nao consegui baixar o arquivo pronto.'));
     }
 
     const blob = await response.blob();
@@ -1311,10 +1624,39 @@ async function baixarResultadoJobDownloadSite(job, nomeFallback) {
     baixarBlobSite(blob, nomeArquivo);
 }
 
+async function retomarJobMp3PendenteSite() {
+    const jobPendente = obterJobMp3PendenteSite();
+    if (!jobPendente || retomandoJobMp3Site) return;
+
+    retomandoJobMp3Site = true;
+    definirControlesDownloadSiteBloqueados(true);
+    mostrarProgressoDownloadSite({
+        etapa: 'retomando',
+        progresso: 2,
+        mensagem: 'Retomando o acompanhamento da sua conversão...'
+    });
+
+    try {
+        const jobFinal = await aguardarJobDownloadSite(jobPendente.id);
+        await baixarResultadoJobDownloadSite(jobFinal, jobPendente.nomeFallback);
+        limparJobMp3PendenteSite();
+        mostrarProgressoDownloadSite({
+            etapa: 'concluído',
+            progresso: 100,
+            mensagem: 'MP3 pronto. Se não abriu, confira se o navegador bloqueou o download.'
+        }, 'success');
+    } catch (erro) {
+        const mensagem = normalizarErroDownloadSite(erro.message || 'Não consegui retomar essa conversão.');
+        mostrarStatusDownloadSite(mensagem, 'error');
+    } finally {
+        retomandoJobMp3Site = false;
+        definirControlesDownloadSiteBloqueados(false);
+    }
+}
+
 async function baixarAudioSite() {
     const input = document.getElementById('site-download-url');
     const url = input?.value?.trim() || '';
-    const botoes = document.querySelectorAll('.site-downloads-tool button');
     const nomeArquivo = 'amz-audio.mp3';
 
     if (!url) {
@@ -1330,9 +1672,7 @@ async function baixarAudioSite() {
         return;
     }
 
-    botoes.forEach((botao) => {
-        botao.disabled = true;
-    });
+    definirControlesDownloadSiteBloqueados(true);
     mostrarProgressoDownloadSite({
         etapa: 'preparando',
         progresso: 2,
@@ -1341,8 +1681,10 @@ async function baixarAudioSite() {
 
     try {
         const job = await criarJobDownloadSite(url);
+        salvarJobMp3PendenteSite(job, nomeArquivo);
         const jobFinal = await aguardarJobDownloadSite(job.id);
         await baixarResultadoJobDownloadSite(jobFinal, nomeArquivo);
+        limparJobMp3PendenteSite();
 
         mostrarProgressoDownloadSite({
             etapa: 'concluido',
@@ -1354,9 +1696,74 @@ async function baixarAudioSite() {
         const mensagem = normalizarErroDownloadSite(erro.message || 'Nao consegui baixar esse link agora.');
         mostrarStatusDownloadSite(mensagem, 'error');
     } finally {
-        botoes.forEach((botao) => {
-            botao.disabled = false;
-        });
+        definirControlesDownloadSiteBloqueados(false);
+    }
+}
+
+function limparArquivoUploadSite() {
+    const input = document.getElementById('site-upload-file');
+    const consentimento = document.getElementById('site-upload-consent');
+    if (input) input.value = '';
+    if (consentimento) consentimento.checked = false;
+
+    atualizarResumoArquivoUploadSite();
+    mostrarStatusDownloadSite('Arquivo removido. Selecione outro para converter.');
+}
+
+function obterNomeMp3ArquivoUploadSite(nomeArquivo = '') {
+    const base = String(nomeArquivo)
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[\\/:*?"<>|]+/g, '-')
+        .trim();
+    return `${base || 'amz-audio'}.mp3`;
+}
+
+async function converterArquivoSite() {
+    const input = document.getElementById('site-upload-file');
+    const consentimento = document.getElementById('site-upload-consent');
+    const arquivo = input?.files?.[0];
+    const erroArquivo = validarArquivoUploadSite(arquivo);
+
+    if (erroArquivo) {
+        mostrarStatusDownloadSite(erroArquivo, 'error');
+        input?.focus();
+        return;
+    }
+
+    if (!consentimento?.checked) {
+        mostrarStatusDownloadSite('Confirme que o arquivo é seu ou que você tem autorização para convertê-lo.', 'error');
+        consentimento?.focus();
+        return;
+    }
+
+    definirControlesDownloadSiteBloqueados(true);
+    mostrarProgressoDownloadSite({
+        etapa: 'preparando envio',
+        progresso: 1,
+        mensagem: 'Preparando o arquivo para conversão em MP3...'
+    });
+
+    try {
+        const job = await criarJobUploadSite(arquivo);
+        const nomeArquivo = obterNomeMp3ArquivoUploadSite(arquivo.name);
+        salvarJobMp3PendenteSite(job, nomeArquivo);
+        const jobFinal = await aguardarJobDownloadSite(job.id);
+        await baixarResultadoJobDownloadSite(jobFinal, nomeArquivo);
+        limparJobMp3PendenteSite();
+
+        mostrarProgressoDownloadSite({
+            etapa: 'concluído',
+            progresso: 100,
+            mensagem: 'MP3 pronto. Se não abriu, confira se o navegador bloqueou o download.'
+        }, 'success');
+    } catch (erro) {
+        console.error('Erro ao converter arquivo enviado:', erro);
+        mostrarStatusDownloadSite(
+            normalizarErroDownloadSite(erro.message || 'Não consegui converter esse arquivo agora.'),
+            'error'
+        );
+    } finally {
+        definirControlesDownloadSiteBloqueados(false);
     }
 }
 
