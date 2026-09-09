@@ -4,4 +4,15 @@
     <item name="vault_unlock" type="id"/>
     <item name="vault_search" type="id"/>
     <item name="vault_import" type="id"/>
+    <item name="vault_backup_reminder" type="id"/>
+    <item name="vault_files_tab" type="id"/>
+    <item name="vault_trash_tab" type="id"/>
+    <item name="vault_view_toggle" type="id"/>
+    <item name="vault_items" type="id"/>
+    <item name="vault_select" type="id"/>
+    <item name="vault_recover" type="id"/>
+    <item name="vault_recovery_code" type="id"/>
+    <item name="vault_recovery_input" type="id"/>
+    <item name="vault_new_password" type="id"/>
+    <item name="vault_new_confirmation" type="id"/>
 </resources>

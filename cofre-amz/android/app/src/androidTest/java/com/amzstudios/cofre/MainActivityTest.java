@@ -38,7 +38,7 @@ public class MainActivityTest {
         capture(a,"test-explorer.png");
         getInstrumentation().runOnMainSync(()->{try{Field id=MainActivity.class.getDeclaredField("pendingId");id.setAccessible(true);id.set(a,entry.id);Field move=MainActivity.class.getDeclaredField("removeOnExport");move.setAccessible(true);move.set(a,true);a.onActivityResult(11,Activity.RESULT_OK,new Intent().setData(android.provider.DocumentsContract.buildDocumentUri("com.amzstudios.cofre.test.documents","destination.txt")));}catch(Exception e){throw new RuntimeException(e);}});
         waitForIdleJob(a);dismiss(a);assertEquals(0,vault.list().size());File destination=new File(context.getFilesDir(),"fixture-destination.txt");assertTrue(destination.isFile());assertEquals("arquivo para mover ao cofre",new String(java.nio.file.Files.readAllBytes(destination.toPath()),"UTF-8"));
-        getInstrumentation().runOnMainSync(()->a.onBackPressed());assertNotNull(a.findViewById(R.id.vault_password));assertFalse(vault.isUnlocked());
+        getInstrumentation().runOnMainSync(()->a.onBackPressed());assertNotNull(a.findViewById(R.id.vault_password));((java.util.concurrent.ExecutorService)field(a,"worker")).submit(()->{}).get(20,java.util.concurrent.TimeUnit.SECONDS);assertFalse(vault.isUnlocked());
         destination.delete();
     }
 }

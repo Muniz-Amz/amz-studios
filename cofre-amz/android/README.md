@@ -1,34 +1,47 @@
-# Cofre AMZ — Android
+# Cofre AMZ — Android 1.1.0
 
-Aplicativo nativo offline, Java, Android 8+ (API 26). ID permanente:
-`com.amzstudios.cofre`. Versão inicial 1.0.0, versionCode 1.
+Aplicativo nativo offline, Java, Android 8+ (API 26). ID permanente
+`com.amzstudios.cofre`, versionCode 2.
 
-## O que está implementado
+## Recursos
 
-- Um cofre por instalação, senha de 10+ caracteres e mudança de senha.
-- Pastas/subpastas, busca global, nomes sem colisões, renomear, mover e excluir.
-- Importação múltipla pelo Storage Access Framework do Android. Cada arquivo é
-  criptografado, sincronizado em disco e autenticado antes de remover a origem.
-  O original é lido novamente e comparado por SHA-256 para detectar mudanças.
-  Se o DocumentsProvider negar a remoção, a cópia protegida é mantida e o app
-  informa explicitamente que o original continua no local de origem.
-- Retirada e cópia para um destino escolhido com ACTION_CREATE_DOCUMENT.
-  A retirada só exclui a entrada do cofre após fechar, reler e verificar o destino.
+- Cofre por instalação, senha de 10+ caracteres, mudança de senha e pastas.
+- Busca, renomear, seleção múltipla para mover, retirar, enviar à lixeira,
+  restaurar e excluir definitivamente.
+- Lista ou grade com miniaturas de fotos e vídeos compatíveis. Decodificação
+  no worker, cache de 8 MiB em memória e temporários privados apagados após uso.
+- Lixeira criptografada sem expiração automática. Restauração mantém a estrutura,
+  resolve nomes repetidos e devolve à raiz quando a pasta original não existe.
+- Chave de recuperação offline aleatória de 256 bits, gerada por opção do usuário.
+  Código exibido uma vez, com salvamento explícito fora do app. Redefine a senha
+  sem recriptografar arquivos. Backups antigos mantêm a recuperação anterior.
+- Espaço do cofre, espaço da lixeira e espaço livre no volume do aplicativo.
+- Lembrete de backup baseado em alterações do índice, senha e recuperação.
+  Só é atualizado após fechar, reler e verificar o backup salvo.
+- Importação múltipla pelo Storage Access Framework. Cada arquivo é criptografado,
+  sincronizado em disco e autenticado antes de remover a origem. O original é
+  relido e comparado por SHA-256. Se o DocumentsProvider negar a remoção, a cópia
+  protegida é mantida e o app avisa que o original continua na origem.
+- Retirada individual com ACTION_CREATE_DOCUMENT; múltipla com
+  ACTION_OPEN_DOCUMENT_TREE, preservando subpastas. Colisões recebem sufixo.
+  Uma pasta só sai do cofre depois de todos os seus arquivos serem verificados
+  no destino. Falhas deixam o grupo de origem intacto e podem deixar cópias parciais.
 - Visualização interna de imagens, textos (até 2 MiB), PDFs e formatos de
-  áudio/vídeo reconhecidos pelo Android. Outros formatos usam um aplicativo
+  áudio/vídeo reconhecidos pelo Android. Outros formatos usam aplicativo externo
   escolhido pelo usuário, após explicar o acesso à cópia descriptografada.
-- Backup .amzcofre criptografado e restauração verificada em uma instalação
-  sem cofre, sem substituir um cofre existente.
-- Bloqueio ao sair e após dois minutos de inatividade; operações em andamento
+- Backup .amzcofre inclui arquivos, lixeira e envelope de recuperação quando
+  ativado. Restaura com senha ou código correspondente ao backup, somente em uma
+  instalação sem cofre, sem substituir dados existentes.
+- Bloqueio ao sair e após dois minutos de inatividade. Operações em andamento
   terminam antes de limpar a chave. Seletores autorizados permitem retorno
   dentro do prazo. Sem senha, a seleção expirada não remove arquivos.
-- FLAG_SECURE nas telas, sem permissão INTERNET, sem conta, anúncios ou telemetria.
-- Backup automático do Android e transferência automática dos dados desativados.
+- FLAG_SECURE, sem permissão INTERNET, conta, anúncios ou telemetria.
+- Backup e transferência automática de dados do Android desativados.
 
-## Compilação e validação
+## Compilação
 
-Requisitos: JDK 17, Gradle 8.6, Android SDK 34 / build-tools 34.0.0.
-AGP 8.3.2. Dependências baixadas dos repositórios Google/Maven Central.
+JDK 17, Gradle 8.6, Android SDK 34 / build-tools 34.0.0, AGP 8.3.2.
+Dependências dos repositórios Google/Maven Central.
 
 ```powershell
 gradle :app:assembleDebug :app:testDebugUnitTest :app:assembleDebugAndroidTest
@@ -37,49 +50,48 @@ adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 adb shell am instrument -w com.amzstudios.cofre.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-`build-release.ps1` aceita os caminhos do Gradle e do JDK. Ele executa
-assembleRelease, lintRelease e testReleaseUnitTest, sem ignorar falhas.
+`build-release.ps1` aceita os caminhos do Gradle e JDK. Executa assembleRelease,
+lintRelease e testReleaseUnitTest, sem ignorar falhas.
 
-### Assinatura e atualizações
+## Assinatura e atualizações
 
-A chave de produção é guardada fora do repositório, por padrão em
+A chave de produção fica fora do repositório, por padrão em
 `$env:USERPROFILE/.android/cofre-amz-signing/cofre-amz-release.p12`.
-A senha local fica protegida pelo DPAPI do Windows no mesmo diretório.
-**Preserve e faça backup seguro da chave e de sua senha.** O arquivo DPAPI só
-pode ser aberto pelo usuário Windows que o criou; guarde a senha separadamente
-em um gerenciador seguro antes de migrar de computador.
+A senha local é protegida pelo DPAPI do Windows no mesmo diretório.
+**Preserve e faça backup seguro da chave e da senha.** O DPAPI só pode ser aberto
+pelo usuário Windows que o criou. Guarde a senha separadamente em um gerenciador
+seguro antes de migrar de computador. Nunca publique ou substitua essa chave.
 
-Não publique esse diretório. Nunca substitua a chave ao atualizar o APK.
-Fingerprint SHA-256 do certificado inicial:
+SHA-256 do certificado:
 `c6dcd70a40693f6e0b9c5dec9b9d8007827b43605ebd2f55455af2ddb41c746f`.
 
-Incremente versionCode/versionName para cada versão. Preserve o applicationId,
-a assinatura e o formato existente do cofre. Instale atualizações com os dados
-mantidos; nunca instrua a desinstalar para atualizar. Futuras migrações precisam
-ler o formato anterior e preservar backup antes de gravar qualquer conversão.
+A v1.1 lê índices v1 e v2, mantendo `files/vault-v1`, applicationId e assinatura.
+A primeira alteração grava o índice v2 com os campos da lixeira; o conteúdo e a
+chave mestre são preservados. Backups v1 podem ser restaurados. Cofres alterados
+na v1.1 não devem ser abertos na v1.0. Instale por cima, sem limpar dados ou
+desinstalar. Aumente versionCode/versionName em futuras versões.
 
-O APK de distribuição fica em `../../assets/meu-site-downloads/` a partir de
-`cofre-amz/android/`, junto de seu SHA-256. Atualize a página e o link na raiz do site.
+Distribuição: `../../assets/meu-site-downloads/` a partir deste diretório,
+junto do SHA-256. Atualize a página do cofre e o link na raiz do site.
 
-## Testes da primeira versão
+## Validação
 
-11 testes JVM: arquivos vazios e grandes em blocos, reabertura, senha errada,
-adulteração de conteúdo e índice, truncamento, bytes adicionais, alteração de
-senha, hierarquia de pastas, ciclos, backup/restauração, zip traversal, importação
-interrompida, erro de destino e detecção de mudanças na origem.
+22 testes JVM cobrem criptografia por blocos, senha errada, adulteração,
+truncamento, bytes extras, hierarquia, ciclos, backup/restauração, zip traversal,
+importação interrompida, erro de destino e alterações na origem. Incluem migração
+de um backup produzido pelo código original v1, lixeira aninhada, restauração com
+colisões, movimentos múltiplos atômicos, recuperação errada/de outro cofre,
+rotação do código, restauração por recuperação e marcador de backup adulterado.
 
-Dois testes instrumentados em Android 14, em modo avião: engine com o provedor
-criptográfico Android e um teste da Activity que cria o cofre, transfere via
-DocumentsProvider, verifica a exclusão da origem, devolve para o destino e
-bloqueia. O provedor de teste existe somente em src/debug e não vai no APK
-de produção. Imagens de QA são geradas apenas pelo teste com dados fictícios.
+Quatro testes instrumentados no emulador Android 14 em modo avião exercitam
+criptografia Android, criação e bloqueio, transferência real via DocumentsProvider,
+miniaturas PNG/MP4, grade/lista, seleção, lixeira/restauração/exclusão, recuperação
+pela tela, backup verificado e retirada em árvore com colisões e destino inválido.
+O provedor e os arquivos sintéticos de teste não entram no APK de produção.
+Imagens de QA são geradas apenas com dados fictícios dos testes.
 
-Validação de assinatura APK v2 e ausência de permissão de internet no APK.
-O APK de produção também foi instalado no Android 14 em modo avião e usado
-com o seletor real do Android: um TXT saiu de Downloads, abriu no visualizador
-interno e voltou a Downloads com SHA-256 idêntico. Uma reinstalação por cima
-do APK preservou a senha e o arquivo do cofre durante essa verificação.
-O aplicativo não passou por auditoria criptográfica independente nem testes em
-todos os fabricantes de aparelhos; não anunciar proteção absoluta.
-
-Veja [SECURITY.md](SECURITY.md) antes de alterar criptografia ou armazenamento.
+A validação de distribuição confere assinatura v2 e ausência de permissão de
+internet e do provedor de teste. A atualização do APK de produção é verificada
+sobre a versão 1.0.0 com um cofre sintético, preservando senha e arquivo.
+Não houve auditoria criptográfica independente nem testes em todos os fabricantes;
+não anunciar proteção absoluta. Veja [SECURITY.md](SECURITY.md).
