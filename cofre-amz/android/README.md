@@ -1,7 +1,7 @@
-# Cofre AMZ — Android 1.1.0
+# Cofre AMZ — Android 1.1.1
 
 Aplicativo nativo offline, Java, Android 8+ (API 26). ID permanente
-`com.amzstudios.cofre`, versionCode 2.
+`com.amzstudios.cofre`, versionCode 3.
 
 ## Recursos
 
@@ -9,13 +9,24 @@ Aplicativo nativo offline, Java, Android 8+ (API 26). ID permanente
 - Busca, renomear, seleção múltipla para mover, retirar, enviar à lixeira,
   restaurar e excluir definitivamente.
 - Lista ou grade com miniaturas de fotos e vídeos compatíveis. Decodificação
-  no worker, cache de 8 MiB em memória e temporários privados apagados após uso.
+  em fila separada e limitada, cache de 8 MiB e leitura autenticada por trechos,
+  sem cópia temporária completa da foto ou vídeo.
 - Lixeira criptografada sem expiração automática. Restauração mantém a estrutura,
   resolve nomes repetidos e devolve à raiz quando a pasta original não existe.
 - Chave de recuperação offline aleatória de 256 bits, gerada por opção do usuário.
   Código exibido uma vez, com salvamento explícito fora do app. Redefine a senha
   sem recriptografar arquivos. Backups antigos mantêm a recuperação anterior.
-- Espaço do cofre, espaço da lixeira e espaço livre no volume do aplicativo.
+- Espaço do cofre, lixeira e volume calculado no worker e reutilizado pela interface.
+- Áudio/vídeo via MediaDataSource, MediaPlayer em HandlerThread e preparação
+  assíncrona, com pausa e busca. Não cria um arquivo legível do vídeo no cache.
+  A reprodução mantém a tela ativa e o bloqueio por inatividade fica suspenso
+  enquanto a prévia está aberta; sair do aplicativo continua bloqueando o cofre.
+- Transferências, backups e restauração com etapas, progresso e interrupção.
+  A tela fica ativa; mantenha o app aberto. Não há serviço de transferência
+  persistente nem retomada automática após o sistema encerrar o processo.
+- Importação verifica espaço conhecido antes de começar e novamente a cada
+  64 MiB, preservando uma margem de aproximadamente 32 MiB. O tamanho informado
+  pelo provedor pode estar ausente ou incorreto; falhas conservam a origem.
 - Lembrete de backup baseado em alterações do índice, senha e recuperação.
   Só é atualizado após fechar, reler e verificar o backup salvo.
 - Importação múltipla pelo Storage Access Framework. Cada arquivo é criptografado,
@@ -76,17 +87,19 @@ junto do SHA-256. Atualize a página do cofre e o link na raiz do site.
 
 ## Validação
 
-22 testes JVM cobrem criptografia por blocos, senha errada, adulteração,
+30 testes JVM cobrem criptografia por blocos, senha errada, adulteração,
 truncamento, bytes extras, hierarquia, ciclos, backup/restauração, zip traversal,
 importação interrompida, erro de destino e alterações na origem. Incluem migração
 de um backup produzido pelo código original v1, lixeira aninhada, restauração com
 colisões, movimentos múltiplos atômicos, recuperação errada/de outro cofre,
 rotação do código, restauração por recuperação e marcador de backup adulterado.
 
-Quatro testes instrumentados no emulador Android 14 em modo avião exercitam
+Cinco testes instrumentados no emulador Android 14 em modo avião exercitam
 criptografia Android, criação e bloqueio, transferência real via DocumentsProvider,
 miniaturas PNG/MP4, grade/lista, seleção, lixeira/restauração/exclusão, recuperação
 pela tela, backup verificado e retirada em árvore com colisões e destino inválido.
+Incluem reprodução por trechos, resposta da UI, ausência de cópia de vídeo no
+cache, controle de bloqueio durante reprodução e interrupção imediata da importação.
 O provedor e os arquivos sintéticos de teste não entram no APK de produção.
 Imagens de QA são geradas apenas com dados fictícios dos testes.
 
@@ -95,3 +108,6 @@ internet e do provedor de teste. A atualização do APK de produção é verific
 sobre a versão 1.0.0 com um cofre sintético, preservando senha e arquivo.
 Não houve auditoria criptográfica independente nem testes em todos os fabricantes;
 não anunciar proteção absoluta. Veja [SECURITY.md](SECURITY.md).
+
+Consulte [PERFORMANCE.md](PERFORMANCE.md) para o ensaio real de 3 GiB com heap
+limitado a 96 MiB, seu comando de reprodução e o que ainda não foi validado.

@@ -65,6 +65,13 @@ public class VaultFeaturesActivityTest {
         for(int i=0;i<100&&loadedImages(activity.findViewById(R.id.vault_items))<2;i++){waitJob();Thread.sleep(100);}
         assertEquals(2,loadedImages(activity.findViewById(R.id.vault_items)));assertTrue(((GridView)activity.findViewById(R.id.vault_items)).getNumColumns()>1);capture("test-v11-grid.png");
         assertEquals(0,new File(context.getCacheDir(),"thumb-work").list().length);
+        // Playback also reads encrypted ranges; the UI must remain responsive and cache stays empty.
+        selectItem(video.id);AlertDialog menu=dialog();main(()->menu.getListView().performItemClick(null,0,0));
+        Dialog media=(Dialog)field(activity,"preview");assertNotNull(media);main(()->activity.onUserInteraction());assertFalse(((android.os.Handler)field(activity,"ui")).hasCallbacks((Runnable)field(activity,"timeout")));
+        String[] state={""};for(int i=0;i<100;i++){main(()->state[0]=((TextView)media.findViewById(R.id.vault_media_status)).getText().toString());if(!state[0].startsWith("Preparando"))break;Thread.sleep(100);}
+        assertTrue(state[0],state[0].startsWith("Reproduzindo")||state[0].startsWith("Pausado")||state[0].equals("Concluído"));
+        long heartbeat=android.os.SystemClock.elapsedRealtime();for(int i=0;i<20;i++)main(()->{});assertTrue("UI blocked during playback",android.os.SystemClock.elapsedRealtime()-heartbeat<3000);
+        File[] plaintext=new File(context.getCacheDir(),"preview").listFiles();assertTrue(plaintext==null||plaintext.length==0);invoke("closePreview");
         clickId(R.id.vault_select);selectItem(photo.id);selectItem(video.id);assertEquals(2,((Set<?>)field(activity,"selected")).size());capture("test-v11-selection.png");
         click("Mover");AlertDialog folders=dialog();main(()->folders.getListView().performItemClick(null,1,1));waitJob();
         assertEquals(folder.id,vault().get(photo.id).parent);assertEquals(folder.id,vault().get(video.id).parent);

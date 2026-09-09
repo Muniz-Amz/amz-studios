@@ -15,4 +15,5 @@
     <item name="vault_recovery_input" type="id"/>
     <item name="vault_new_password" type="id"/>
     <item name="vault_new_confirmation" type="id"/>
+    <item name="vault_media_status" type="id"/>
 </resources>

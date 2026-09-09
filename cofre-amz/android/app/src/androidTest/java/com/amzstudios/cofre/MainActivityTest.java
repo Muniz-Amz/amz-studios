@@ -41,4 +41,14 @@ public class MainActivityTest {
         getInstrumentation().runOnMainSync(()->a.onBackPressed());assertNotNull(a.findViewById(R.id.vault_password));((java.util.concurrent.ExecutorService)field(a,"worker")).submit(()->{}).get(20,java.util.concurrent.TimeUnit.SECONDS);assertFalse(vault.isUnlocked());
         destination.delete();
     }
+
+    @Test public void interruptImportKeepsOriginalAndInterfaceResponsive()throws Exception{
+        Context context=getInstrumentation().getTargetContext();VaultEngine.removeTree(new File(context.getFilesDir(),"vault-v1"));
+        MainActivity a=getActivity();getInstrumentation().waitForIdleSync();
+        getInstrumentation().runOnMainSync(()->{((EditText)a.findViewById(R.id.vault_password)).setText("Teste cancelamento 2026");((EditText)a.findViewById(R.id.vault_confirmation)).setText("Teste cancelamento 2026");a.findViewById(R.id.vault_unlock).performClick();});waitForIdleJob(a);
+        File source=new File(context.getFilesDir(),"fixture-source.txt");try(RandomAccessFile f=new RandomAccessFile(source,"rw")){f.setLength(32L*1024*1024);}
+        android.net.Uri uri=android.provider.DocumentsContract.buildDocumentUri("com.amzstudios.cofre.test.documents","source.txt");
+        getInstrumentation().runOnMainSync(()->{a.onActivityResult(10,Activity.RESULT_OK,new Intent().setData(uri));try{ProgressDialog progress=(ProgressDialog)field(a,"progress");assertNotNull(progress);progress.getButton(DialogInterface.BUTTON_NEGATIVE).performClick();}catch(Exception e){throw new RuntimeException(e);}});
+        waitForIdleJob(a);assertTrue("Original must survive interruption",source.exists());assertNotNull(a.findViewById(R.id.vault_import));VaultEngine vault=(VaultEngine)field(a,"vault");for(VaultEngine.Entry entry:vault.list())if(!entry.folder)vault.verify(entry.id);dismiss(a);source.delete();
+    }
 }

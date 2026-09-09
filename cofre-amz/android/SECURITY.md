@@ -1,4 +1,4 @@
-# Formato e limites de segurança — aplicativo 1.1.0
+# Formato e limites de segurança — aplicativo 1.1.1
 
 O diretório privado `files/vault-v1` contém metadados e conteúdo criptografados.
 Não armazena senha, derivação da senha ou chave mestre em texto puro.
@@ -61,9 +61,17 @@ integridade. A v1.1 preserva conteúdos v1; apenas novas escritas de índice usa
 - Não há garantia de apagamento forense em flash. Outras cópias, lixeiras de
   provedores, sincronização de galeria e backups externos não são controlados.
 - Prévias usam cache privado, limpo ao fechar a prévia, bloquear ou iniciar o app.
-  Miniaturas ficam em LruCache na memória; a extração usa temporário privado
-  apagado em finally. Bloqueio invalida trabalhos pendentes e descarta miniaturas.
-  Encerramento abrupto pode deixar temporário até a próxima inicialização.
+  Miniaturas ficam em LruCache na memória. Miniaturas e reprodução de áudio/vídeo
+  leem trechos autenticados do AMF1 diretamente, sem gerar cópia legível completa.
+  RandomReader confere tamanho exato, cabeçalho e tag final ao abrir; cada bloco
+  solicitado confere seu comprimento e tag com AAD de ID, índice e comprimento
+  antes de liberar bytes. Mantém no máximo um bloco legível de 1 MiB por leitor.
+  Leituras parciais não calculam SHA-256 do arquivo inteiro; importação, retirada
+  e backup continuam fazendo a verificação completa. O formato não foi alterado.
+  Leitores possuem chave derivada própria, checam revogação em cada leitura e
+  apagam chave e cache ao fechar. Bloqueio cancela miniaturas e reprodução.
+  PDFs, textos, imagens abertas e visualizadores externos ainda podem usar cache
+  temporário; encerramento abrupto pode deixá-lo até a próxima inicialização.
 - Abrir em aplicativo externo concede leitura de cópia temporária; o receptor
   pode salvá-la. A concessão e o cache são removidos no retorno.
 - Backup antigo mantém a senha e o envelope de recuperação que tinha ao ser salvo.

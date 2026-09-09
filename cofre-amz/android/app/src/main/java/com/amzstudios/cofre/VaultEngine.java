@@ -17,7 +17,7 @@ public final class VaultEngine {
     private final File root;
     private byte[] master;
     private List<Entry> entries = new ArrayList<>();
-    public interface Progress { void update(long bytes); }
+    public interface Progress { void update(long bytes); default void phase(String name){} }
     public static final class Entry {
         public final String id, parent, name, mime, trashRoot;
         public final boolean folder;
@@ -68,7 +68,7 @@ public final class VaultEngine {
             cleanupOrphans();
         } catch(Exception e) { lock(); throw e; }
     }
-    public void lock() {
+    public synchronized void lock() {
         if(master!=null) Arrays.fill(master,(byte)0);
         master=null; entries=new ArrayList<>();
     }
@@ -194,12 +194,13 @@ public final class VaultEngine {
         requireUnlocked(); validateDestination(parent,name,null);
         String id=UUID.randomUUID().toString(); File temp=new File(root,id+".part"), target=content(id);
         byte[] key=fileKey(id), buffer=new byte[CHUNK]; MessageDigest sha=MessageDigest.getInstance("SHA-256");
-        long total=0, index=0;
+        long total=0, index=0,nextSpaceCheck=0;
         try {
             try(FileOutputStream stream=new FileOutputStream(temp); DataOutputStream out=new DataOutputStream(new BufferedOutputStream(stream))) {
                 out.writeInt(0x414D4631);
                 while(true) {
                     int count=readChunk(source,buffer); if(count==0) break;
+                    if(total>=nextSpaceCheck){if(root.getUsableSpace()<34L*1024*1024)throw new IOException("Espaço insuficiente; original preservado.");nextSpaceCheck=total+64L*1024*1024;}
                     byte[] plain=Arrays.copyOf(buffer,count), iv=random(12);
                     byte[] encrypted=crypt(Cipher.ENCRYPT_MODE,key,iv,aad(id,index++,count),plain);
                     sha.update(plain); Arrays.fill(plain,(byte)0);
@@ -212,7 +213,7 @@ public final class VaultEngine {
             }
             Entry entry=new Entry(id,parent,name.trim(),mime==null?"application/octet-stream":mime,false,total,System.currentTimeMillis(),sha.digest());
             // Read back and authenticate every chunk before committing metadata or allowing source removal.
-            readContent(temp,entry,null,null);
+            if(progress!=null)progress.phase("Verificando arquivo protegido · "+entry.name);readContent(temp,entry,null,progress);
             atomicMove(temp,target);
             List<Entry> next=list(); next.add(entry); commit(next);
             return entry;
@@ -222,10 +223,59 @@ public final class VaultEngine {
         Entry entry=get(id); if(entry.folder) throw new IOException("Escolha um arquivo.");
         readContent(content(id),entry,output,progress);
     }
+    /** Independent, bounded reader; every requested block is authenticated before release. */
+    public synchronized RandomReader openRandomAccess(String id,java.util.function.BooleanSupplier allowed)throws Exception{
+        Entry entry=get(id);if(entry.folder)throw new IOException("Escolha um arquivo.");
+        return new RandomReader(content(id),entry,fileKey(id),allowed);
+    }
+    public static final class RandomReader implements Closeable {
+        private final RandomAccessFile file;private final Entry entry;private final byte[] key;
+        private final java.util.function.BooleanSupplier allowed;
+        private byte[] cached;private long cachedIndex=-1;private boolean closed;
+        RandomReader(File source,Entry entry,byte[] key,java.util.function.BooleanSupplier allowed)throws Exception{
+            this.entry=entry;this.key=key;this.allowed=allowed;
+            RandomAccessFile opened=null;
+            try{
+                opened=new RandomAccessFile(source,"r");file=opened;
+                long chunks=entry.size/CHUNK+(entry.size%CHUNK==0?0:1);
+                long expected=Math.addExact(4,Math.addExact(entry.size,Math.multiplyExact(32,chunks+1)));
+                if(file.length()!=expected||file.readInt()!=0x414D4631)throw new IOException("Arquivo criptografado inválido.");
+                file.seek(expected-32);if(file.readInt()!=0)throw new IOException("Final do arquivo inválido.");
+                byte[] iv=new byte[12],tag=new byte[16];file.readFully(iv);file.readFully(tag);
+                crypt(Cipher.DECRYPT_MODE,key,iv,aad(entry.id,chunks,0),tag);
+            }catch(Exception e){Arrays.fill(key,(byte)0);if(opened!=null)opened.close();throw e;}
+        }
+        public long size(){return entry.size;}
+        public synchronized int readAt(long position,byte[] buffer,int offset,int length)throws IOException{
+            check();if(position<0||offset<0||length<0||offset>buffer.length-length)throw new IndexOutOfBoundsException();
+            if(length==0)return 0;if(position>=entry.size)return -1;
+            int wanted=(int)Math.min((long)length,entry.size-position),copied=0;
+            try{
+                while(copied<wanted){
+                    check();long block=position/CHUNK;int inside=(int)(position%CHUNK);
+                    if(cachedIndex!=block){
+                        wipe();file.seek(Math.addExact(4,Math.multiplyExact(block,(long)CHUNK+32)));
+                        int count=(int)Math.min((long)CHUNK,entry.size-block*CHUNK);
+                        if(file.readInt()!=count)throw new IOException("Bloco do arquivo inválido.");
+                        byte[] iv=new byte[12],encrypted=new byte[count+16];file.readFully(iv);file.readFully(encrypted);
+                        cached=crypt(Cipher.DECRYPT_MODE,key,iv,aad(entry.id,block,count),encrypted);cachedIndex=block;
+                    }
+                    check();int count=Math.min(wanted-copied,cached.length-inside);
+                    System.arraycopy(cached,inside,buffer,offset+copied,count);copied+=count;position+=count;
+                }
+                return copied;
+            }catch(Exception e){Arrays.fill(buffer,offset,offset+copied,(byte)0);wipe();if(e instanceof IOException)throw (IOException)e;throw new IOException("Não foi possível autenticar o trecho do arquivo.",e);}
+        }
+        private void check()throws IOException{if(closed||!allowed.getAsBoolean())throw new IOException("Leitura encerrada.");}
+        private void wipe(){if(cached!=null)Arrays.fill(cached,(byte)0);cached=null;cachedIndex=-1;}
+        public InputStream stream(){return new InputStream(){long position;public int read()throws IOException{byte[] b=new byte[1];return read(b,0,1)<0?-1:b[0]&255;}public int read(byte[] b,int off,int len)throws IOException{int n=readAt(position,b,off,len);if(n>0)position+=n;return n;}public long skip(long n){long skip=Math.max(0,Math.min(n,entry.size-position));position+=skip;return skip;}public void close()throws IOException{RandomReader.this.close();}};}
+        @Override public synchronized void close()throws IOException{if(closed)return;closed=true;wipe();Arrays.fill(key,(byte)0);file.close();}
+    }
     public void verify(String id) throws Exception { Entry entry=get(id); readContent(content(id),entry,null,null); }
-    public boolean matches(String id,InputStream input) throws Exception {
-        Entry e=get(id); MessageDigest sha=MessageDigest.getInstance("SHA-256"); byte[] b=new byte[CHUNK]; long size=0;
-        try { int n; while((n=input.read(b))!=-1) { sha.update(b,0,n); size+=n; } }
+    public boolean matches(String id,InputStream input)throws Exception{return matches(id,input,null);}
+    public boolean matches(String id,InputStream input,Progress progress) throws Exception {
+        Entry e=get(id);if(progress!=null)progress.phase("Conferindo cópia · "+e.name); MessageDigest sha=MessageDigest.getInstance("SHA-256"); byte[] b=new byte[CHUNK]; long size=0;
+        try { int n; while((n=input.read(b))!=-1) { sha.update(b,0,n); size+=n;if(progress!=null)progress.update(size); } }
         finally { Arrays.fill(b,(byte)0); }
         return size==e.size && MessageDigest.isEqual(sha.digest(),e.digest);
     }
@@ -248,28 +298,32 @@ public final class VaultEngine {
     public void delete(String id) throws Exception {
         Set<String> removed=new HashSet<>();for(Entry e:activeSubtree(id))removed.add(e.id);removeIds(removed);
     }
-    public void backup(OutputStream target) throws Exception {
+    public static long encryptedSize(long bytes){if(bytes<0)throw new IllegalArgumentException();long chunks=bytes/CHUNK+(bytes%CHUNK==0?0:1);return Math.addExact(4,Math.addExact(bytes,Math.multiplyExact(32,chunks+1)));}
+    public void backup(OutputStream target)throws Exception{backup(target,null);}
+    public void backup(OutputStream target,Progress progress) throws Exception {
         requireUnlocked();
-        for(Entry e:entries) if(!e.folder) verify(e.id);
+        for(Entry e:entries) if(!e.folder){if(progress!=null)progress.phase("Verificando para backup · "+e.name);readContent(content(e.id),e,null,progress);}
         try(ZipOutputStream zip=new ZipOutputStream(target)) {
             zip.setLevel(0); // Encrypted data is incompressible.
+            if(progress!=null)progress.phase("Gravando backup criptografado");long copied=0;
             for(File file:backupFiles()) {
                 zip.putNextEntry(new ZipEntry(file.getName()));
-                try(InputStream in=new FileInputStream(file)) { copy(in,zip,null); }
+                long base=copied;try(InputStream in=new FileInputStream(file)) { copy(in,zip,progress==null?null:n->progress.update(base+n)); }copied+=file.length();
                 zip.closeEntry();
             }
         }
     }
-    public void verifyBackup(InputStream source) throws Exception {
-        requireUnlocked(); Map<String,File> expected=new HashMap<>();
+    public void verifyBackup(InputStream source)throws Exception{verifyBackup(source,null);}
+    public void verifyBackup(InputStream source,Progress progress) throws Exception {
+        requireUnlocked();if(progress!=null)progress.phase("Conferindo backup e cofre");long processed=0; Map<String,File> expected=new HashMap<>();
         for(File f:backupFiles()) expected.put(f.getName(),f);
         try(ZipInputStream zip=new ZipInputStream(source)) {
             ZipEntry e; while((e=zip.getNextEntry())!=null) {
                 File original=expected.remove(e.getName()); if(original==null) throw new IOException("Backup inválido.");
                 MessageDigest actual=MessageDigest.getInstance("SHA-256"), wanted=MessageDigest.getInstance("SHA-256");
                 byte[] buffer=new byte[CHUNK]; int n;
-                while((n=zip.read(buffer))!=-1) actual.update(buffer,0,n);
-                try(InputStream in=new FileInputStream(original)) { while((n=in.read(buffer))!=-1) wanted.update(buffer,0,n); }
+                while((n=zip.read(buffer))!=-1){actual.update(buffer,0,n);processed+=n;if(progress!=null)progress.update(processed);}
+                try(InputStream in=new FileInputStream(original)) { while((n=in.read(buffer))!=-1){wanted.update(buffer,0,n);processed+=n;if(progress!=null)progress.update(processed);} }
                 if(!MessageDigest.isEqual(actual.digest(),wanted.digest())) throw new IOException("O backup não foi gravado corretamente.");
             }
         }
@@ -277,17 +331,19 @@ public final class VaultEngine {
     }
     /** Restore into an empty vault only. The current vault can never be overwritten by this operation. */
     public void restore(InputStream source,char[] password) throws Exception {
-        restoreInternal(source,password,null);
+        restoreInternal(source,password,null,null);
     }
     public void restoreUsingRecovery(InputStream source,String code,char[] newPassword) throws Exception {
-        if(newPassword.length<10)throw new IOException("Use pelo menos 10 caracteres na nova senha.");restoreInternal(source,newPassword,code);
+        if(newPassword.length<10)throw new IOException("Use pelo menos 10 caracteres na nova senha.");restoreInternal(source,newPassword,code,null);
     }
-    private void restoreInternal(InputStream source,char[] password,String recovery) throws Exception {
+    public void restore(InputStream source,char[] password,Progress progress)throws Exception{restoreInternal(source,password,null,progress);}
+    public void restoreUsingRecovery(InputStream source,String code,char[] newPassword,Progress progress)throws Exception{if(newPassword.length<10)throw new IOException("Use pelo menos 10 caracteres na nova senha.");restoreInternal(source,newPassword,code,progress);}
+    private void restoreInternal(InputStream source,char[] password,String recovery,Progress progress) throws Exception {
         if(exists()) throw new IOException("Restaure em uma instalação sem cofre. O cofre atual será preservado.");
         File staged=new File(root.getParentFile(),"restore-"+UUID.randomUUID());
         if(!staged.mkdirs()) throw new IOException("Não foi possível preparar a restauração.");
         try {
-            Set<String> names=new HashSet<>(); long total=0,limit=Math.max(0,staged.getUsableSpace()-32L*1024*1024);
+            if(progress!=null)progress.phase("Lendo backup para restauração");Set<String> names=new HashSet<>(); long total=0,limit=Math.max(0,staged.getUsableSpace()-32L*1024*1024);
             try(ZipInputStream zip=new ZipInputStream(source)) {
                 ZipEntry item; byte[] b=new byte[CHUNK];
                 while((item=zip.getNextEntry())!=null) {
@@ -295,15 +351,16 @@ public final class VaultEngine {
                     if(item.isDirectory() || !(n.equals(CONFIG)||n.equals(INDEX)||n.equals(RECOVERY)||n.matches("[a-f0-9-]{36}\\.bin")) || !names.add(n) || names.size()>100002)
                         throw new IOException("Estrutura de backup inválida.");
                     try(FileOutputStream out=new FileOutputStream(new File(staged,n))) {
-                        int count; while((count=zip.read(b))!=-1) { total+=count; if(total>limit) throw new IOException("Espaço insuficiente para restaurar."); out.write(b,0,count); }
+                        int count; while((count=zip.read(b))!=-1) { total+=count; if(total>limit) throw new IOException("Espaço insuficiente para restaurar."); out.write(b,0,count);if(progress!=null)progress.update(total); }
                         out.getFD().sync();
                     }
                 }
             }
             if(!names.contains(CONFIG)||!names.contains(INDEX)) throw new IOException("Backup incompleto.");
             VaultEngine check=new VaultEngine(staged);
-            try { if(recovery==null)check.unlock(password);else check.unlockWithRecovery(recovery); for(Entry e:check.list()) if(!e.folder) check.verify(e.id);if(recovery!=null)check.writeConfig(password); }
+            try { if(recovery==null)check.unlock(password);else check.unlockWithRecovery(recovery); for(Entry e:check.list()) if(!e.folder){if(progress!=null)progress.phase("Verificando restauração · "+e.name);check.readContent(check.content(e.id),e,null,progress);}if(recovery!=null)check.writeConfig(password); }
             finally { check.lock(); }
+            if(progress!=null)progress.update(total);
             if(root.exists()) { File[] files=root.listFiles(); if(files==null||files.length>0) throw new IOException("O destino não está vazio."); if(!root.delete()) throw new IOException("Destino indisponível."); }
             atomicMove(staged,root); unlock(password);if(recovery==null)markBackupCompleted();
         } finally { removeTree(staged); }
