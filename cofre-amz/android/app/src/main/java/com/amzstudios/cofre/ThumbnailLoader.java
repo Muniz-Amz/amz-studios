@@ -14,7 +14,7 @@ import java.util.function.BooleanSupplier;
 /** Bounded independent decoding; no plaintext media file and no transfer-queue backlog. */
 final class ThumbnailLoader {
     private final VaultEngine vault;private final Handler ui;private final BooleanSupplier allowed;private volatile int generation;
-    private final ThreadPoolExecutor decodeWorker=new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(12));
+    private final ThreadPoolExecutor decodeWorker=new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(12),r->new Thread(()->{android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);r.run();},"cofre-thumbnails"));
     private final Set<String> pending=new HashSet<>(),unsupported=new HashSet<>();
     private final Map<String,List<WeakReference<ImageView>>> waiting=new HashMap<>();
     private final LruCache<String,Bitmap> cache=new LruCache<String,Bitmap>(8*1024*1024){@Override protected int sizeOf(String key,Bitmap bitmap){return bitmap.getAllocationByteCount();}};
@@ -24,7 +24,7 @@ final class ThumbnailLoader {
     void close(){clear();decodeWorker.shutdownNow();}
     void bind(VaultEngine.Entry entry,ImageView image){
         String tag=generation+":"+entry.id;image.setTag(tag);Bitmap cached=cache.get(entry.id);
-        if(cached!=null){image.setImageBitmap(cached);return;}if(unsupported.contains(entry.id))return;
+        if(cached!=null){image.setImageBitmap(cached);return;}image.setImageDrawable(null);if(unsupported.contains(entry.id)||!allowed.getAsBoolean())return;
         List<WeakReference<ImageView>> views=waiting.computeIfAbsent(entry.id,k->new ArrayList<>());views.removeIf(v->v.get()==null);if(views.size()>=8)views.remove(0);views.add(new WeakReference<>(image));
         if(!pending.add(entry.id))return;int epoch=generation;
         try{decodeWorker.execute(()->{

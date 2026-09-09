@@ -1,9 +1,19 @@
-# Cofre AMZ — Android 1.1.1
+# Cofre AMZ — Android 1.1.2
 
 Aplicativo nativo offline, Java, Android 8+ (API 26). ID permanente
-`com.amzstudios.cofre`, versionCode 3.
+`com.amzstudios.cofre`, versionCode 4.
 
 ## Recursos
+
+- Interface nativa em grafite e verde suave, ícones vetoriais, ações na base e
+  feedback de toque. Sem biblioteca visual adicional, blur ou animação decorativa contínua.
+- Toque abre arquivos diretamente; menu de três pontos mantém as ações. A seleção
+  atualiza os controles sem reconstruir a tela ou perder a busca/posição da rolagem.
+- Cartões reutilizados em lista/grade, miniaturas suspensas durante rolagem e
+  reprodução, com decodificação em prioridade de fundo. Filtro/ordenação de
+  catálogos acima de 500 entradas são feitos no worker, com descarte de resultados antigos.
+- Fotos abertas por trechos autenticados com decodificação fora da interface e
+  redução para até 2000 px por lado. PDFs renderizam uma página por vez no worker.
 
 - Cofre por instalação, senha de 10+ caracteres, mudança de senha e pastas.
 - Busca, renomear, seleção múltipla para mover, retirar, enviar à lixeira,
@@ -18,7 +28,7 @@ Aplicativo nativo offline, Java, Android 8+ (API 26). ID permanente
   sem recriptografar arquivos. Backups antigos mantêm a recuperação anterior.
 - Espaço do cofre, lixeira e volume calculado no worker e reutilizado pela interface.
 - Áudio/vídeo via MediaDataSource, MediaPlayer em HandlerThread e preparação
-  assíncrona, com pausa e busca. Não cria um arquivo legível do vídeo no cache.
+  assíncrona, proporção original, pausa, busca e saltos de 10 segundos. Não cria um arquivo legível do vídeo no cache.
   A reprodução mantém a tela ativa e o bloqueio por inatividade fica suspenso
   enquanto a prévia está aberta; sair do aplicativo continua bloqueando o cofre.
 - Transferências, backups e restauração com etapas, progresso e interrupção.
@@ -94,17 +104,20 @@ de um backup produzido pelo código original v1, lixeira aninhada, restauração
 colisões, movimentos múltiplos atômicos, recuperação errada/de outro cofre,
 rotação do código, restauração por recuperação e marcador de backup adulterado.
 
-Cinco testes instrumentados no emulador Android 14 em modo avião exercitam
+Oito testes instrumentados no emulador Android 14 em modo avião exercitam
 criptografia Android, criação e bloqueio, transferência real via DocumentsProvider,
 miniaturas PNG/MP4, grade/lista, seleção, lixeira/restauração/exclusão, recuperação
 pela tela, backup verificado e retirada em árvore com colisões e destino inválido.
 Incluem reprodução por trechos, resposta da UI, ausência de cópia de vídeo no
 cache, controle de bloqueio durante reprodução e interrupção imediata da importação.
+Incluem também reciclagem sem miniatura residual, seleção sem reconstrução da
+Activity, busca/rolagem com 5.000 entradas de metadados, imagem sem cópia no cache,
+proporção horizontal/vertical de vídeo e navegação em PDF de duas páginas.
 O provedor e os arquivos sintéticos de teste não entram no APK de produção.
 Imagens de QA são geradas apenas com dados fictícios dos testes.
 
 A validação de distribuição confere assinatura v2 e ausência de permissão de
-internet e do provedor de teste. A atualização do APK de produção é verificada
+internet e do provedor de teste. Na v1.1.0, a atualização do APK de produção foi verificada
 sobre a versão 1.0.0 com um cofre sintético, preservando senha e arquivo.
 Não houve auditoria criptográfica independente nem testes em todos os fabricantes;
 não anunciar proteção absoluta. Veja [SECURITY.md](SECURITY.md).

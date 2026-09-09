@@ -70,7 +70,8 @@ integridade. A v1.1 preserva conteúdos v1; apenas novas escritas de índice usa
   e backup continuam fazendo a verificação completa. O formato não foi alterado.
   Leitores possuem chave derivada própria, checam revogação em cada leitura e
   apagam chave e cache ao fechar. Bloqueio cancela miniaturas e reprodução.
-  PDFs, textos, imagens abertas e visualizadores externos ainda podem usar cache
+  Fotos abertas usam leituras autenticadas e bitmap reduzido em memória.
+  PDFs, textos e visualizadores externos ainda podem usar cache
   temporário; encerramento abrupto pode deixá-lo até a próxima inicialização.
 - Abrir em aplicativo externo concede leitura de cópia temporária; o receptor
   pode salvá-la. A concessão e o cache são removidos no retorno.

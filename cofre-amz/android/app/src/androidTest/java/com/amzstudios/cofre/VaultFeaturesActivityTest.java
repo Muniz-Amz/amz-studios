@@ -47,7 +47,7 @@ public class VaultFeaturesActivityTest {
     private void positive()throws Exception{AlertDialog d=dialog();main(()->d.getButton(AlertDialog.BUTTON_POSITIVE).performClick());waitJob();}
     private void dismiss()throws Exception{invoke("closeDialogs");}
     private View byText(View view,String label){if(view instanceof TextView&&label.contentEquals(((TextView)view).getText()))return view;if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++){View found=byText(((ViewGroup)view).getChildAt(i),label);if(found!=null)return found;}return null;}
-    private void click(String label){main(()->{View v=byText(activity.getWindow().getDecorView(),label);assertNotNull("Missing control: "+label,v);v.performClick();});}
+    private void click(String label){main(()->{View v=null;try{View actions=(View)field(activity,"selectionActions");if(actions!=null&&actions.isShown())v=byText(actions,label);}catch(Exception ignored){}if(v==null)v=byText(activity.getWindow().getDecorView(),label);assertNotNull("Missing control: "+label,v);v.performClick();});}
     private void clickId(int id){main(()->{View v=activity.findViewById(id);assertNotNull(v);v.performClick();});}
     private void selectItem(String id)throws Exception{
         main(()->{GridView grid=activity.findViewById(R.id.vault_items);for(int i=0;i<grid.getAdapter().getCount();i++){Object value=grid.getAdapter().getItem(i);if(value instanceof VaultEngine.Entry&&((VaultEngine.Entry)value).id.equals(id)){grid.performItemClick(grid.getChildAt(i-grid.getFirstVisiblePosition()),i,i);return;}}fail("Entry not visible");});
@@ -66,10 +66,11 @@ public class VaultFeaturesActivityTest {
         assertEquals(2,loadedImages(activity.findViewById(R.id.vault_items)));assertTrue(((GridView)activity.findViewById(R.id.vault_items)).getNumColumns()>1);capture("test-v11-grid.png");
         assertEquals(0,new File(context.getCacheDir(),"thumb-work").list().length);
         // Playback also reads encrypted ranges; the UI must remain responsive and cache stays empty.
-        selectItem(video.id);AlertDialog menu=dialog();main(()->menu.getListView().performItemClick(null,0,0));
+        long videoStart=android.os.SystemClock.elapsedRealtime();selectItem(video.id);
         Dialog media=(Dialog)field(activity,"preview");assertNotNull(media);main(()->activity.onUserInteraction());assertFalse(((android.os.Handler)field(activity,"ui")).hasCallbacks((Runnable)field(activity,"timeout")));
         String[] state={""};for(int i=0;i<100;i++){main(()->state[0]=((TextView)media.findViewById(R.id.vault_media_status)).getText().toString());if(!state[0].startsWith("Preparando"))break;Thread.sleep(100);}
         assertTrue(state[0],state[0].startsWith("Reproduzindo")||state[0].startsWith("Pausado")||state[0].equals("Concluído"));
+        android.util.Log.i("CofrePerformance","Small MP4 prepared after direct tap in "+(android.os.SystemClock.elapsedRealtime()-videoStart)+" ms");
         long heartbeat=android.os.SystemClock.elapsedRealtime();for(int i=0;i<20;i++)main(()->{});assertTrue("UI blocked during playback",android.os.SystemClock.elapsedRealtime()-heartbeat<3000);
         File[] plaintext=new File(context.getCacheDir(),"preview").listFiles();assertTrue(plaintext==null||plaintext.length==0);invoke("closePreview");
         clickId(R.id.vault_select);selectItem(photo.id);selectItem(video.id);assertEquals(2,((Set<?>)field(activity,"selected")).size());capture("test-v11-selection.png");
@@ -100,5 +101,34 @@ public class VaultFeaturesActivityTest {
         VaultEngine.Entry retained=vault().importFile(new ByteArrayInputStream(new byte[]{1,2,3}),"preservado.bin","application/octet-stream","",null);invoke("showExplorer");set("pendingExports",new ArrayList<>(Collections.singletonList(retained.id)));
         Uri invalid=DocumentsContract.buildTreeDocumentUri("com.amzstudios.cofre.test.documents","invalid");main(()->activity.onActivityResult(14,Activity.RESULT_OK,new Intent().setData(invalid)));waitJob();dismiss();vault().verify(retained.id);assertEquals(1,vault().list().size());
         invoke("requestLock");waitJob();main(()->{((EditText)activity.findViewById(R.id.vault_password)).setText("Nova senha offline 2026");activity.findViewById(R.id.vault_unlock).performClick();});waitJob();assertTrue(vault().isUnlocked());
+    }
+
+    @Test public void lightweightLayoutRecyclesCellsAndKeepsSelectionScroll()throws Exception{
+        seed.folder("","Documentos");seed.folder("","Pessoal");
+        Bitmap art=Bitmap.createBitmap(640,400,Bitmap.Config.ARGB_8888);Canvas canvas=new Canvas(art);Paint paint=new Paint();
+        paint.setShader(new LinearGradient(0,0,0,400,0xff79b4bb,0xffefc493,Shader.TileMode.CLAMP));canvas.drawRect(0,0,640,400,paint);paint.setShader(null);paint.setColor(0xffffe5b7);canvas.drawCircle(470,115,44,paint);paint.setColor(0xff3f6b76);Path mountain=new Path();mountain.moveTo(0,340);mountain.lineTo(180,140);mountain.lineTo(370,360);mountain.lineTo(530,230);mountain.lineTo(640,330);mountain.lineTo(640,400);mountain.lineTo(0,400);mountain.close();canvas.drawPath(mountain,paint);
+        ByteArrayOutputStream jpg=new ByteArrayOutputStream();art.compress(Bitmap.CompressFormat.JPEG,90,jpg);art.recycle();
+        VaultEngine.Entry photo=seed.importFile(new ByteArrayInputStream(jpg.toByteArray()),"Montanhas ao amanhecer.jpg","image/jpeg","",null);
+        seed.importFile(new ByteArrayInputStream(jpg.toByteArray()),"Minha próxima viagem.jpg","image/jpeg","",null);
+        open();if(!(Boolean)field(activity,"gridMode"))clickId(R.id.vault_view_toggle);main(()->((GridView)activity.findViewById(R.id.vault_items)).setSelection(2));
+        for(int i=0;i<80&&loadedImages(activity.findViewById(R.id.vault_items))<2;i++){Thread.sleep(100);inst.waitForIdleSync();}capture("test-v112-grid.png");
+        // Rebinding the same cell must not show the previous file's decrypted thumbnail.
+        main(()->{GridView grid=activity.findViewById(R.id.vault_items);android.widget.Adapter adapter=grid.getAdapter();int photoIndex=-1,folderIndex=-1;for(int i=0;i<adapter.getCount();i++){VaultEngine.Entry e=(VaultEngine.Entry)adapter.getItem(i);if(e.id.equals(photo.id))photoIndex=i;if(e.folder)folderIndex=i;}View first=adapter.getView(photoIndex,null,grid);assertEquals(1,loadedImages(first));View reused=adapter.getView(folderIndex,first,grid);assertSame(first,reused);assertEquals(0,loadedImages(reused));});
+        selectItem(photo.id);Dialog preview=(Dialog)field(activity,"preview");assertNotNull(preview);
+        for(int i=0;i<80&&loadedImages(preview.getWindow().getDecorView())<1;i++){Thread.sleep(100);inst.waitForIdleSync();}assertEquals(1,loadedImages(preview.getWindow().getDecorView()));File[] plaintext=new File(context.getCacheDir(),"preview").listFiles();assertTrue(plaintext==null||plaintext.length==0);invoke("closePreview");
+        clickId(R.id.vault_view_toggle);capture("test-v112-list.png");
+        // Metadata-only UI fixture: this measures navigation, not a 100 GB storage test.
+        List<VaultEngine.Entry> catalog=new ArrayList<>();for(int i=0;i<5000;i++)catalog.add(new VaultEngine.Entry("ui-"+i,"",String.format(Locale.ROOT,"Arquivo %05d.txt",i),"text/plain",false,3000,0,new byte[32]));set("all",catalog);invoke("refresh");waitJob();GridView original=activity.findViewById(R.id.vault_items);assertEquals(5000,original.getAdapter().getCount());
+        main(()->original.setSelection(120));int position=original.getFirstVisiblePosition();assertTrue(position>0);clickId(R.id.vault_select);selectItem("ui-120");assertSame(original,activity.findViewById(R.id.vault_items));assertEquals(position,original.getFirstVisiblePosition());
+        main(()->((EditText)activity.findViewById(R.id.vault_search)).setText("Arquivo 004"));Thread.sleep(250);waitJob();assertEquals(100,original.getAdapter().getCount());selectItem("ui-400");assertEquals("Arquivo 004",((EditText)activity.findViewById(R.id.vault_search)).getText().toString());assertSame(original,activity.findViewById(R.id.vault_items));
+        long start=android.os.SystemClock.elapsedRealtime();for(int i=0;i<20;i++){final int target=i*4;main(()->original.setSelection(target));}android.util.Log.i("CofrePerformance","5000-item metadata fixture, 20 navigation/idle rounds: "+(android.os.SystemClock.elapsedRealtime()-start)+" ms");assertTrue("UI navigation stalled",android.os.SystemClock.elapsedRealtime()-start<5000);
+    }
+
+    @Test public void videoSurfacePreservesLandscapeAndPortraitAspect()throws Exception{
+        main(()->{VaultMediaView.AspectSurface view=new VaultMediaView.AspectSurface(context);view.videoSize(1920,1080);view.measure(View.MeasureSpec.makeMeasureSpec(1000,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(1000,View.MeasureSpec.EXACTLY));assertEquals(1000,view.getMeasuredWidth());assertEquals(562,view.getMeasuredHeight());view.videoSize(1080,1920);view.measure(View.MeasureSpec.makeMeasureSpec(1000,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(1000,View.MeasureSpec.EXACTLY));assertEquals(562,view.getMeasuredWidth());assertEquals(1000,view.getMeasuredHeight());});
+    }
+
+    @Test public void pdfPagesDecodeAndCloseWithoutBlockingUi()throws Exception{
+        android.graphics.pdf.PdfDocument document=new android.graphics.pdf.PdfDocument();for(int i=0;i<2;i++){android.graphics.pdf.PdfDocument.Page p=document.startPage(new android.graphics.pdf.PdfDocument.PageInfo.Builder(600,800,i+1).create());Paint paint=new Paint();paint.setColor(Color.BLACK);paint.setTextSize(36);p.getCanvas().drawText("Pagina privada "+(i+1),40,80,paint);document.finishPage(p);}ByteArrayOutputStream data=new ByteArrayOutputStream();document.writeTo(data);document.close();VaultEngine.Entry pdf=seed.importFile(new ByteArrayInputStream(data.toByteArray()),"Documento.pdf","application/pdf","",null);open();selectItem(pdf.id);waitJob();Dialog preview=(Dialog)field(activity,"preview");assertNotNull(preview);for(int i=0;i<100&&byText(preview.getWindow().getDecorView(),"1 / 2")==null;i++){Thread.sleep(100);inst.waitForIdleSync();}assertNotNull(byText(preview.getWindow().getDecorView(),"1 / 2"));assertEquals(1,loadedImages(preview.getWindow().getDecorView()));main(()->byText(preview.getWindow().getDecorView(),"Próxima").performClick());for(int i=0;i<100&&byText(preview.getWindow().getDecorView(),"2 / 2")==null;i++){Thread.sleep(100);inst.waitForIdleSync();}assertNotNull(byText(preview.getWindow().getDecorView(),"2 / 2"));invoke("closePreview");assertEquals(0,new File(context.getCacheDir(),"preview").list().length);vault().verify(pdf.id);
     }
 }

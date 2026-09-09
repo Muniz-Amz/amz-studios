@@ -1,6 +1,40 @@
-# Desempenho — 1.1.1
+# Desempenho — 1.1.2
 
-## Alterações
+## Interface na v1.1.2
+
+- A seleção mantém a mesma GridView, consulta e posição de rolagem. Células são
+  recicladas com tipos distintos para lista, grade e estado vazio. A imagem e
+  a associação anterior são limpas quando a célula passa a representar outro arquivo.
+- Durante a rolagem, a fila pendente de miniaturas é descartada. Quando a lista
+  para, só as células visíveis são vinculadas novamente. O executor de miniaturas
+  tem prioridade de fundo; mídia em reprodução impede novas miniaturas.
+- Filtro e ordenação com mais de 500 metadados passam para o worker; um número
+  de geração impede aplicar resultados de uma consulta ou tela antiga.
+- Toque direto abre vídeos, sem menu intermediário. SurfaceView preserva a
+  proporção original. Preparação/leitura continuam assíncronas.
+- Fotos não são exportadas para arquivo temporário. Decodificação por trechos
+  ocorre fora da interface, com amostragem até 2000 px por lado (até cerca de
+  16 MB de bitmap ARGB). PDF mantém uma página exibida, até 1600 × 2400 px;
+  abertura/renderização/fechamento nativos ficam no executor do visualizador.
+- O tema usa fontes do Android, caminhos vetoriais e formas sólidas; nenhuma
+  dependência visual adicional ou animação decorativa contínua foi adicionada.
+
+## Validação da interface
+
+Em emulador Android 14, modo avião, os oito testes instrumentados passaram
+na compilação final em 134,589 s. A preparação do MP4 sintético pequeno após
+um toque levou 1.263 ms; não é medição de vídeo de 2–3 GB. Vinte rodadas de
+navegação/espera da interface sobre uma lista de 5.000 metadados levaram
+1.981 ms; isso não mede FPS nem representa 5.000 arquivos gravados no cofre.
+Os testes verificam reciclagem sem imagem residual, manutenção da seleção,
+busca e posição de rolagem, imagem sem arquivo temporário, proporções de vídeo
+e navegação em PDF, além dos fluxos de transferência, lixeira e recuperação.
+Trinta testes JVM passaram. Lint de produção: zero erros.
+
+APK de produção: 1.206.572 bytes, sem novas bibliotecas visuais, com o mesmo
+identificador e certificado das versões anteriores.
+
+## Base de transferência e mídia da v1.1.1
 
 O formato de conteúdo continua AMF1, em blocos autenticados de até 1 MiB.
 Não existe carregamento do cofre inteiro ou de um vídeo inteiro na memória.
@@ -25,6 +59,7 @@ Não existe carregamento do cofre inteiro ou de um vídeo inteiro na memória.
 
 ## Ensaio de volume realizado
 
+Ensaio realizado na v1.1.1, com o mesmo VaultEngine preservado na v1.1.2.
 Em Windows / JDK 17, tools/VolumeProbe.java gerou e processou **3.221.225.489 bytes**
 (3 GiB + 17), sem manter o original na memória ou em outro arquivo. Importação com
 releitura autenticada, exportação integral com SHA-256 e leituras aleatórias perto

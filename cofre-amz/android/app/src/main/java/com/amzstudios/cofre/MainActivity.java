@@ -22,14 +22,19 @@ import java.util.concurrent.*;
 
 public class MainActivity extends Activity {
     private static final int PICK_FILES=10, SAVE_FILE=11, SAVE_BACKUP=12, RESTORE=13, EXPORT_MANY=14, SAVE_RECOVERY=15;
-    private static final int BG=0xff0d1118, SURFACE=0xff171e29, BORDER=0xff2a3545, INK=0xfff0f4fb, MUTED=0xffa4b0c2, ACCENT=0xffadceff;
+    private static final int BG=VaultUi.BG, SURFACE=VaultUi.SURFACE, BORDER=VaultUi.BORDER, INK=VaultUi.INK, MUTED=VaultUi.MUTED, ACCENT=VaultUi.ACCENT;
     private static final long LOCK_DELAY=120000;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private final Handler ui=new Handler(Looper.getMainLooper());
     private VaultEngine vault;
     private LinearLayout page;
     private EditText password, confirmation, search;
-    private TextView status, counter;
+    private TextView status, counter, freeSpace, selectionTitle;
+    private LinearLayout trail;
+    private View normalActions, selectionActions;
+    private Button selectButton;
+    private boolean scrolling;
+    private int filterGeneration;
     private GridView list;
     private ThumbnailLoader thumbnails;
     private FileAdapter adapter;
@@ -52,6 +57,7 @@ public class MainActivity extends Activity {
     private volatile String progressPhase="Processando";
     private volatile Summary summary;
     private final Runnable searchRefresh=()->refresh();
+    private final Runnable resumeThumbnails=()->bindVisibleThumbnails();
     private static final class Summary {
         long stored,free,trash,lastBackup;boolean needsBackup;final Map<String,Integer> children=new HashMap<>();
     }
@@ -70,8 +76,8 @@ public class MainActivity extends Activity {
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,WindowManager.LayoutParams.FLAG_SECURE);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         vault=new VaultEngine(new File(getFilesDir(),"vault-v1"));
-        gridMode=getPreferences(MODE_PRIVATE).getBoolean("grid",false);
-        thumbnails=new ThumbnailLoader(vault,new File(getCacheDir(),"thumb-work"),worker,ui,()->unlocked&&!busy);
+        gridMode=getPreferences(MODE_PRIVATE).getBoolean("grid",true);
+        thumbnails=new ThumbnailLoader(vault,new File(getCacheDir(),"thumb-work"),worker,ui,()->unlocked&&!busy&&!mediaActive&&!scrolling);
         clearPreviews(); showLocked();
     }
     @Override protected void onResume() {
@@ -86,49 +92,42 @@ public class MainActivity extends Activity {
     }
     @Override public void onUserInteraction() { super.onUserInteraction(); if(unlocked&&!busy) armLock(); }
     @Override protected void onDestroy() {
-        ui.removeCallbacks(timeout); clearRestorePassword();
-        unlocked=false;thumbnails.close();pendingRecovery=null;summary=null;
+        unlocked=false;closePreview();ui.removeCallbacksAndMessages(null);filterGeneration++;clearRestorePassword();
+        thumbnails.close();pendingRecovery=null;summary=null;
         if(!worker.isShutdown())worker.execute(vault::lock);
         worker.shutdown(); super.onDestroy();
     }
     private void armLock() { ui.removeCallbacks(timeout); if(!mediaActive)ui.postDelayed(timeout,LOCK_DELAY); }
     private void requestLock() {
-        ui.removeCallbacks(timeout); unlocked=false; all.clear(); visible.clear();selected.clear();selectionMode=false;trashView=false;pendingRecovery=null;pendingExports.clear();summary=null;thumbnails.clear();
+        ui.removeCallbacks(timeout);ui.removeCallbacks(searchRefresh);ui.removeCallbacks(resumeThumbnails);filterGeneration++; unlocked=false; all.clear(); visible.clear();selected.clear();selectionMode=false;trashView=false;pendingRecovery=null;pendingExports.clear();summary=null;thumbnails.clear();
         closeDialogs(); closePreview();
         if(busy) { lockAfter=true; return; }
         if(!worker.isShutdown())worker.execute(vault::lock); folder=""; showLocked();
     }
     private void frame() {
-        page=new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL); page.setPadding(dp(20),dp(14),dp(20),dp(12)); page.setBackgroundColor(BG);
-        setContentView(page);
+        page=new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL); page.setPadding(dp(20),dp(12),dp(20),dp(12)); page.setBackgroundColor(BG);
+        getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);setContentView(page);
     }
     private void showLocked() {
-        if(isFinishing()||isDestroyed()) return;
-        frame();
-        ScrollView scroll=new ScrollView(this); LinearLayout content=column(); content.setPadding(dp(4),dp(30),dp(4),dp(24)); scroll.addView(content); page.addView(scroll,new LinearLayout.LayoutParams(-1,-1));
-        ImageView mark=new ImageView(this); mark.setImageResource(R.drawable.ic_vault); content.addView(mark,new LinearLayout.LayoutParams(dp(76),dp(76)));
-        TextView brand=text("AMZ STUDIOS  /  OFFLINE",12,MUTED); brand.setLetterSpacing(.12f); add(content,brand,14);
-        add(content,text("Cofre AMZ",36,INK),12);
-        add(content,text(vault.exists()?"Seus arquivos, guardados.\nDesbloqueie para acessar suas pastas.":"Um lugar privado para seus arquivos.\nCrie sua senha para começar.",16,MUTED),10);
-        LinearLayout form=column(); form.setPadding(dp(18),dp(18),dp(18),dp(20)); form.setBackground(box(SURFACE,20)); add(content,form,28);
-        add(form,text(vault.exists()?"Desbloquear cofre":"Criar cofre",20,INK),0);
-        password=input("Senha",true); password.setId(R.id.vault_password); add(form,password,14);
-        if(!vault.exists()) { confirmation=input("Repita a senha",true); confirmation.setId(R.id.vault_confirmation); add(form,confirmation,8); }
-        CheckBox show=new CheckBox(this); show.setText("Mostrar senha"); show.setTextColor(MUTED); show.setTextSize(14);
-        show.setOnCheckedChangeListener((b,on)->{ password.setTransformationMethod(on?HideReturnsTransformationMethod.getInstance():PasswordTransformationMethod.getInstance()); if(!vault.exists()&&confirmation!=null) confirmation.setTransformationMethod(on?HideReturnsTransformationMethod.getInstance():PasswordTransformationMethod.getInstance()); }); add(form,show,3);
-        Button enter=button(vault.exists()?"Desbloquear":"Criar meu cofre",true); enter.setId(R.id.vault_unlock); add(form,enter,10);
-        status=text("",14,0xffffb4ab); add(form,status,8);
-        enter.setOnClickListener(v->authenticate());
-        password.setOnEditorActionListener((v,a,event)->{ if(vault.exists()){authenticate();return true;} return false; });
-        if(!vault.exists()) {
-            add(content,text("Use pelo menos 10 caracteres. Guarde sua senha: não existe recuperação pela internet. Faça um backup do cofre antes de trocar de celular ou desinstalar o app.",14,MUTED),18);
-            Button restore=button("Restaurar backup .amzcofre",false); add(content,restore,14); restore.setOnClickListener(v->askRestore());
-        } else {
-            add(content,text("Sem conta. Sem conexão. Os arquivos ficam neste aparelho.",14,MUTED),20);
-            if(vault.hasRecovery()){Button recover=button("Esqueci a senha · Recuperar acesso",false);recover.setId(R.id.vault_recover);add(content,recover,12);recover.setOnClickListener(v->recoverAccess());}
-            Button help=button("Sobre minha senha e meus arquivos",false); add(content,help,12); help.setOnClickListener(v->help());
-        }
-        add(content,text("Android 8 ou superior  ·  v1.1.1",12,MUTED),28);
+        if(isFinishing()||isDestroyed())return;
+        frame();boolean exists=vault.exists();
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);LinearLayout content=column();content.setPadding(dp(4),dp(24),dp(4),dp(20));scroll.addView(content);page.addView(scroll,new LinearLayout.LayoutParams(-1,-1));
+        LinearLayout intro=row();ImageView mark=new ImageView(this);mark.setImageDrawable(VaultUi.icon(this,"lock",ACCENT,40));mark.setBackground(box(0xff203734,24));mark.setPadding(dp(21),dp(21),dp(21),dp(21));intro.addView(mark,new LinearLayout.LayoutParams(dp(84),dp(84)));
+        TextView offline=text("OFFLINE\nSEMPRE SEU",10,MUTED);offline.setLetterSpacing(.13f);offline.setGravity(Gravity.RIGHT);intro.addView(offline,new LinearLayout.LayoutParams(0,-2,1));content.addView(intro);
+        TextView brand=text("AMZ STUDIOS",11,ACCENT);brand.setLetterSpacing(.18f);add(content,brand,28);
+        add(content,text("Seu mundo.\nEm segurança.",34,INK),8);
+        add(content,text(exists?"Desbloqueie o Cofre AMZ para acessar seus arquivos.":"Bem-vindo ao Cofre AMZ. Um espaço privado para tudo o que é seu.",15,MUTED),12);
+        LinearLayout form=column();form.setPadding(dp(20),dp(22),dp(20),dp(18));form.setBackground(box(SURFACE,24));add(content,form,26);
+        add(form,text(exists?"Acesse seu cofre":"Crie seu cofre",20,INK),0);
+        password=input("Sua senha",true);password.setId(R.id.vault_password);password.setBackground(box(BG,12));password.setImeOptions(exists?android.view.inputmethod.EditorInfo.IME_ACTION_GO:android.view.inputmethod.EditorInfo.IME_ACTION_NEXT);add(form,password,16);
+        confirmation=null;if(!exists){confirmation=input("Repita sua senha",true);confirmation.setId(R.id.vault_confirmation);confirmation.setBackground(box(BG,12));add(form,confirmation,10);}
+        CheckBox show=new CheckBox(this);show.setText("Mostrar senha");show.setTextColor(MUTED);show.setTextSize(13);show.setButtonTintList(android.content.res.ColorStateList.valueOf(ACCENT));
+        show.setOnCheckedChangeListener((b,on)->{password.setTransformationMethod(on?HideReturnsTransformationMethod.getInstance():PasswordTransformationMethod.getInstance());if(confirmation!=null)confirmation.setTransformationMethod(on?HideReturnsTransformationMethod.getInstance():PasswordTransformationMethod.getInstance());});add(form,show,6);
+        Button enter=button(exists?"Desbloquear cofre":"Criar meu cofre",true);enter.setId(R.id.vault_unlock);enter.setCompoundDrawables(null,null,VaultUi.icon(this,"arrow",BG,20),null);add(form,enter,10);enter.setOnClickListener(v->authenticate());
+        status=text("",13,0xffffb4ab);add(form,status,2);password.setOnEditorActionListener((v,a,event)->{if(exists){authenticate();return true;}return false;});
+        if(!exists){add(content,text("Use pelo menos 10 caracteres. Guarde sua senha e faça um backup antes de trocar de celular ou desinstalar o app.",13,MUTED),18);Button restore=tabButton("Restaurar backup .amzcofre",false);add(content,restore,8);restore.setOnClickListener(v->askRestore());}
+        else{if(vault.hasRecovery()){Button recover=tabButton("Esqueci a senha · Recuperar acesso",false);recover.setId(R.id.vault_recover);add(content,recover,12);recover.setOnClickListener(v->recoverAccess());}Button help=tabButton("Sobre minha senha e meus arquivos",false);add(content,help,8);help.setOnClickListener(v->help());}
+        TextView privacy=text("Sem conta. Sem conexão. Só você e seus arquivos.",12,MUTED);privacy.setGravity(Gravity.CENTER);add(content,privacy,22);TextView version=text("Cofre AMZ · v1.1.2",11,MUTED);version.setGravity(Gravity.CENTER);add(content,version,8);
     }
     private void authenticate() {
         if(busy) return;
@@ -145,67 +144,108 @@ public class MainActivity extends Activity {
     }
     private void showExplorer() {
         if(!vault.isUnlocked()||isFinishing()||isDestroyed())return;
-        unlocked=true;all=vault.list();frame();
-        LinearLayout header=row();TextView title=text("Cofre AMZ",25,INK);header.addView(title,new LinearLayout.LayoutParams(0,-2,1));
-        Button more=button("•••",false);more.setContentDescription("Opções do cofre");header.addView(more,new LinearLayout.LayoutParams(dp(48),dp(46)));more.setOnClickListener(v->options(more));
-        Button lock=button("Bloquear",false);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(100),dp(46));lp.leftMargin=dp(6);header.addView(lock,lp);lock.setOnClickListener(v->requestLock());page.addView(header);
-        counter=text("",14,MUTED);counter.setOnClickListener(v->storageInfo());add(page,counter,8);
+        ui.removeCallbacks(searchRefresh);ui.removeCallbacks(resumeThumbnails);filterGeneration++;
+        scrolling=false;thumbnails.pause();unlocked=true;all=vault.list();frame();
+        LinearLayout header=row(),brand=column();TextView eyebrow=text("SEU ESPAÇO PRIVADO",10,ACCENT);eyebrow.setLetterSpacing(.16f);brand.addView(eyebrow);add(brand,text("Cofre AMZ",27,INK),3);header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
+        Button lock=iconButton("lock","Bloquear cofre");header.addView(lock,new LinearLayout.LayoutParams(dp(48),dp(48)));lock.setOnClickListener(v->requestLock());
+        Button more=iconButton("more","Opções do cofre");LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(dp(48),dp(48));mp.leftMargin=dp(6);header.addView(more,mp);more.setOnClickListener(v->options(more));page.addView(header);
+
+        LinearLayout storage=row();storage.setPadding(dp(16),dp(13),dp(16),dp(13));storage.setBackground(VaultUi.ripple(this,SURFACE,18));storage.setOnClickListener(v->storageInfo());storage.setContentDescription("Informações de armazenamento");
+        ImageView disk=new ImageView(this);disk.setImageDrawable(VaultUi.icon(this,"drive",ACCENT,26));storage.addView(disk,new LinearLayout.LayoutParams(dp(28),dp(28)));
+        LinearLayout metrics=column();LinearLayout.LayoutParams metricsParams=new LinearLayout.LayoutParams(0,-2,1);metricsParams.leftMargin=dp(13);storage.addView(metrics,metricsParams);counter=text("",18,INK);counter.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));metrics.addView(counter);freeSpace=text("",12,MUTED);add(metrics,freeSpace,3);
         if(summary!=null&&summary.needsBackup){
-            Button backup=button("Há alterações sem backup · Salvar backup",false);backup.setId(R.id.vault_backup_reminder);backup.setTextSize(13);add(page,backup,8);backup.setOnClickListener(v->saveBackup());
-        }
-        search=input(trashView?"Buscar na lixeira":"Buscar arquivos e pastas",false);search.setId(R.id.vault_search);add(page,search,12);
-        search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void onTextChanged(CharSequence s,int st,int b,int c){ui.removeCallbacks(searchRefresh);ui.postDelayed(searchRefresh,180);}public void afterTextChanged(Editable e){}});
+            Button backup=button("Salvar\nbackup",false);backup.setId(R.id.vault_backup_reminder);backup.setContentDescription("Há alterações sem backup. Salvar backup criptografado");backup.setTextSize(12);backup.setPadding(dp(8),dp(4),dp(8),dp(4));backup.setBackground(VaultUi.ripple(this,0xff25413e,12));LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(dp(72),dp(48));bp.leftMargin=dp(8);storage.addView(backup,bp);backup.setOnClickListener(v->saveBackup());
+        }else{ImageView storageArrow=new ImageView(this);storageArrow.setImageDrawable(VaultUi.icon(this,"arrow",MUTED,20));storage.addView(storageArrow,new LinearLayout.LayoutParams(dp(20),dp(20)));}add(page,storage,14);
+        search=input(trashView?"Buscar na lixeira":"Buscar arquivos e pastas",false);search.setId(R.id.vault_search);search.setCompoundDrawables(VaultUi.icon(this,"search",MUTED,20),null,null,null);search.setCompoundDrawablePadding(dp(10));add(page,search,14);
+        search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void onTextChanged(CharSequence s,int st,int b,int c){ui.removeCallbacks(searchRefresh);filterGeneration++;ui.postDelayed(searchRefresh,180);}public void afterTextChanged(Editable e){}});
         LinearLayout tabs=row();int trashCount=0;for(VaultEngine.Entry e:all)if(e.isTrashed()&&e.id.equals(e.trashRoot))trashCount++;
-        Button files=button("Arquivos",!trashView),trash=button("Lixeira ("+trashCount+")",trashView),view=button(gridMode?"Lista":"Grade",false);
+        Button files=tabButton("Arquivos",!trashView),trash=tabButton("Lixeira"+(trashCount>0?" · "+trashCount:""),trashView),view=iconButton(gridMode?"list":"grid",gridMode?"Visualização em lista":"Visualização em grade");
         files.setId(R.id.vault_files_tab);trash.setId(R.id.vault_trash_tab);view.setId(R.id.vault_view_toggle);
-        tabs.addView(files,new LinearLayout.LayoutParams(0,dp(44),1));LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(0,dp(44),1);tp.leftMargin=dp(6);tabs.addView(trash,tp);LinearLayout.LayoutParams vp=new LinearLayout.LayoutParams(dp(76),dp(44));vp.leftMargin=dp(6);tabs.addView(view,vp);
-        files.setOnClickListener(v->switchTrash(false));trash.setOnClickListener(v->switchTrash(true));view.setOnClickListener(v->{gridMode=!gridMode;getPreferences(MODE_PRIVATE).edit().putBoolean("grid",gridMode).apply();view.setText(gridMode?"Lista":"Grade");refresh();});add(page,tabs,8);
-        LinearLayout location=row();HorizontalScrollView crumbs=new HorizontalScrollView(this);crumbs.setHorizontalScrollBarEnabled(false);LinearLayout trail=row();crumbs.addView(trail);location.addView(crumbs,new LinearLayout.LayoutParams(0,dp(48),1));
-        if(selectionMode){TextView count=text(selected.size()+" selecionado(s)",15,INK);trail.addView(count);}else if(trashView){trail.addView(text("Lixeira criptografada",16,INK));}
+        tabs.addView(files,new LinearLayout.LayoutParams(0,dp(46),1));LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(0,dp(46),1);tp.leftMargin=dp(4);tabs.addView(trash,tp);LinearLayout.LayoutParams vp=new LinearLayout.LayoutParams(dp(48),dp(48));vp.leftMargin=dp(12);tabs.addView(view,vp);
+        files.setOnClickListener(v->switchTrash(false));trash.setOnClickListener(v->switchTrash(true));view.setOnClickListener(v->{gridMode=!gridMode;getPreferences(MODE_PRIVATE).edit().putBoolean("grid",gridMode).apply();view.setCompoundDrawables(null,VaultUi.icon(this,gridMode?"list":"grid",ACCENT,22),null,null);view.setContentDescription(gridMode?"Visualização em lista":"Visualização em grade");thumbnails.pause();refresh();});add(page,tabs,10);
+
+        LinearLayout location=row();FrameLayout locationText=new FrameLayout(this);location.addView(locationText,new LinearLayout.LayoutParams(0,dp(48),1));
+        HorizontalScrollView crumbs=new HorizontalScrollView(this);crumbs.setHorizontalScrollBarEnabled(false);trail=row();crumbs.addView(trail);locationText.addView(crumbs,new FrameLayout.LayoutParams(-1,-1));
+        selectionTitle=text("",16,ACCENT);selectionTitle.setGravity(Gravity.CENTER_VERTICAL);locationText.addView(selectionTitle,new FrameLayout.LayoutParams(-1,-1));
+        if(trashView){trail.addView(text("Lixeira protegida",16,INK));}
         else{
-            Button home=button("Meus arquivos",false);trail.addView(home);home.setOnClickListener(v->{folder="";showExplorer();});List<VaultEngine.Entry> parents=new ArrayList<>();String current=folder;
+            Button home=tabButton("Meus arquivos",false);home.setTextColor(INK);trail.addView(home);home.setOnClickListener(v->{folder="";showExplorer();});List<VaultEngine.Entry> parents=new ArrayList<>();String current=folder;
             try{while(!current.isEmpty()){VaultEngine.Entry e=vault.get(current);parents.add(0,e);current=e.parent;}}catch(Exception e){folder="";}
-            for(VaultEngine.Entry e:parents){trail.addView(text(" / ",15,MUTED));Button b=button(e.name,false);trail.addView(b);b.setOnClickListener(v->{folder=e.id;showExplorer();});}
+            for(VaultEngine.Entry e:parents){trail.addView(text(" / ",15,MUTED));Button b=tabButton(e.name,false);b.setTextColor(INK);trail.addView(b);b.setOnClickListener(v->{folder=e.id;showExplorer();});}
+            crumbs.post(()->crumbs.fullScroll(View.FOCUS_RIGHT));
         }
-        Button select=button(selectionMode?"Cancelar":"Selecionar",false);select.setId(R.id.vault_select);location.addView(select,new LinearLayout.LayoutParams(dp(100),dp(44)));select.setOnClickListener(v->{selectionMode=!selectionMode;selected.clear();showExplorer();});add(page,location,6);
-        if(selectionMode){
-            HorizontalScrollView scroll=new HorizontalScrollView(this);LinearLayout actions=row();scroll.addView(actions);action(actions,"Todos",()->{for(VaultEngine.Entry e:visible)selected.add(e.id);showExplorer();});
-            if(trashView){action(actions,"Restaurar",()->restoreSelected(new ArrayList<>(selected)));action(actions,"Excluir de vez",()->purgeSelected(new ArrayList<>(selected)));}
-            else{action(actions,"Mover",()->chooseFolders(new ArrayList<>(selected)));action(actions,"Retirar",()->exportSelection(new ArrayList<>(selected)));action(actions,"Lixeira",()->trashSelected(new ArrayList<>(selected)));}add(page,scroll,6);
-        }else if(!trashView){
-            LinearLayout actions=row();Button move=button("+ Mover arquivos",true);move.setId(R.id.vault_import);actions.addView(move,new LinearLayout.LayoutParams(0,dp(50),1));move.setOnClickListener(v->chooseFiles());Button newFolder=button("+ Pasta",false);LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(dp(100),dp(50));np.leftMargin=dp(8);actions.addView(newFolder,np);newFolder.setOnClickListener(v->nameDialog(null));add(page,actions,6);
-        }
-        list=new GridView(this);list.setId(R.id.vault_items);list.setVerticalSpacing(dp(8));list.setHorizontalSpacing(dp(10));list.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);list.setPadding(0,dp(12),0,dp(8));list.setClipToPadding(false);adapter=new FileAdapter();list.setAdapter(adapter);page.addView(list,new LinearLayout.LayoutParams(-1,0,1));
-        list.setOnItemClickListener((p,v,position,id)->{if(visible.isEmpty())return;VaultEngine.Entry e=visible.get(position);if(selectionMode)toggleSelection(e);else if(e.folder&&!trashView){folder=e.id;showExplorer();}else fileMenu(e);});
-        list.setOnItemLongClickListener((p,v,position,id)->{if(visible.isEmpty())return false;selectionMode=true;toggleSelection(visible.get(position));return true;});
-        add(page,text(trashView?"A lixeira ocupa espaço até a exclusão definitiva.":"Segure um item para selecionar · Tudo offline",12,MUTED),4);refresh();
+        selectButton=tabButton(selectionMode?"Cancelar":"Selecionar",false);selectButton.setId(R.id.vault_select);location.addView(selectButton,new LinearLayout.LayoutParams(dp(98),dp(48)));selectButton.setOnClickListener(v->{selectionMode=!selectionMode;selected.clear();updateSelection();});add(page,location,4);
+
+        list=new GridView(this);list.setId(R.id.vault_items);list.setVerticalSpacing(dp(10));list.setHorizontalSpacing(dp(12));list.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);list.setPadding(0,dp(4),0,dp(12));list.setClipToPadding(false);list.setSelector(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));list.setDrawSelectorOnTop(false);adapter=new FileAdapter();list.setAdapter(adapter);page.addView(list,new LinearLayout.LayoutParams(-1,0,1));
+        list.setOnItemClickListener((p,v,position,id)->{if(position>=visible.size()||busy)return;VaultEngine.Entry e=visible.get(position);if(selectionMode)toggleSelection(e);else if(e.isTrashed())fileMenu(e);else if(e.folder){folder=e.id;showExplorer();}else openFile(e);});
+        list.setOnItemLongClickListener((p,v,position,id)->{if(position>=visible.size())return false;selectionMode=true;toggleSelection(visible.get(position));return true;});
+        list.setOnScrollListener(new AbsListView.OnScrollListener(){
+            public void onScrollStateChanged(AbsListView v,int state){scrolling=state!=SCROLL_STATE_IDLE;ui.removeCallbacks(resumeThumbnails);if(scrolling)thumbnails.pause();else ui.post(resumeThumbnails);}
+            public void onScroll(AbsListView v,int first,int count,int total){}
+        });
+        LinearLayout actions=row();normalActions=actions;
+        if(!trashView){Button move=button("Mover arquivos",true);move.setCompoundDrawables(VaultUi.icon(this,"plus",BG,20),null,null,null);move.setCompoundDrawablePadding(dp(8));move.setId(R.id.vault_import);actions.addView(move,new LinearLayout.LayoutParams(0,dp(54),1));move.setOnClickListener(v->chooseFiles());Button newFolder=button("Pasta",false);newFolder.setContentDescription("Nova pasta");newFolder.setCompoundDrawables(VaultUi.icon(this,"folder",ACCENT,20),null,null,null);newFolder.setCompoundDrawablePadding(dp(8));LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(dp(110),dp(54));np.leftMargin=dp(10);actions.addView(newFolder,np);newFolder.setOnClickListener(v->nameDialog(null));}
+        else{TextView hint=text("Os itens permanecem aqui até você excluí-los de vez.",12,MUTED);hint.setPadding(dp(2),dp(10),dp(2),dp(10));actions.addView(hint);}
+        add(page,actions,6);
+        HorizontalScrollView selectionScroll=new HorizontalScrollView(this);selectionScroll.setHorizontalScrollBarEnabled(false);selectionActions=selectionScroll;LinearLayout selectedActions=row();selectionScroll.addView(selectedActions);action(selectedActions,"Todos",()->{for(VaultEngine.Entry e:visible)selected.add(e.id);updateSelection();});
+        if(trashView){action(selectedActions,"Restaurar",()->restoreSelected(new ArrayList<>(selected)));action(selectedActions,"Excluir de vez",()->purgeSelected(new ArrayList<>(selected)));}
+        else{action(selectedActions,"Mover",()->chooseFolders(new ArrayList<>(selected)));action(selectedActions,"Retirar",()->exportSelection(new ArrayList<>(selected)));action(selectedActions,"Lixeira",()->trashSelected(new ArrayList<>(selected)));}add(page,selectionScroll,6);
+        updateSelection();refresh();
     }
     private void switchTrash(boolean value){trashView=value;selectionMode=false;selected.clear();folder="";showExplorer();}
-    private void action(LinearLayout row,String label,Runnable action){Button b=button(label,false);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(44));lp.rightMargin=dp(6);row.addView(b,lp);b.setOnClickListener(v->action.run());}
-    private void toggleSelection(VaultEngine.Entry e){if(!selected.add(e.id))selected.remove(e.id);String query=search.getText().toString();showExplorer();search.setText(query);}
+    private void action(LinearLayout row,String label,Runnable action){Button b=button(label,false);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(54));lp.rightMargin=dp(8);row.addView(b,lp);b.setOnClickListener(v->action.run());}
+    private void toggleSelection(VaultEngine.Entry e){if(!selected.add(e.id))selected.remove(e.id);updateSelection();}
+    private void updateSelection(){
+        selectButton.setText(selectionMode?"Cancelar":"Selecionar");selectionTitle.setText(selected.size()+" selecionado"+(selected.size()==1?"":"s"));selectionTitle.setVisibility(selectionMode?View.VISIBLE:View.GONE);trail.setVisibility(selectionMode?View.INVISIBLE:View.VISIBLE);
+        normalActions.setVisibility(selectionMode?View.GONE:View.VISIBLE);selectionActions.setVisibility(selectionMode?View.VISIBLE:View.GONE);if(adapter!=null)adapter.notifyDataSetChanged();
+    }
     private void refresh(){
-        if(!unlocked||adapter==null||list==null)return;String query=search.getText().toString().trim().toLowerCase(Locale.ROOT);visible=new ArrayList<>();
-        for(VaultEngine.Entry e:all){boolean eligible=trashView?e.isTrashed()&&e.id.equals(e.trashRoot):!e.isTrashed();if(eligible&&(query.isEmpty()?(trashView||e.parent.equals(folder)):e.name.toLowerCase(Locale.ROOT).contains(query)))visible.add(e);}
-        Collections.sort(visible,(a,b)->a.folder!=b.folder?(a.folder?-1:1):a.name.compareToIgnoreCase(b.name));
-        int count=0;for(VaultEngine.Entry e:all)if(!e.folder&&!e.isTrashed())count++;
-        counter.setText(count+" arquivo(s) · "+size(summary==null?0:summary.stored)+" no cofre\n"+size(summary==null?0:summary.free)+" livres no aparelho");
-        list.setNumColumns(visible.isEmpty()?1:gridMode?(getResources().getConfiguration().screenWidthDp>=600?3:2):1);adapter.notifyDataSetChanged();
+        if(!unlocked||adapter==null||list==null)return;
+        String query=search.getText().toString().trim().toLowerCase(Locale.ROOT),currentFolder=folder;boolean trash=trashView;int epoch=++filterGeneration;List<VaultEngine.Entry> snapshot=new ArrayList<>(all);
+        Runnable filter=()->{
+            List<VaultEngine.Entry> result=new ArrayList<>();int count=0;
+            for(VaultEngine.Entry e:snapshot){if(!e.folder&&!e.isTrashed())count++;boolean eligible=trash?e.isTrashed()&&e.id.equals(e.trashRoot):!e.isTrashed();if(eligible&&(query.isEmpty()?(trash||e.parent.equals(currentFolder)):e.name.toLowerCase(Locale.ROOT).contains(query)))result.add(e);}
+            Collections.sort(result,(a,b)->a.folder!=b.folder?(a.folder?-1:1):a.name.compareToIgnoreCase(b.name));int fileCount=count;
+            Runnable apply=()->{if(!unlocked||epoch!=filterGeneration||isDestroyed())return;visible=result;counter.setText(size(summary==null?0:summary.stored)+" no cofre");freeSpace.setText(fileCount+" arquivo"+(fileCount==1?"":"s")+" · "+size(summary==null?0:summary.free)+" livres");list.setNumColumns(visible.isEmpty()?1:gridMode?Math.max(2,getResources().getConfiguration().screenWidthDp/180):1);adapter.notifyDataSetChanged();};
+            if(Looper.myLooper()==Looper.getMainLooper())apply.run();else ui.post(apply);
+        };
+        if(snapshot.size()>500&&!worker.isShutdown())worker.execute(filter);else filter.run();
+    }
+    private void bindVisibleThumbnails(){
+        if(!unlocked||busy||mediaActive||scrolling||list==null)return;
+        for(int i=0;i<list.getChildCount();i++){Object tag=list.getChildAt(i).getTag();if(tag instanceof Cell){Cell c=(Cell)tag;if(c.entry!=null&&c.media)thumbnails.bind(c.entry,c.image);}}
+    }
+    private final class Cell {
+        final boolean grid;final LinearLayout root;final FrameLayout art;final ImageView glyph,image,play;final TextView name,meta;final Button control;
+        VaultEngine.Entry entry;boolean media;
+        Cell(boolean grid){
+            this.grid=grid;root=grid?column():row();root.setTag(this);root.setDescendantFocusability(android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS);root.setPadding(dp(grid?10:12),dp(10),dp(grid?10:8),dp(10));
+            art=new FrameLayout(MainActivity.this);art.setBackground(box(0xff21313d,12));art.setClipToOutline(true);
+            glyph=new ImageView(MainActivity.this);glyph.setScaleType(ImageView.ScaleType.CENTER);art.addView(glyph,new FrameLayout.LayoutParams(-1,-1));
+            image=new ImageView(MainActivity.this);image.setScaleType(ImageView.ScaleType.CENTER_CROP);art.addView(image,new FrameLayout.LayoutParams(-1,-1));
+            play=new ImageView(MainActivity.this);play.setPadding(dp(6),dp(6),dp(6),dp(6));play.setBackground(box(0xc00d141b,20));play.setImageDrawable(VaultUi.icon(MainActivity.this,"play",INK,18));FrameLayout.LayoutParams pp=new FrameLayout.LayoutParams(dp(30),dp(30),Gravity.BOTTOM|Gravity.END);pp.setMargins(0,0,dp(8),dp(8));art.addView(play,pp);
+            name=text("",14,INK);name.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));name.setSingleLine();name.setEllipsize(TextUtils.TruncateAt.END);meta=text("",12,MUTED);meta.setSingleLine();meta.setEllipsize(TextUtils.TruncateAt.END);
+            control=iconButton("more","Opções do arquivo");control.setPadding(dp(8),dp(12),dp(8),dp(12));control.setBackground(VaultUi.ripple(MainActivity.this,Color.TRANSPARENT,12));control.setOnClickListener(v->{if(entry==null)return;if(selectionMode)toggleSelection(entry);else fileMenu(entry);});
+            LinearLayout labels=column();labels.addView(name);add(labels,meta,4);
+            if(grid){root.addView(art,new LinearLayout.LayoutParams(-1,dp(96)));LinearLayout bottom=row();bottom.addView(labels,new LinearLayout.LayoutParams(0,-2,1));bottom.addView(control,new LinearLayout.LayoutParams(dp(40),dp(48)));add(root,bottom,6);}
+            else{root.addView(art,new LinearLayout.LayoutParams(dp(52),dp(52)));LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(0,-2,1);np.leftMargin=dp(12);root.addView(labels,np);root.addView(control,new LinearLayout.LayoutParams(dp(44),dp(48)));}
+        }
+        void bind(VaultEngine.Entry e){
+            boolean changed=entry==null||!entry.id.equals(e.id);entry=e;media=!e.folder&&(e.mime.startsWith("image/")||e.mime.startsWith("video/"));
+            name.setText(e.name);meta.setText(detail(e));root.setBackground(VaultUi.ripple(MainActivity.this,selected.contains(e.id)?0xff263f42:SURFACE,16));
+            if(changed){image.setTag(null);image.setImageDrawable(null);glyph.setImageDrawable(VaultUi.icon(MainActivity.this,e.folder?"folder":e.mime.startsWith("video/")?"video":e.mime.startsWith("image/")?"image":e.mime.startsWith("audio/")?"audio":"file",e.folder?0xffebc78c:ACCENT,grid?36:26));}
+            play.setVisibility(grid&&e.mime.startsWith("video/")?View.VISIBLE:View.GONE);image.setVisibility(media?View.VISIBLE:View.GONE);
+            String icon=selectionMode?(selected.contains(e.id)?"check":"circle"):"more";control.setCompoundDrawables(null,VaultUi.icon(MainActivity.this,icon,selected.contains(e.id)?ACCENT:MUTED,22),null,null);control.setContentDescription((selectionMode?"Selecionar ":"Opções de ")+e.name);control.setSelected(selected.contains(e.id));
+            if(media&&!scrolling&&!busy&&!mediaActive)thumbnails.bind(e,image);
+        }
     }
     private class FileAdapter extends BaseAdapter{
         public int getCount(){return visible.isEmpty()?1:visible.size();}public Object getItem(int p){return visible.isEmpty()?null:visible.get(p);}public long getItemId(int p){return p;}@Override public boolean isEnabled(int p){return !visible.isEmpty();}
+        @Override public int getViewTypeCount(){return 3;}@Override public int getItemViewType(int p){return visible.isEmpty()?2:gridMode?1:0;}
         public View getView(int p,View old,android.view.ViewGroup parent){
-            if(visible.isEmpty()){LinearLayout empty=column();empty.setGravity(Gravity.CENTER);empty.setPadding(dp(12),dp(28),dp(12),dp(28));TextView heading=text(search.length()>0?"Nenhum resultado":trashView?"Lixeira vazia":"Esta pasta está vazia",20,INK);heading.setGravity(Gravity.CENTER);empty.addView(heading);TextView hint=text(search.length()>0?"Tente outro nome.":trashView?"Os itens excluídos ficam protegidos aqui.":"Toque em Mover arquivos para começar.",14,MUTED);hint.setGravity(Gravity.CENTER);add(empty,hint,10);return empty;}
-            VaultEngine.Entry e=visible.get(p);LinearLayout cell=gridMode?column():row();cell.setDescendantFocusability(android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS);cell.setPadding(dp(12),dp(12),dp(12),dp(12));cell.setBackground(box(selected.contains(e.id)?0xff263d5b:SURFACE,14));
-            FrameLayout icon=new FrameLayout(MainActivity.this);icon.setBackground(box(0xff23324a,10));TextView badge=text(e.folder?"▰":type(e),e.folder?30:14,ACCENT);badge.setTypeface(null,Typeface.BOLD);badge.setGravity(Gravity.CENTER);icon.addView(badge,new FrameLayout.LayoutParams(-1,-1));
-            if(!e.folder&&(e.mime.startsWith("image/")||e.mime.startsWith("video/"))){ImageView image=new ImageView(MainActivity.this);image.setScaleType(ImageView.ScaleType.CENTER_CROP);icon.addView(image,new FrameLayout.LayoutParams(-1,-1));thumbnails.bind(e,image);}
-            if(gridMode){cell.addView(icon,new LinearLayout.LayoutParams(-1,dp(112)));LinearLayout names=row();TextView name=text(e.name,15,INK);name.setMaxLines(2);name.setEllipsize(TextUtils.TruncateAt.END);names.addView(name,new LinearLayout.LayoutParams(0,-2,1));names.addView(itemControl(e),new LinearLayout.LayoutParams(dp(42),dp(44)));add(cell,names,6);}
-            else{cell.addView(icon,new LinearLayout.LayoutParams(dp(46),dp(46)));LinearLayout names=column();LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(0,-2,1);np.leftMargin=dp(12);cell.addView(names,np);TextView name=text(e.name,16,INK);name.setSingleLine();name.setEllipsize(TextUtils.TruncateAt.END);names.addView(name);add(names,text(detail(e),12,MUTED),4);cell.addView(itemControl(e),new LinearLayout.LayoutParams(dp(44),dp(46)));}
-            if(gridMode)add(cell,text(detail(e),12,MUTED),2);return cell;
+            if(visible.isEmpty()){LinearLayout empty=column();empty.setGravity(Gravity.CENTER);empty.setPadding(dp(16),dp(32),dp(16),dp(32));ImageView mark=new ImageView(MainActivity.this);mark.setImageDrawable(VaultUi.icon(MainActivity.this,search.length()>0?"search":trashView?"trash":"folder",ACCENT,38));mark.setBackground(box(SURFACE,24));mark.setPadding(dp(20),dp(20),dp(20),dp(20));empty.addView(mark,new LinearLayout.LayoutParams(dp(80),dp(80)));TextView heading=text(search.length()>0?"Nenhum resultado":trashView?"Tudo em ordem":"Seu espaço, do seu jeito",19,INK);heading.setGravity(Gravity.CENTER);add(empty,heading,18);TextView hint=text(search.length()>0?"Tente buscar por outro nome.":trashView?"A lixeira está vazia.":"Mova arquivos ou crie uma pasta para começar.",13,MUTED);hint.setGravity(Gravity.CENTER);add(empty,hint,8);return empty;}
+            Cell cell=old!=null&&old.getTag() instanceof Cell&&((Cell)old.getTag()).grid==gridMode?(Cell)old.getTag():new Cell(gridMode);cell.bind(visible.get(p));return cell.root;
         }
-    }
-    private View itemControl(VaultEngine.Entry e){
-        if(selectionMode){CheckBox box=new CheckBox(this);box.setChecked(selected.contains(e.id));box.setContentDescription("Selecionar "+e.name);box.setOnClickListener(v->toggleSelection(e));return box;}
-        Button menu=button("⋮",false);menu.setContentDescription("Opções de "+e.name);menu.setOnClickListener(v->fileMenu(e));return menu;
     }
     private String detail(VaultEngine.Entry e){if(trashView)return "Excluído em "+DateFormat.getDateInstance(DateFormat.SHORT,new Locale("pt","BR")).format(new Date(e.trashedAt));return e.folder?"Pasta · "+children(e.id)+" itens":size(e.size);}
     private int children(String id){return summary==null?0:summary.children.getOrDefault(id,0);}
@@ -218,7 +258,7 @@ public class MainActivity extends Activity {
     private void fileMenu(VaultEngine.Entry e){
         if(!unlocked||busy)return;
         if(e.isTrashed()){
-            track(new AlertDialog.Builder(this).setTitle(e.name).setItems(new String[]{"Restaurar","Excluir definitivamente","Selecionar"},(d,which)->{if(which==0)restoreSelected(Collections.singletonList(e.id));else if(which==1)purgeSelected(Collections.singletonList(e.id));else{selectionMode=true;selected.add(e.id);showExplorer();}}).setNegativeButton("Fechar",null).show());return;
+            track(new AlertDialog.Builder(this).setTitle(e.name).setItems(new String[]{"Restaurar","Excluir definitivamente","Selecionar"},(d,which)->{if(which==0)restoreSelected(Collections.singletonList(e.id));else if(which==1)purgeSelected(Collections.singletonList(e.id));else{selectionMode=true;selected.add(e.id);updateSelection();}}).setNegativeButton("Fechar",null).show());return;
         }
         String[] labels=e.folder?new String[]{"Abrir pasta","Renomear","Mover para outra pasta","Excluir pasta"}:new String[]{"Abrir arquivo","Mover para fora do cofre","Salvar uma cópia fora","Renomear","Mover para outra pasta","Excluir do cofre"};
         track(new AlertDialog.Builder(this).setTitle(e.name).setItems(labels,(d,which)->{
@@ -402,41 +442,36 @@ public class MainActivity extends Activity {
         d.setOnShowListener(x->d.getButton(-1).setOnClickListener(v->{if(pass.length()<10||!pass.getText().toString().equals(again.getText().toString())){pass.setError("Use pelo menos 10 caracteres e repita a mesma senha.");return;}char[] chars=pass.getText().toString().toCharArray();pass.setText("");again.setText("");d.dismiss();run("Atualizando senha…",()->{try{vault.changePassword(chars);}finally{Arrays.fill(chars,'\0');}},()->{showExplorer();notice("Senha alterada","Use a nova senha para desbloquear este cofre. Salve um novo backup.");},this::error);}));track(d);d.show();
     }
     private void openFile(VaultEngine.Entry e){
+        if(!unlocked||busy)return;
+        if(e.mime.startsWith("image/")){
+            thumbnails.pause();LinearLayout content=previewFrame(e.name);VaultImageView image=new VaultImageView(this,vault,e,()->unlocked);
+            content.addView(image,new LinearLayout.LayoutParams(-1,0,1));previewCleanup=()->{image.close();if(unlocked)ui.post(resumeThumbnails);};preview.show();return;
+        }
         if(e.mime.startsWith("video/")||e.mime.startsWith("audio/")){
             thumbnails.pause();ui.removeCallbacks(timeout);LinearLayout content=previewFrame(e.name);mediaActive=true;VaultMediaView media=new VaultMediaView(this,vault,e,()->unlocked);
-            content.addView(media,new LinearLayout.LayoutParams(-1,0,1));previewCleanup=()->{mediaActive=false;media.close();if(unlocked)armLock();};preview.show();return;
+            content.addView(media,new LinearLayout.LayoutParams(-1,0,1));previewCleanup=()->{mediaActive=false;media.close();if(unlocked){armLock();ui.post(resumeThumbnails);}};preview.show();return;
         }
         if(e.size>new File(getCacheDir().getPath()).getUsableSpace()-16L*1024*1024){notice("Pouco espaço","Libere espaço para visualizar este arquivo.");return;}
         File dir=new File(getCacheDir(),"preview");dir.mkdirs();File file=new File(dir,e.name);
         run("Abrindo arquivo…",()->{try(FileOutputStream out=new FileOutputStream(file)){vault.exportFile(e.id,out,operationProgress);}},()->{
             try{
-                if(e.mime.startsWith("image/"))showImage(e,file);
-                else if(e.mime.equals("application/pdf")||e.name.toLowerCase(Locale.ROOT).endsWith(".pdf"))showPdf(e,file);
+                if(e.mime.equals("application/pdf")||e.name.toLowerCase(Locale.ROOT).endsWith(".pdf"))showPdf(e,file);
                 else if(e.mime.startsWith("text/")||e.name.toLowerCase(Locale.ROOT).matches(".*\\.(txt|md|csv|json|log)$"))showText(e,file);
                 else externalPreview(e,file);
             }catch(Exception err){clearPreviews();error(err);}
         },err->{clearPreviews();error(err);});
     }
     private LinearLayout previewFrame(String title){
-        closePreview();Dialog dialog=new Dialog(this,android.R.style.Theme_Material_NoActionBar);dialog.getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,WindowManager.LayoutParams.FLAG_SECURE);
-        LinearLayout content=column();content.setPadding(dp(16),dp(16),dp(16),dp(16));content.setBackgroundColor(BG);LinearLayout bar=row();TextView label=text(title,19,INK);label.setSingleLine();label.setEllipsize(TextUtils.TruncateAt.END);bar.addView(label,new LinearLayout.LayoutParams(0,-2,1));Button close=button("Fechar",false);bar.addView(close);close.setOnClickListener(v->closePreview());content.addView(bar);dialog.setContentView(content);
-        dialog.setOnDismissListener(d->{if(previewCleanup!=null){previewCleanup.run();previewCleanup=null;}clearPreviews();preview=null;});preview=dialog;return content;
-    }
-    private void showImage(VaultEngine.Entry entry,File file)throws Exception{
-        BitmapFactory.Options bounds=new BitmapFactory.Options();bounds.inJustDecodeBounds=true;BitmapFactory.decodeFile(file.getPath(),bounds);if(bounds.outWidth<1)throw new IOException("Formato de imagem não reconhecido.");
-        BitmapFactory.Options options=new BitmapFactory.Options();options.inSampleSize=1;while(bounds.outWidth/options.inSampleSize>2000||bounds.outHeight/options.inSampleSize>2000)options.inSampleSize*=2;
-        Bitmap bitmap=BitmapFactory.decodeFile(file.getPath(),options);if(bitmap==null)throw new IOException("Não foi possível abrir a imagem.");LinearLayout content=previewFrame(entry.name);ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.FIT_CENTER);image.setImageBitmap(bitmap);content.addView(image,new LinearLayout.LayoutParams(-1,0,1));previewCleanup=()->{image.setImageDrawable(null);bitmap.recycle();};preview.show();
+        closePreview();Dialog dialog=new Dialog(this,R.style.AppTheme);dialog.getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,WindowManager.LayoutParams.FLAG_SECURE);
+        LinearLayout content=column();content.setPadding(dp(16),dp(16),dp(16),dp(16));content.setBackgroundColor(BG);LinearLayout bar=row();TextView label=text(title,19,INK);label.setSingleLine();label.setEllipsize(TextUtils.TruncateAt.END);bar.addView(label,new LinearLayout.LayoutParams(0,-2,1));Button close=iconButton("close","Fechar visualização");bar.addView(close,new LinearLayout.LayoutParams(dp(48),dp(48)));close.setOnClickListener(v->closePreview());content.addView(bar);dialog.setContentView(content);
+        dialog.setOnDismissListener(d->{if(preview!=dialog)return;Runnable cleanup=previewCleanup;previewCleanup=null;preview=null;if(cleanup!=null)cleanup.run();clearPreviews();});preview=dialog;return content;
     }
     private void showText(VaultEngine.Entry entry,File file)throws Exception{
         if(file.length()>2*1024*1024){externalPreview(entry,file);return;}
         byte[] data=java.nio.file.Files.readAllBytes(file.toPath());LinearLayout content=previewFrame(entry.name);ScrollView scroll=new ScrollView(this);TextView text=text(new String(data,java.nio.charset.StandardCharsets.UTF_8),16,INK);text.setTypeface(Typeface.MONOSPACE);text.setPadding(dp(8),dp(18),dp(8),dp(18));text.setTextIsSelectable(true);scroll.addView(text);content.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));Arrays.fill(data,(byte)0);preview.show();
     }
-    private void showPdf(VaultEngine.Entry entry,File file)throws Exception{
-        ParcelFileDescriptor fd=ParcelFileDescriptor.open(file,ParcelFileDescriptor.MODE_READ_ONLY);PdfRenderer renderer;
-        try{renderer=new PdfRenderer(fd);}catch(Exception e){fd.close();throw e;}
-        LinearLayout content=previewFrame(entry.name);ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.FIT_CENTER);content.addView(image,new LinearLayout.LayoutParams(-1,0,1));LinearLayout nav=row();Button previous=button("Anterior",false),next=button("Próxima",false);TextView number=text("",14,MUTED);number.setGravity(Gravity.CENTER);nav.addView(previous);nav.addView(number,new LinearLayout.LayoutParams(0,-2,1));nav.addView(next);content.addView(nav);int[] index={0};Bitmap[] current={null};
-        Runnable render=()->{try(PdfRenderer.Page p=renderer.openPage(index[0])){int width=Math.min(1600,getResources().getDisplayMetrics().widthPixels);int height=Math.max(1,Math.min(2400,(int)((long)p.getHeight()*width/p.getWidth())));Bitmap bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);bitmap.eraseColor(Color.WHITE);p.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);image.setImageBitmap(bitmap);if(current[0]!=null)current[0].recycle();current[0]=bitmap;number.setText((index[0]+1)+" / "+renderer.getPageCount());previous.setEnabled(index[0]>0);next.setEnabled(index[0]+1<renderer.getPageCount());}catch(Exception e){error(e);}};
-        previous.setOnClickListener(v->{index[0]--;render.run();});next.setOnClickListener(v->{index[0]++;render.run();});previewCleanup=()->{renderer.close();try{fd.close();}catch(Exception ignored){}image.setImageDrawable(null);if(current[0]!=null)current[0].recycle();};render.run();preview.show();
+    private void showPdf(VaultEngine.Entry entry,File file){
+        LinearLayout content=previewFrame(entry.name);VaultPdfView pdf=new VaultPdfView(this,file);content.addView(pdf,new LinearLayout.LayoutParams(-1,0,1));previewCleanup=pdf::close;preview.show();
     }
     private void externalPreview(VaultEngine.Entry entry,File file){
         track(new AlertDialog.Builder(this).setTitle("Abrir em outro aplicativo?").setMessage("O aplicativo escolhido terá acesso a uma cópia descriptografada e poderá salvá-la. O acesso temporário será encerrado quando você voltar ao Cofre AMZ.").setNegativeButton("Cancelar",(d,w)->clearPreviews()).setPositiveButton("Abrir",(d,w)->{
@@ -444,15 +479,15 @@ public class MainActivity extends Activity {
             try{external=true;unlocked=false;thumbnails.clear();worker.execute(vault::lock);all.clear();showLocked();startActivityForResult(Intent.createChooser(i,"Abrir arquivo"),20);}catch(Exception err){external=false;clearPreviews();notice("Nenhum aplicativo disponível","Instale um aplicativo compatível com este formato ou retire o arquivo para uma pasta.");}
         }).setOnCancelListener(d->clearPreviews()).show());
     }
-    private void closePreview(){if(preview!=null){Dialog old=preview;preview=null;old.dismiss();}}
+    private void closePreview(){if(preview!=null){Dialog old=preview;Runnable cleanup=previewCleanup;preview=null;previewCleanup=null;old.setOnDismissListener(null);old.dismiss();if(cleanup!=null)cleanup.run();clearPreviews();}}
     private void clearPreviews(){
         File dir=new File(getCacheDir(),"preview");File[] files=dir.listFiles();if(files!=null)for(File f:files){try{Uri uri=FileProvider.getUriForFile(this,getPackageName()+".preview",f);revokeUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}f.delete();}
     }
-    private void help(){notice("Cofre AMZ 1.1.1","• Funciona offline, sem permissão de internet.\n\n• Use Selecionar ou segure um item para mover, retirar ou enviar vários arquivos à lixeira.\n\n• Grade mostra miniaturas de fotos e vídeos compatíveis. As miniaturas não são salvas em texto legível.\n\n• A lixeira continua criptografada. Restaure os itens ou exclua definitivamente para liberar espaço. Não há exclusão automática.\n\n• Gere sua chave de recuperação no menu e guarde o código fora do cofre. Quem tiver o código e os dados do cofre pode recuperar o acesso. Sem senha ou código previamente gerado, não é possível recuperar.\n\n• Salve um backup sempre que aparecer o aviso. Ele inclui os arquivos, a lixeira e a recuperação ativada. Backups antigos mantêm a senha e a chave que tinham ao ser salvos.\n\n• Desinstalar o app ou limpar seus dados apaga o cofre. Instale atualizações por cima para manter seus arquivos.\n\n• Ao importar, o original só é removido após a verificação. Se o Android não permitir apagar na origem, o app avisa.\n\n• Bloqueio ao sair do app e após 2 minutos sem interação.\n\nAES-256-GCM · Android 8+");}
+    private void help(){notice("Cofre AMZ 1.1.2","• Funciona offline, sem permissão de internet.\n\n• Use Selecionar ou segure um item para mover, retirar ou enviar vários arquivos à lixeira.\n\n• Grade mostra miniaturas de fotos e vídeos compatíveis. As miniaturas não são salvas em texto legível.\n\n• A lixeira continua criptografada. Restaure os itens ou exclua definitivamente para liberar espaço. Não há exclusão automática.\n\n• Gere sua chave de recuperação no menu e guarde o código fora do cofre. Quem tiver o código e os dados do cofre pode recuperar o acesso. Sem senha ou código previamente gerado, não é possível recuperar.\n\n• Salve um backup sempre que aparecer o aviso. Ele inclui os arquivos, a lixeira e a recuperação ativada. Backups antigos mantêm a senha e a chave que tinham ao ser salvos.\n\n• Desinstalar o app ou limpar seus dados apaga o cofre. Instale atualizações por cima para manter seus arquivos.\n\n• Ao importar, o original só é removido após a verificação. Se o Android não permitir apagar na origem, o app avisa.\n\n• Bloqueio ao sair do app e após 2 minutos sem interação.\n\nAES-256-GCM · Android 8+");}
     private interface Job{void execute()throws Exception;}
     private interface Failure{void accept(Exception e);}
     private void run(String label,Job job,Runnable done,Failure failed){
-        if(busy)return;busy=true;cancelRequested=false;thumbnails.pause();lockAfter=false;ui.removeCallbacks(timeout);lastProgress=0;progressPhase=label;getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if(busy)return;filterGeneration++;busy=true;cancelRequested=false;thumbnails.pause();lockAfter=false;ui.removeCallbacks(timeout);lastProgress=0;progressPhase=label;getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         progress=new ProgressDialog(this);progress.setTitle(label);progress.setMessage("Aguarde. Seus arquivos estão sendo verificados.");progress.setIndeterminate(true);progress.setCancelable(false);progress.getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,WindowManager.LayoutParams.FLAG_SECURE);boolean cancellable=label.startsWith("Movendo arquivos")||label.startsWith("Retirando")||label.startsWith("Salvando backup")||label.startsWith("Salvando e conferindo")||label.startsWith("Abrindo arquivo")||label.startsWith("Restaurando e verificando");if(cancellable)progress.setButton(DialogInterface.BUTTON_NEGATIVE,"Interromper",(d,w)->{});progress.show();
         if(cancellable)progress.getButton(DialogInterface.BUTTON_NEGATIVE).setOnClickListener(v->{cancelRequested=true;progress.getButton(DialogInterface.BUTTON_NEGATIVE).setEnabled(false);progress.setMessage("Interrompendo com segurança. Aguarde…");});
         worker.execute(()->{Exception failure=null;try{job.execute();}catch(Exception e){failure=e;}loadSummary();Exception outcome=failure;
@@ -467,14 +502,16 @@ public class MainActivity extends Activity {
     private void clearRestorePassword(){if(restorePassword!=null)Arrays.fill(restorePassword,'\0');restorePassword=null;restoreRecovery=null;}
     private void hideKeyboard(){((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(password.getWindowToken(),0);}
     private int dp(float value){return (int)(value*getResources().getDisplayMetrics().density+.5f);}
-    private TextView text(String value,int size,int color){TextView v=new TextView(this);v.setText(value);v.setTextSize(size);v.setTextColor(color);v.setLineSpacing(dp(3),1);if(size>=20)v.setTypeface(null,Typeface.BOLD);return v;}
-    private EditText input(String hint,boolean secret){EditText v=new EditText(this);v.setTextColor(INK);v.setHintTextColor(MUTED);v.setHint(hint);v.setTextSize(16);v.setSingleLine(true);v.setPadding(dp(12),dp(12),dp(12),dp(12));v.setBackground(box(BG,10));v.setMinHeight(dp(52));v.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);v.setInputType(secret?android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD:android.text.InputType.TYPE_CLASS_TEXT);return v;}
-    private Button button(String label,boolean primary){Button v=new Button(this);v.setText(label);v.setAllCaps(false);v.setTextSize(14);v.setTypeface(null,Typeface.BOLD);v.setTextColor(primary?BG:ACCENT);v.setPadding(dp(12),dp(6),dp(12),dp(6));v.setMinHeight(dp(46));v.setMinimumHeight(dp(46));v.setMinWidth(0);v.setMinimumWidth(0);v.setBackground(box(primary?ACCENT:SURFACE,12));return v;}
-    private GradientDrawable box(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));if(color==BG||color==SURFACE)d.setStroke(dp(1),BORDER);return d;}
+    private TextView text(String value,int size,int color){TextView v=new TextView(this);v.setText(value);v.setTextSize(size);v.setTextColor(color);v.setFontFeatureSettings("kern");v.setLineSpacing(dp(2),1);v.setTypeface(Typeface.create(size>=18?"sans-serif-medium":"sans-serif",Typeface.NORMAL));return v;}
+    private EditText input(String hint,boolean secret){EditText v=new EditText(this);v.setTextColor(INK);v.setHintTextColor(MUTED);v.setHint(hint);v.setTextSize(15);v.setSingleLine(true);v.setPadding(dp(15),dp(13),dp(15),dp(13));v.setBackground(box(SURFACE,14));v.setMinHeight(dp(52));v.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);v.setInputType(secret?android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD:android.text.InputType.TYPE_CLASS_TEXT);return v;}
+    private Button button(String label,boolean primary){Button v=new Button(this);v.setText(label);v.setAllCaps(false);v.setTextSize(14);v.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));v.setTextColor(primary?BG:ACCENT);v.setPadding(dp(14),dp(8),dp(14),dp(8));v.setMinHeight(dp(48));v.setMinimumHeight(dp(48));v.setMinWidth(0);v.setMinimumWidth(0);v.setStateListAnimator(null);v.setElevation(0);v.setBackground(VaultUi.ripple(this,primary?ACCENT:SURFACE,14));return v;}
+    private Button iconButton(String icon,String description){Button b=button("",false);b.setPadding(dp(12),dp(12),dp(12),dp(12));b.setCompoundDrawables(null,VaultUi.icon(this,icon,ACCENT,22),null,null);b.setContentDescription(description);return b;}
+    private Button tabButton(String label,boolean active){Button b=button(label,false);b.setPadding(dp(8),dp(6),dp(8),dp(6));b.setTextColor(active?ACCENT:MUTED);b.setBackground(VaultUi.ripple(this,active?0xff213735:Color.TRANSPARENT,12));return b;}
+    private GradientDrawable box(int color,int radius){return VaultUi.shape(this,color,radius);}
     private LinearLayout column(){LinearLayout v=new LinearLayout(this);v.setOrientation(LinearLayout.VERTICAL);return v;}
     private LinearLayout row(){LinearLayout v=new LinearLayout(this);v.setOrientation(LinearLayout.HORIZONTAL);v.setGravity(Gravity.CENTER_VERTICAL);return v;}
     private View padded(View child){LinearLayout p=column();p.setPadding(dp(22),dp(8),dp(22),dp(8));p.addView(child);return p;}
     private void add(LinearLayout parent,View child,int margin){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.topMargin=dp(margin);parent.addView(child,p);}
     private static String size(long bytes){if(bytes<1024)return bytes+" B";if(bytes<1024*1024)return String.format(new Locale("pt","BR"),"%.1f KB",bytes/1024.0);if(bytes<1024L*1024*1024)return String.format(new Locale("pt","BR"),"%.1f MB",bytes/(1024.0*1024));return String.format(new Locale("pt","BR"),"%.2f GB",bytes/(1024.0*1024*1024));}
-    @Override public void onBackPressed(){if(busy)return;if(unlocked&&selectionMode){selectionMode=false;selected.clear();showExplorer();return;}if(unlocked&&trashView){switchTrash(false);return;}if(unlocked&&!folder.isEmpty()){try{folder=vault.get(folder).parent;}catch(Exception e){folder="";}showExplorer();}else if(unlocked)requestLock();else super.onBackPressed();}
+    @Override public void onBackPressed(){if(busy)return;if(unlocked&&selectionMode){selectionMode=false;selected.clear();updateSelection();return;}if(unlocked&&trashView){switchTrash(false);return;}if(unlocked&&!folder.isEmpty()){try{folder=vault.get(folder).parent;}catch(Exception e){folder="";}showExplorer();}else if(unlocked)requestLock();else super.onBackPressed();}
 }
