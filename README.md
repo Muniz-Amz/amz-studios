@@ -6,6 +6,7 @@ Repositorio principal do site AMZ Studios, painel do bot, backend do bot Discord
 
 - `index.html`, `style.css`, `script.js`: site principal publicado no GitHub Pages.
 - `assets/`: logos e arquivos publicos de download.
+- `cofre-amz/`: pagina do Cofre AMZ e codigo Android em `cofre-amz/android/`.
 - `backend/`: API/painel e bot Discord hospedados fora do GitHub Pages.
 - `backend/mp3_extractor/`: servico MP3 separado, publicado como servico proprio no Render e removivel sem afetar o bot.
 - `docs/`: documentacao de organizacao, deploy e manutencao.

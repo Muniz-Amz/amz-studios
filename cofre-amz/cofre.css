@@ -1,0 +1,12 @@
+.vault-hero h1 { color: #d5e5ff; }
+.vault-small { font-size: 14px !important; line-height: 1.65; color: #a4b0c2; }
+.vault-hero .vault-small { margin-top: 22px; }
+.vault-features { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.vault-features h2 { font-size: 23px; margin: 20px 0 12px; }
+.vault-features p, .seo-side-card p { color: #a4b0c2; font-size: 16px; line-height: 1.8; }
+.vault-number { color: #adceff; font-family: monospace; font-size: 14px; }
+.vault-steps { padding-left: 23px; color: #bbc4d1; font-size: 16px; line-height: 1.8; }
+.vault-steps li { margin-bottom: 16px; padding-left: 6px; }
+.vault-details { margin-bottom: 48px; }
+.vault-details a { color: #adceff; font-size: 14px; text-decoration: underline; text-underline-offset: 4px; }
+@media (max-width: 760px) { .vault-features { grid-template-columns: 1fr; } .seo-navbar { padding: 16px; gap: 16px; } .seo-nav-links { gap: 12px; } .seo-nav-links a { font-size: 12px; } }
