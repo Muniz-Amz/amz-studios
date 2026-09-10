@@ -1,4 +1,30 @@
-# Desempenho — 1.1.4
+# Desempenho — 1.2.0
+
+## Duas sessões na v1.2.0
+
+Os cofres usam engines e índices separados; somente o engine selecionado recebe
+operações de arquivos/backup. Nenhum conteúdo existente é recriptografado ao
+configurar o alternativo. Autenticação e comparação de senhas rodam no worker;
+a senha alternativa pode exigir duas derivações PBKDF2, pois o principal é
+tentado primeiro. Não há promessa de tempos iguais ou desbloqueio instantâneo.
+
+Trocar exige bloquear e autenticar novamente. A sessão anterior perde seu cache
+de miniaturas, seleção, busca e visualizador. A configuração usa o mesmo motor
+por blocos e não adiciona bibliotecas de interface ou reprodução.
+
+Validação Android 14 em modo avião: 14 testes gerais passaram em 383,988 s.
+Após acrescentar a limpeza explícita das linhas anteriores antes do filtro de
+uma nova sessão, os quatro testes de sessões passaram em 167,610 s na compilação
+final. Incluem criação pela interface, as duas senhas no mesmo campo, importação,
+backup e recuperação do alternativo, retorno ao principal e seletor antigo
+recusado. A regressão de 600 metadados bloqueia o worker de filtro e verifica
+que a lista anterior está vazia enquanto o novo resultado ainda não chegou.
+A tela do alternativo foi inspecionada com arquivos sintéticos, usando a mesma
+interface do principal, sem identificação de cofre falso.
+Os 41 testes JVM de produção passaram, incluindo nove testes de isolamento,
+colisões de senha, restauração interrompida e compatibilidade. Lint: zero erros,
+35 avisos. APK de 1.212.076 bytes, versionCode 7, com o certificado permanente
+de produção e sem permissão de internet.
 
 ## Resumo do backup na v1.1.4
 

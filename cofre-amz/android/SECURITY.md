@@ -1,8 +1,39 @@
-# Formato e limites de segurança — aplicativo 1.1.1
+# Formato e limites de segurança — aplicativo 1.2.0
 
 O diretório privado `files/vault-v1` contém metadados e conteúdo criptografados.
 Não armazena senha, derivação da senha ou chave mestre em texto puro.
 A chave existe em memória enquanto o cofre está aberto.
+
+## Duas senhas e isolamento
+
+O principal mantém o diretório original `files/vault-v1`; o alternativo usa
+`files/vault-alternate-v1`. Cada um possui chave mestre aleatória independente,
+salts, índice, conteúdo, lixeira, envelope de recuperação e marcador de backup.
+Não existe chave de conteúdo compartilhada nem arquivo de roteamento em backups.
+A senha é verificada contra os envelopes existentes e só a sessão correspondente
+permanece desbloqueada. Senhas iguais são recusadas em criação do alternativo,
+alteração, recuperação e restauração; a conferência de colisão não abre nem
+altera a outra sessão. Senha desconhecida termina com ambos bloqueados.
+
+A configuração do alternativo só fica disponível após entrar no principal.
+O alternativo apresenta o mesmo gerenciador e não recebe aviso de “cofre falso”.
+Backups, espaço ocupado, contagens e recuperação referem-se ao cofre aberto.
+O espaço livre do aparelho é compartilhado. Backups são independentes e precisam
+ser feitos para cada cofre. Um backup restaurado na instalação vazia vira o
+principal; o segundo pode ser restaurado pelo menu de configuração do alternativo.
+Restaurações só aceitam destinos vazios e preservam o cofre já existente.
+
+Bloqueio/saída fecha as duas sessões após concluir ou interromper uma operação
+em andamento. Ao entrar, o carregador de miniaturas é
+recriado com o engine selecionado, sem reaproveitar seu cache, e seleções,
+buscas e visualizadores são limpos. O retorno de um seletor autorizado em outra
+sessão ou antes de um bloqueio é recusado, mesmo após entrar com outra senha.
+
+Este recurso não oferece negação plausível contra análise forense, root ou
+acesso à pasta privada. Diretórios, quantidade/tamanho dos dados, presença de
+recuperação, recursos publicados e tempos de autenticação podem revelar que há
+dois cofres. O principal é tentado primeiro, de modo que tempos não são iguais.
+Não prometer invisibilidade, resistência a coerção ou proteção absoluta.
 
 ## Formato
 

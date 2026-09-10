@@ -54,19 +54,29 @@ public final class VaultEngine {
     }
     public void unlock(char[] password) throws Exception {
         lock();
+        try {
+            master=readMaster(password);
+            entries=readIndex();
+            validateEntries(entries);
+            for(Entry e:entries) if(!e.folder && !content(e.id).isFile()) throw new IOException("Arquivo ausente. Restaure um backup íntegro.");
+            cleanupOrphans();
+        } catch(Exception e) { lock(); throw e; }
+    }
+    /** Checks a password envelope without unlocking or changing this vault's current session. */
+    boolean acceptsPassword(char[] password)throws Exception{
+        try{byte[] candidate=readMaster(password);Arrays.fill(candidate,(byte)0);return true;}
+        catch(AEADBadTagException e){return false;}
+    }
+    private byte[] readMaster(char[] password)throws Exception{
         try(DataInputStream in=new DataInputStream(new FileInputStream(new File(root,CONFIG)))) {
             if(in.readInt()!=0x414D5A31 || in.readInt()!=ITERATIONS) throw new IOException("Formato de cofre não suportado.");
             byte[] salt=new byte[16], iv=new byte[12], wrapped=new byte[48];
             in.readFully(salt); in.readFully(iv); in.readFully(wrapped);
             if(in.read()!=-1) throw new IOException("Cabeçalho inválido.");
             byte[] key=derive(password,salt);
-            try { master=crypt(Cipher.DECRYPT_MODE,key,iv,"AMZ/key/1",wrapped); }
+            try { return crypt(Cipher.DECRYPT_MODE,key,iv,"AMZ/key/1",wrapped); }
             finally { Arrays.fill(key,(byte)0); }
-            entries=readIndex();
-            validateEntries(entries);
-            for(Entry e:entries) if(!e.folder && !content(e.id).isFile()) throw new IOException("Arquivo ausente. Restaure um backup íntegro.");
-            cleanupOrphans();
-        } catch(Exception e) { lock(); throw e; }
+        }
     }
     public synchronized void lock() {
         if(master!=null) Arrays.fill(master,(byte)0);
@@ -92,7 +102,7 @@ public final class VaultEngine {
         unlockWithRecovery(code);
         try {writeConfig(newPassword);}catch(Exception e){lock();throw e;}
     }
-    private void unlockWithRecovery(String code) throws Exception {
+    void unlockWithRecovery(String code) throws Exception {
         lock();byte[] recovery=decodeRecovery(code);
         try(DataInputStream in=new DataInputStream(new FileInputStream(new File(root,RECOVERY)))) {
             if(in.readInt()!=0x414D5231)throw new IOException("Chave de recuperação inválida.");

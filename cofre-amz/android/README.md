@@ -1,9 +1,30 @@
-# Cofre AMZ — Android 1.1.4
+# Cofre AMZ — Android 1.2.0
 
 Aplicativo nativo offline, Java, Android 8+ (API 26). ID permanente
-`com.amzstudios.cofre`, versionCode 6.
+`com.amzstudios.cofre`, versionCode 7.
 
 ## Recursos
+
+- Duas senhas no mesmo campo de entrada. A senha atual abre o cofre principal;
+  a senha alternativa abre um cofre independente, com a mesma tela e todos os
+  recursos. Configuração em Opções do cofre → Senha alternativa, somente após
+  entrar no principal. A configuração não move nem recriptografa arquivos atuais.
+- Cada cofre tem chave mestre, índice, conteúdo, lixeira, recuperação e marcador
+  de backup próprios. O backup inclui somente o cofre aberto. Nenhuma indicação
+  de “falso” aparece ao entrar com a senha alternativa. Para trocar, bloqueie
+  e digite a outra senha. Não há troca direta a partir do cofre alternativo.
+- Senhas iguais são rejeitadas na configuração, alteração, recuperação e
+  restauração. Senha inválida bloqueia ambos; nunca abre um cofre vazio como fallback.
+- A recuperação seleciona somente o cofre correspondente ao código fornecido.
+  Faça um backup e gere uma chave em cada cofre. Para restaurar os dois em outro
+  aparelho, restaure primeiro o principal; dentro dele, abra Senha alternativa
+  → Restaurar backup para restaurar o segundo em um destino vazio.
+- Ao trocar de sessão, o app fecha o visualizador, invalida seletores antigos,
+  limpa a seleção/busca e recria o carregador de miniaturas para o cofre aberto.
+  Preferências de lista/grade são independentes.
+
+O recurso separa o acesso dentro do app. Não garante ocultar a existência dos
+dois cofres em uma análise técnica do aparelho. Veja SECURITY.md.
 
 - Antes e depois de salvar o backup, a tela mostra quantos arquivos ativos e
   quantos arquivos da lixeira estão incluídos. Cofre vazio é identificado como
@@ -29,7 +50,7 @@ Aplicativo nativo offline, Java, Android 8+ (API 26). ID permanente
 - Fotos abertas por trechos autenticados com decodificação fora da interface e
   redução para até 2000 px por lado. PDFs renderizam uma página por vez no worker.
 
-- Cofre por instalação, senha de 10+ caracteres, mudança de senha e pastas.
+- Até dois cofres por instalação, senhas de 10+ caracteres, mudança de senha e pastas.
 - Busca, renomear, seleção múltipla para mover, retirar, enviar à lixeira,
   restaurar e excluir definitivamente.
 - Lista ou grade com miniaturas de fotos e vídeos compatíveis. Decodificação
@@ -100,7 +121,7 @@ seguro antes de migrar de computador. Nunca publique ou substitua essa chave.
 SHA-256 do certificado:
 `c6dcd70a40693f6e0b9c5dec9b9d8007827b43605ebd2f55455af2ddb41c746f`.
 
-A v1.1 lê índices v1 e v2, mantendo `files/vault-v1`, applicationId e assinatura.
+A v1.2 lê índices v1 e v2, mantendo `files/vault-v1`, applicationId e assinatura.
 A primeira alteração grava o índice v2 com os campos da lixeira; o conteúdo e a
 chave mestre são preservados. Backups v1 podem ser restaurados. Cofres alterados
 na v1.1 não devem ser abertos na v1.0. Instale por cima, sem limpar dados ou
@@ -111,7 +132,14 @@ junto do SHA-256. Atualize a página do cofre e o link na raiz do site.
 
 ## Validação
 
-32 testes JVM cobrem criptografia por blocos, senha errada, adulteração,
+Nove testes JVM de sessões exercitam o isolamento entre senhas, arquivos,
+lixeira, backup e recuperação; recusam colisões de senha; verificam reinício,
+restauração lado a lado, interrupção e preservação do cofre anterior. Quatro testes Android
+exercitam configuração pela tela, entrada pelas duas senhas, importação e backup
+no alternativo, seleção expirada após troca e restauração/recuperação do segundo.
+Uma regressão com 600 metadados bloqueia o filtro em segundo plano e confirma que nenhuma linha da sessão anterior permanece visível enquanto ele aguarda. Os demais testes verificam os recursos já existentes.
+
+41 testes JVM cobrem criptografia por blocos, senha errada, adulteração,
 truncamento, bytes extras, hierarquia, ciclos, backup/restauração, zip traversal,
 importação interrompida, erro de destino e alterações na origem. Incluem migração
 de um backup produzido pelo código original v1, lixeira aninhada, restauração com
@@ -122,7 +150,7 @@ arquivos: itens retirados, purgados, órfãos e externos ficam de fora; cópias
 mantidas no cofre e lixeira permanecem. Um backup antigo preserva seu retrato
 anterior e um novo backup do cofre vazio restaura somente estrutura e recuperação.
 
-Onze testes instrumentados no emulador Android 14 em modo avião exercitam
+Quinze testes instrumentados no emulador Android 14 em modo avião exercitam
 criptografia Android, criação e bloqueio, transferência real via DocumentsProvider,
 miniaturas PNG/MP4, grade/lista, seleção, lixeira/restauração/exclusão, recuperação
 pela tela, backup verificado e retirada em árvore com colisões e destino inválido.

@@ -27,6 +27,10 @@ public class MainActivity extends Activity {
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private final Handler ui=new Handler(Looper.getMainLooper());
     private VaultEngine vault;
+    private VaultProfiles profiles;
+    private VaultEngine pickerVault;
+    private int accessEpoch,pickerEpoch;
+    private boolean restoreAlternate;
     private LinearLayout page;
     private EditText password, confirmation, search;
     private TextView status, counter, freeSpace, selectionTitle;
@@ -79,7 +83,7 @@ public class MainActivity extends Activity {
         super.onCreate(saved);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,WindowManager.LayoutParams.FLAG_SECURE);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-        vault=new VaultEngine(new File(getFilesDir(),"vault-v1"));
+        profiles=new VaultProfiles(getFilesDir());vault=profiles.active();
         gridMode=getPreferences(MODE_PRIVATE).getBoolean("grid",true);
         thumbnails=new ThumbnailLoader(vault,new File(getCacheDir(),"thumb-work"),worker,ui,()->unlocked&&!busy&&!mediaActive&&!scrolling);
         clearPreviews(); showLocked();
@@ -98,15 +102,16 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() {
         unlocked=false;closeProgress();closeDialogs();closePreview();ui.removeCallbacksAndMessages(null);filterGeneration++;clearRestorePassword();
         thumbnails.close();pendingRecovery=null;summary=null;
-        if(!worker.isShutdown())worker.execute(vault::lock);
+        if(!worker.isShutdown())worker.execute(profiles::lock);
         worker.shutdown(); super.onDestroy();
     }
     private void armLock() { ui.removeCallbacks(timeout); if(!mediaActive)ui.postDelayed(timeout,LOCK_DELAY); }
     private void requestLock() {
+        accessEpoch++;pendingId=null;removeOnExport=false;clearRestorePassword();
         ui.removeCallbacks(timeout);ui.removeCallbacks(searchRefresh);ui.removeCallbacks(resumeThumbnails);filterGeneration++; unlocked=false; all.clear(); visible.clear();selected.clear();selectionMode=false;trashView=false;pendingRecovery=null;pendingExports.clear();summary=null;thumbnails.clear();
         closeDialogs(); closePreview();
         if(busy) { lockAfter=true; return; }
-        if(!worker.isShutdown())worker.execute(vault::lock); folder=""; showLocked();
+        if(!worker.isShutdown())worker.execute(profiles::lock); folder=""; showLocked();
     }
     private void frame() {
         page=new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL); page.setPadding(dp(20),dp(12),dp(20),dp(12)); page.setBackgroundColor(BG);
@@ -114,7 +119,7 @@ public class MainActivity extends Activity {
     }
     private void showLocked() {
         if(isFinishing()||isDestroyed())return;
-        frame();boolean exists=vault.exists();
+        frame();boolean exists=profiles.exists();
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);LinearLayout content=column();content.setPadding(dp(4),dp(24),dp(4),dp(20));scroll.addView(content);page.addView(scroll,new LinearLayout.LayoutParams(-1,-1));
         LinearLayout intro=row();ImageView mark=new ImageView(this);mark.setImageDrawable(VaultUi.icon(this,"lock",ACCENT,40));mark.setBackground(box(0xff203734,24));mark.setPadding(dp(21),dp(21),dp(21),dp(21));intro.addView(mark,new LinearLayout.LayoutParams(dp(84),dp(84)));
         TextView offline=text("OFFLINE\nSEMPRE SEU",10,MUTED);offline.setLetterSpacing(.13f);offline.setGravity(Gravity.RIGHT);intro.addView(offline,new LinearLayout.LayoutParams(0,-2,1));content.addView(intro);
@@ -130,21 +135,28 @@ public class MainActivity extends Activity {
         Button enter=button(exists?"Desbloquear cofre":"Criar meu cofre",true);enter.setId(R.id.vault_unlock);enter.setCompoundDrawables(null,null,VaultUi.icon(this,"arrow",BG,20),null);add(form,enter,10);enter.setOnClickListener(v->authenticate());
         status=text("",13,0xffffb4ab);add(form,status,2);password.setOnEditorActionListener((v,a,event)->{if(exists){authenticate();return true;}return false;});
         if(!exists){add(content,text("Use pelo menos 10 caracteres. Guarde sua senha e faça um backup antes de trocar de celular ou desinstalar o app.",13,MUTED),18);Button restore=tabButton("Restaurar backup .amzcofre",false);add(content,restore,8);restore.setOnClickListener(v->askRestore());}
-        else{if(vault.hasRecovery()){Button recover=tabButton("Esqueci a senha · Recuperar acesso",false);recover.setId(R.id.vault_recover);add(content,recover,12);recover.setOnClickListener(v->recoverAccess());}Button help=tabButton("Sobre minha senha e meus arquivos",false);add(content,help,8);help.setOnClickListener(v->help());}
-        TextView privacy=text("Sem conta. Sem conexão. Só você e seus arquivos.",12,MUTED);privacy.setGravity(Gravity.CENTER);add(content,privacy,22);TextView version=text("Cofre AMZ · v1.1.3",11,MUTED);version.setGravity(Gravity.CENTER);add(content,version,8);
+        else{if(profiles.hasRecovery()){Button recover=tabButton("Esqueci a senha · Recuperar acesso",false);recover.setId(R.id.vault_recover);add(content,recover,12);recover.setOnClickListener(v->recoverAccess());}Button help=tabButton("Sobre minha senha e meus arquivos",false);add(content,help,8);help.setOnClickListener(v->help());}
+        TextView privacy=text("Sem conta. Sem conexão. Só você e seus arquivos.",12,MUTED);privacy.setGravity(Gravity.CENTER);add(content,privacy,22);TextView version=text("Cofre AMZ · v1.2.0",11,MUTED);version.setGravity(Gravity.CENTER);add(content,version,8);
     }
     private void authenticate() {
         if(busy) return;
-        char[] pass=password.getText().toString().toCharArray(); boolean create=!vault.exists();
+        char[] pass=password.getText().toString().toCharArray(); boolean create=!profiles.exists();
         if(create&&(pass.length<10||!password.getText().toString().equals(confirmation.getText().toString()))) {
             Arrays.fill(pass,'\0'); status.setText("Use 10 ou mais caracteres e repita a mesma senha."); return;
         }
         password.setText(""); if(confirmation!=null) confirmation.setText("");
         hideKeyboard();
         run(create?"Criando seu cofre…":"Desbloqueando…",()->{
-            try { if(create) vault.create(pass); else vault.unlock(pass); }
+            try { if(create) profiles.create(pass); else profiles.unlock(pass); }
             finally { Arrays.fill(pass,'\0'); }
-        },()->{ unlocked=true; folder=""; showExplorer(); armLock(); },e->notice("Não foi possível desbloquear",create?friendly(e):"Senha incorreta ou cofre danificado. Confira sua senha e tente novamente."));
+        },this::enteredVault,e->notice("Não foi possível desbloquear",create?friendly(e):"Senha incorreta ou cofre danificado. Confira sua senha e tente novamente."));
+    }
+    private void enteredVault(){
+        accessEpoch++;closeDialogs();closePreview();clearPreviews();thumbnails.close();
+        thumbnails=new ThumbnailLoader(vault,new File(getCacheDir(),"thumb-work"),worker,ui,()->unlocked&&!busy&&!mediaActive&&!scrolling);
+        all.clear();visible.clear();folder="";pendingId=null;pendingExports.clear();pendingRecovery=null;selected.clear();selectionMode=false;trashView=false;
+        gridMode=getPreferences(MODE_PRIVATE).getBoolean(profiles.isPrimary()?"grid":"grid-alternate",true);
+        unlocked=true;showExplorer();armLock();
     }
     private void showExplorer() {
         if(!vault.isUnlocked()||isFinishing()||isDestroyed())return;
@@ -166,7 +178,7 @@ public class MainActivity extends Activity {
         Button files=tabButton("Arquivos",!trashView),trash=tabButton("Lixeira"+(trashCount>0?" · "+trashCount:""),trashView),view=iconButton(gridMode?"list":"grid",gridMode?"Visualização em lista":"Visualização em grade");
         files.setId(R.id.vault_files_tab);trash.setId(R.id.vault_trash_tab);view.setId(R.id.vault_view_toggle);
         tabs.addView(files,new LinearLayout.LayoutParams(0,dp(46),1));LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(0,dp(46),1);tp.leftMargin=dp(4);tabs.addView(trash,tp);LinearLayout.LayoutParams vp=new LinearLayout.LayoutParams(dp(48),dp(48));vp.leftMargin=dp(12);tabs.addView(view,vp);
-        files.setOnClickListener(v->switchTrash(false));trash.setOnClickListener(v->switchTrash(true));view.setOnClickListener(v->{gridMode=!gridMode;getPreferences(MODE_PRIVATE).edit().putBoolean("grid",gridMode).apply();view.setCompoundDrawables(null,VaultUi.icon(this,gridMode?"list":"grid",ACCENT,22),null,null);view.setContentDescription(gridMode?"Visualização em lista":"Visualização em grade");thumbnails.pause();refresh();});add(page,tabs,10);
+        files.setOnClickListener(v->switchTrash(false));trash.setOnClickListener(v->switchTrash(true));view.setOnClickListener(v->{gridMode=!gridMode;getPreferences(MODE_PRIVATE).edit().putBoolean(profiles.isPrimary()?"grid":"grid-alternate",gridMode).apply();view.setCompoundDrawables(null,VaultUi.icon(this,gridMode?"list":"grid",ACCENT,22),null,null);view.setContentDescription(gridMode?"Visualização em lista":"Visualização em grade");thumbnails.pause();refresh();});add(page,tabs,10);
 
         LinearLayout location=row();FrameLayout locationText=new FrameLayout(this);location.addView(locationText,new LinearLayout.LayoutParams(0,dp(48),1));
         HorizontalScrollView crumbs=new HorizontalScrollView(this);crumbs.setHorizontalScrollBarEnabled(false);trail=row();crumbs.addView(trail);locationText.addView(crumbs,new FrameLayout.LayoutParams(-1,-1));
@@ -256,8 +268,27 @@ public class MainActivity extends Activity {
     private String type(VaultEngine.Entry e){if(e.mime.startsWith("image/"))return "IMG";if(e.mime.startsWith("video/"))return "VID";if(e.mime.startsWith("audio/"))return "ÁUD";int dot=e.name.lastIndexOf('.');return dot>=0?e.name.substring(dot+1).toUpperCase(Locale.ROOT).substring(0,Math.min(4,e.name.length()-dot-1)):"ARQ";}
 
     private void options(View anchor){
-        PopupMenu menu=new PopupMenu(this,anchor);String[] labels={"Salvar backup criptografado","Chave de recuperação","Armazenamento","Alterar senha","Ajuda e informações"};for(String label:labels)menu.getMenu().add(label);
-        menu.setOnMenuItemClickListener(item->{String label=item.getTitle().toString();if(label.equals(labels[0]))saveBackup();else if(label.equals(labels[1]))createRecovery();else if(label.equals(labels[2]))storageInfo();else if(label.equals(labels[3]))changePassword();else help();return true;});menu.show();
+        if(!unlocked||busy)return;
+        PopupMenu menu=new PopupMenu(this,anchor);String[] labels={"Salvar backup criptografado","Chave de recuperação","Armazenamento","Alterar senha","Ajuda e informações"};for(String label:labels)menu.getMenu().add(label);if(profiles.isPrimary())menu.getMenu().add("Senha alternativa");
+        menu.setOnMenuItemClickListener(item->{String label=item.getTitle().toString();if(label.equals(labels[0]))saveBackup();else if(label.equals(labels[1]))createRecovery();else if(label.equals(labels[2]))storageInfo();else if(label.equals(labels[3]))changePassword();else if(label.equals("Senha alternativa"))configureAlternate();else help();return true;});menu.show();
+    }
+    private void configureAlternate(){
+        if(!unlocked||busy||!profiles.isPrimary())return;
+        if(profiles.alternate.exists()){
+            notice("Senha alternativa configurada","Bloqueie o app e digite a senha alternativa na mesma tela de entrada. Para alterar essa senha, entre com ela e use Alterar senha. Arquivos, lixeira, backups e recuperação pertencem somente ao cofre aberto.");return;
+        }
+        LinearLayout fields=column();EditText pass=input("Senha alternativa (10 ou mais caracteres)",true),again=input("Repita a senha alternativa",true);
+        pass.setId(R.id.vault_alternate_password);again.setId(R.id.vault_alternate_confirmation);fields.addView(pass);add(fields,again,8);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Configurar senha alternativa")
+            .setMessage("Sua senha atual continuará abrindo seus arquivos. A senha alternativa abrirá outro cofre, com a mesma aparência, onde você poderá guardar arquivos normalmente. Use senhas diferentes.\n\nFaça um backup e gere uma chave de recuperação em cada cofre. O recurso não garante esconder a existência dos dois cofres em uma análise técnica do aparelho.")
+            .setView(padded(fields)).setNegativeButton("Cancelar",null).setNeutralButton("Restaurar backup",(dialog,w)->askRestore(true)).setPositiveButton("Criar",null).create();
+        d.setOnShowListener(x->d.getButton(-1).setOnClickListener(v->{
+            if(pass.length()<10||!pass.getText().toString().equals(again.getText().toString())){pass.setError("Use 10 ou mais caracteres e repita a mesma senha.");return;}
+            char[] chars=pass.getText().toString().toCharArray();pass.setText("");again.setText("");d.dismiss();
+            run("Configurando senha alternativa…",()->{try{profiles.createAlternate(chars);}finally{Arrays.fill(chars,'\0');}},()->{
+                showExplorer();notice("Senha alternativa configurada","Seus arquivos atuais foram mantidos. Bloqueie o app e digite a senha alternativa para entrar no novo cofre. Para voltar a este cofre, bloqueie novamente e use sua senha principal.");
+            },e->notice("Não foi possível configurar",friendly(e)));
+        }));track(d);d.show();
     }
     private void fileMenu(VaultEngine.Entry e){
         if(!unlocked||busy)return;
@@ -339,7 +370,7 @@ public class MainActivity extends Activity {
         }).show());
     }
     private void launch(Intent intent,int code){
-        external=true;
+        pickerVault=unlocked?vault:null;pickerEpoch=accessEpoch;external=true;
         try{startActivityForResult(intent,code);}catch(ActivityNotFoundException e){external=false;notice("Seletor indisponível","Ative o aplicativo Arquivos do Android para escolher o destino.");}
     }
     private boolean removeOnExport;
@@ -359,11 +390,12 @@ public class MainActivity extends Activity {
         return "Meus arquivos: "+backupFileCount(info.activeFiles)+"\nLixeira: "+backupFileCount(info.trashFiles)+"\n"+(info.activeFiles+info.trashFiles==0?"Nenhum arquivo para incluir. Apenas a estrutura do cofre e os dados de acesso serão salvos.":"Inclui a estrutura de pastas e os dados de acesso do cofre.");
     }
     private String backupFileCount(int count){return count+" arquivo"+(count==1?"":"s");}
-    private void askRestore(){
+    private void askRestore(){askRestore(false);}
+    private void askRestore(boolean alternate){
         LinearLayout fields=column();CheckBox useCode=new CheckBox(this);useCode.setText("Usar chave de recuperação");useCode.setTextColor(INK);fields.addView(useCode);EditText code=input("Código AMZ1-…",true),pass=input("Senha usada no backup",true),again=input("Repita a nova senha",true);fields.addView(code);fields.addView(pass);fields.addView(again);code.setVisibility(View.GONE);again.setVisibility(View.GONE);
         useCode.setOnCheckedChangeListener((b,on)->{code.setVisibility(on?View.VISIBLE:View.GONE);again.setVisibility(on?View.VISIBLE:View.GONE);pass.setHint(on?"Nova senha (10 ou mais caracteres)":"Senha usada no backup");});
         AlertDialog d=new AlertDialog.Builder(this).setTitle("Restaurar cofre").setMessage("Use a senha ou a chave de recuperação que o backup tinha quando foi salvo.").setView(padded(fields)).setNegativeButton("Cancelar",null).setPositiveButton("Escolher backup",null).create();
-        d.setOnShowListener(x->d.getButton(-1).setOnClickListener(v->{boolean recovery=useCode.isChecked();if(pass.length()==0||(recovery&&(pass.length()<10||!pass.getText().toString().equals(again.getText().toString())||code.length()==0))){pass.setError(recovery?"Informe o código e repita uma nova senha de 10+ caracteres.":"Digite a senha do backup");return;}clearRestorePassword();restorePassword=pass.getText().toString().toCharArray();restoreRecovery=recovery?code.getText().toString():null;pass.setText("");again.setText("");code.setText("");d.dismiss();launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),RESTORE);}));track(d);d.show();
+        d.setOnShowListener(x->d.getButton(-1).setOnClickListener(v->{boolean recovery=useCode.isChecked();if(pass.length()==0||(recovery&&(pass.length()<10||!pass.getText().toString().equals(again.getText().toString())||code.length()==0))){pass.setError(recovery?"Informe o código e repita uma nova senha de 10+ caracteres.":"Digite a senha do backup");return;}clearRestorePassword();restorePassword=pass.getText().toString().toCharArray();restoreRecovery=recovery?code.getText().toString():null;restoreAlternate=alternate;pass.setText("");again.setText("");code.setText("");d.dismiss();launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),RESTORE);}));track(d);d.show();
     }
     private void createRecovery(){
         boolean exists=vault.hasRecovery();track(new AlertDialog.Builder(this).setTitle(exists?"Gerar outra chave de recuperação?":"Criar chave de recuperação").setMessage((exists?"A chave anterior deixará de funcionar neste cofre. Backups antigos continuam com a chave antiga.\n\n":"")+"Guarde o código fora do cofre. Quem tiver esse código e os dados do cofre poderá recuperar o acesso. O app não guarda o código em texto legível.").setNegativeButton("Cancelar",null).setPositiveButton(exists?"Gerar nova chave":"Gerar código",(d,w)->{
@@ -378,14 +410,19 @@ public class MainActivity extends Activity {
     private void recoverAccess(){
         LinearLayout fields=column();EditText code=input("Chave de recuperação AMZ1-…",true),pass=input("Nova senha (10 ou mais caracteres)",true),again=input("Repita a nova senha",true);code.setId(R.id.vault_recovery_input);pass.setId(R.id.vault_new_password);again.setId(R.id.vault_new_confirmation);fields.addView(code);add(fields,pass,8);add(fields,again,8);
         AlertDialog d=new AlertDialog.Builder(this).setTitle("Recuperar acesso offline").setMessage("Use a chave gerada anteriormente neste cofre. Seus arquivos serão mantidos e a senha será substituída.").setView(padded(fields)).setNegativeButton("Cancelar",null).setPositiveButton("Recuperar",null).create();
-        d.setOnShowListener(x->d.getButton(-1).setOnClickListener(v->{if(code.length()==0||pass.length()<10||!pass.getText().toString().equals(again.getText().toString())){pass.setError("Informe o código e repita uma senha de 10+ caracteres.");return;}String recovery=code.getText().toString();char[] chars=pass.getText().toString().toCharArray();code.setText("");pass.setText("");again.setText("");d.dismiss();run("Recuperando o cofre…",()->{try{vault.recover(recovery,chars);}finally{Arrays.fill(chars,'\0');}},()->{unlocked=true;folder="";trashView=false;showExplorer();armLock();notice("Acesso recuperado","A nova senha já está valendo neste cofre. Salve um novo backup.");},e->notice("Não foi possível recuperar","Confira o código de recuperação deste cofre. Seus arquivos foram preservados."));}));track(d);d.show();
+        d.setOnShowListener(x->d.getButton(-1).setOnClickListener(v->{if(code.length()==0||pass.length()<10||!pass.getText().toString().equals(again.getText().toString())){pass.setError("Informe o código e repita uma senha de 10+ caracteres.");return;}String recovery=code.getText().toString();char[] chars=pass.getText().toString().toCharArray();code.setText("");pass.setText("");again.setText("");d.dismiss();run("Recuperando o cofre…",()->{try{profiles.recover(recovery,chars);}finally{Arrays.fill(chars,'\0');}},()->{enteredVault();notice("Acesso recuperado","A nova senha já está valendo neste cofre. Salve um novo backup.");},e->notice("Não foi possível recuperar","Confira o código de recuperação deste cofre. Seus arquivos foram preservados."));}));track(d);d.show();
     }
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);external=false;stopped=false;
+        VaultEngine origin=pickerVault;pickerVault=null;
+        if(origin!=null&&(!unlocked||origin!=vault||pickerEpoch!=accessEpoch)){
+            if(request==RESTORE)clearRestorePassword();pendingId=null;pendingExports.clear();pendingRecovery=null;
+            notice("Seleção expirada","Desbloqueie o cofre e escolha os arquivos novamente.");return;
+        }
         if(result!=RESULT_OK||data==null){if(request==RESTORE)clearRestorePassword();if(request==SAVE_RECOVERY)pendingRecovery=null;if(unlocked)armLock();return;}
         if(request==RESTORE){
-            Uri uri=data.getData();if(uri==null||restorePassword==null){clearRestorePassword();return;}char[] pass=restorePassword;String code=restoreRecovery;restorePassword=null;restoreRecovery=null;
-            run("Restaurando e verificando arquivos…",()->{try(InputStream in=read(uri)){if(code==null)vault.restore(in,pass,operationProgress);else vault.restoreUsingRecovery(in,code,pass,operationProgress);}finally{Arrays.fill(pass,'\0');}},()->{unlocked=true;showExplorer();armLock();notice("Cofre restaurado","Todos os arquivos foram verificados. Guarde seu backup em um local seguro.");},e->notice("Não foi possível restaurar","Confira a senha ou chave de recuperação, a integridade do backup e o espaço disponível. "+friendly(e)));return;
+            Uri uri=data.getData();if(uri==null||restorePassword==null){clearRestorePassword();return;}char[] pass=restorePassword;String code=restoreRecovery;boolean alternate=restoreAlternate;restorePassword=null;restoreRecovery=null;restoreAlternate=false;
+            run("Restaurando e verificando arquivos…",()->{try(InputStream in=read(uri)){profiles.restore(in,pass,code,alternate,operationProgress);}finally{Arrays.fill(pass,'\0');}},()->{enteredVault();notice("Cofre restaurado","Todos os arquivos foram verificados. Guarde seu backup em um local seguro.");},e->notice("Não foi possível restaurar","Confira a senha ou chave de recuperação, a integridade do backup e o espaço disponível. "+friendly(e)));return;
         }
         if(!unlocked){notice("Cofre bloqueado","Desbloqueie e selecione os arquivos novamente. Nenhum original foi removido.");return;}
         if(request==PICK_FILES){
@@ -449,7 +486,7 @@ public class MainActivity extends Activity {
     private void changePassword(){
         LinearLayout fields=column();EditText pass=input("Nova senha (10 ou mais caracteres)",true),again=input("Repita a nova senha",true);fields.addView(pass);fields.addView(again);
         AlertDialog d=new AlertDialog.Builder(this).setTitle("Alterar senha").setMessage("Backups anteriores continuam usando a senha antiga.").setView(padded(fields)).setNegativeButton("Cancelar",null).setPositiveButton("Salvar senha",null).create();
-        d.setOnShowListener(x->d.getButton(-1).setOnClickListener(v->{if(pass.length()<10||!pass.getText().toString().equals(again.getText().toString())){pass.setError("Use pelo menos 10 caracteres e repita a mesma senha.");return;}char[] chars=pass.getText().toString().toCharArray();pass.setText("");again.setText("");d.dismiss();run("Atualizando senha…",()->{try{vault.changePassword(chars);}finally{Arrays.fill(chars,'\0');}},()->{showExplorer();notice("Senha alterada","Use a nova senha para desbloquear este cofre. Salve um novo backup.");},this::error);}));track(d);d.show();
+        d.setOnShowListener(x->d.getButton(-1).setOnClickListener(v->{if(pass.length()<10||!pass.getText().toString().equals(again.getText().toString())){pass.setError("Use pelo menos 10 caracteres e repita a mesma senha.");return;}char[] chars=pass.getText().toString().toCharArray();pass.setText("");again.setText("");d.dismiss();run("Atualizando senha…",()->{try{profiles.changePassword(chars);}finally{Arrays.fill(chars,'\0');}},()->{showExplorer();notice("Senha alterada","Use a nova senha para desbloquear este cofre. Salve um novo backup.");},this::error);}));track(d);d.show();
     }
     private void openFile(VaultEngine.Entry e){
         if(!unlocked||busy)return;
@@ -510,22 +547,22 @@ public class MainActivity extends Activity {
     private void externalPreview(VaultEngine.Entry entry,File file){
         track(new AlertDialog.Builder(this).setTitle("Abrir em outro aplicativo?").setMessage("O aplicativo escolhido terá acesso a uma cópia descriptografada e poderá salvá-la. O acesso temporário será encerrado quando você voltar ao Cofre AMZ.").setNegativeButton("Cancelar",(d,w)->clearPreviews()).setPositiveButton("Abrir",(d,w)->{
             Uri uri=FileProvider.getUriForFile(this,getPackageName()+".preview",file);Intent i=new Intent(Intent.ACTION_VIEW).setDataAndType(uri,entry.mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);i.setClipData(ClipData.newRawUri("Arquivo",uri));
-            try{external=true;unlocked=false;thumbnails.clear();worker.execute(vault::lock);all.clear();showLocked();startActivityForResult(Intent.createChooser(i,"Abrir arquivo"),20);}catch(Exception err){external=false;clearPreviews();notice("Nenhum aplicativo disponível","Instale um aplicativo compatível com este formato ou retire o arquivo para uma pasta.");}
+            try{external=true;unlocked=false;thumbnails.clear();worker.execute(profiles::lock);all.clear();showLocked();startActivityForResult(Intent.createChooser(i,"Abrir arquivo"),20);}catch(Exception err){external=false;clearPreviews();notice("Nenhum aplicativo disponível","Instale um aplicativo compatível com este formato ou retire o arquivo para uma pasta.");}
         }).setOnCancelListener(d->clearPreviews()).show());
     }
     private void closePreview(){if(preview!=null){Dialog old=preview;Runnable cleanup=previewCleanup;preview=null;previewCleanup=null;old.setOnDismissListener(null);old.dismiss();if(cleanup!=null)cleanup.run();clearPreviews();}}
     private void clearPreviews(){
         File dir=new File(getCacheDir(),"preview");File[] files=dir.listFiles();if(files!=null)for(File f:files){try{Uri uri=FileProvider.getUriForFile(this,getPackageName()+".preview",f);revokeUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}f.delete();}
     }
-    private void help(){notice("Cofre AMZ 1.1.3","• Funciona offline, sem permissão de internet.\n\n• Use Selecionar ou segure um item para mover, retirar ou enviar vários arquivos à lixeira.\n\n• Grade mostra miniaturas de fotos e vídeos compatíveis. As miniaturas não são salvas em texto legível.\n\n• A lixeira continua criptografada. Restaure os itens ou exclua definitivamente para liberar espaço. Não há exclusão automática.\n\n• Gere sua chave de recuperação no menu e guarde o código fora do cofre. Quem tiver o código e os dados do cofre pode recuperar o acesso. Sem senha ou código previamente gerado, não é possível recuperar.\n\n• Salve um backup sempre que aparecer o aviso. Ele inclui os arquivos, a lixeira e a recuperação ativada. Backups antigos mantêm a senha e a chave que tinham ao ser salvos.\n\n• Desinstalar o app ou limpar seus dados apaga o cofre. Instale atualizações por cima para manter seus arquivos.\n\n• Ao importar, o original só é removido após a verificação. Se o Android não permitir apagar na origem, o app avisa.\n\n• Bloqueio ao sair do app e após 2 minutos sem interação.\n\nAES-256-GCM · Android 8+");}
+    private void help(){notice("Cofre AMZ 1.2.0","• Funciona offline, sem permissão de internet.\n\n• Use Selecionar ou segure um item para mover, retirar ou enviar vários arquivos à lixeira.\n\n• Grade mostra miniaturas de fotos e vídeos compatíveis. As miniaturas não são salvas em texto legível.\n\n• A lixeira continua criptografada. Restaure os itens ou exclua definitivamente para liberar espaço. Não há exclusão automática.\n\n• Gere sua chave de recuperação no menu e guarde o código fora do cofre. Quem tiver o código e os dados do cofre pode recuperar o acesso. Sem senha ou código previamente gerado, não é possível recuperar.\n\n• Salve um backup sempre que aparecer o aviso. Ele inclui os arquivos, a lixeira e a recuperação ativada. Backups antigos mantêm a senha e a chave que tinham ao ser salvos.\n\n• Desinstalar o app ou limpar seus dados apaga o cofre. Instale atualizações por cima para manter seus arquivos.\n\n• Ao importar, o original só é removido após a verificação. Se o Android não permitir apagar na origem, o app avisa.\n\n• Bloqueio ao sair do app e após 2 minutos sem interação.\n\nAES-256-GCM · Android 8+");}
     private interface Job{void execute()throws Exception;}
     private interface Failure{void accept(Exception e);}
     private void run(String label,Job job,Runnable done,Failure failed){
         if(busy)return;filterGeneration++;busy=true;cancelRequested=false;thumbnails.pause();lockAfter=false;ui.removeCallbacks(timeout);lastProgress=0;progressPhase=label;getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         progress=new ProgressDialog(this);progress.setTitle(label);progress.setMessage("Aguarde. Seus arquivos estão sendo verificados.");progress.setIndeterminate(true);progress.setCancelable(false);progress.getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,WindowManager.LayoutParams.FLAG_SECURE);boolean cancellable=label.startsWith("Movendo arquivos")||label.startsWith("Retirando")||label.startsWith("Salvando backup")||label.startsWith("Salvando e conferindo")||label.startsWith("Abrindo arquivo")||label.startsWith("Restaurando e verificando");if(cancellable)progress.setButton(DialogInterface.BUTTON_NEGATIVE,"Interromper",(d,w)->{});progress.show();
         if(cancellable)progress.getButton(DialogInterface.BUTTON_NEGATIVE).setOnClickListener(v->{cancelRequested=true;progress.getButton(DialogInterface.BUTTON_NEGATIVE).setEnabled(false);progress.setMessage("Interrompendo com segurança. Aguarde…");});
-        worker.execute(()->{Exception failure=null;try{job.execute();}catch(Exception e){failure=e;}loadSummary();Exception outcome=failure;
-            ui.post(()->{busy=false;if(isFinishing()||isDestroyed()){vault.lock();return;}getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);closeProgress();if(lockAfter||stopped){vault.lock();unlocked=false;lockAfter=false;clearPreviews();showLocked();return;}if(outcome==null)done.run();else failed.accept(outcome);if(unlocked)armLock();});});
+        worker.execute(()->{Exception failure=null;try{job.execute();}catch(Exception e){failure=e;}vault=profiles.active();loadSummary();Exception outcome=failure;
+            ui.post(()->{busy=false;if(isFinishing()||isDestroyed()){profiles.lock();return;}getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);closeProgress();if(lockAfter||stopped){profiles.lock();unlocked=false;lockAfter=false;clearPreviews();showLocked();return;}if(outcome==null)done.run();else failed.accept(outcome);if(unlocked)armLock();});});
     }
     private void closeProgress(){ProgressDialog old=progress;progress=null;if(old!=null&&old.isShowing()&&old.getWindow()!=null&&old.getWindow().getDecorView().isAttachedToWindow())old.dismiss();}
     private void progressBytes(long bytes){if(cancelRequested)throw new CancellationException("Operação interrompida. Os arquivos ainda não transferidos permanecem na origem.");long now=SystemClock.elapsedRealtime();if(now-lastProgress<300)return;lastProgress=now;ui.post(()->{if(progress!=null&&!cancelRequested)progress.setMessage(progressPhase+"\n"+size(bytes)+" processados nesta etapa.\nMantenha o app aberto até concluir.");});}
@@ -534,7 +571,7 @@ public class MainActivity extends Activity {
     private void notice(String title,String body){if(!isFinishing()&&!isDestroyed())track(new AlertDialog.Builder(this).setTitle(title).setMessage(body).setPositiveButton("Entendi",null).show());}
     private void track(Dialog d){dialogs.removeIf(x->!x.isShowing());dialogs.add(d);if(d.getWindow()!=null)d.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);}
     private void closeDialogs(){for(Dialog d:new ArrayList<>(dialogs))if(d.isShowing())d.dismiss();dialogs.clear();}
-    private void clearRestorePassword(){if(restorePassword!=null)Arrays.fill(restorePassword,'\0');restorePassword=null;restoreRecovery=null;}
+    private void clearRestorePassword(){if(restorePassword!=null)Arrays.fill(restorePassword,'\0');restorePassword=null;restoreRecovery=null;restoreAlternate=false;}
     private void hideKeyboard(){((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(password.getWindowToken(),0);}
     private int dp(float value){return (int)(value*getResources().getDisplayMetrics().density+.5f);}
     private TextView text(String value,int size,int color){TextView v=new TextView(this);v.setText(value);v.setTextSize(size);v.setTextColor(color);v.setFontFeatureSettings("kern");v.setLineSpacing(dp(2),1);v.setTypeface(Typeface.create(size>=18?"sans-serif-medium":"sans-serif",Typeface.NORMAL));return v;}

@@ -27,6 +27,7 @@ public class VaultFeaturesActivityTest {
     private File vaultDir;
     @Before public void setup()throws Exception{
         vaultDir=new File(context.getFilesDir(),"vault-v1");VaultEngine.removeTree(vaultDir);
+        VaultEngine.removeTree(new File(context.getFilesDir(),"vault-alternate-v1"));
         VaultEngine.removeTree(new File(context.getFilesDir(),"fixture-export"));
         seed=new VaultEngine(vaultDir);seed.create(password.toCharArray());
     }
@@ -108,6 +109,7 @@ public class VaultFeaturesActivityTest {
         Uri invalid=DocumentsContract.buildTreeDocumentUri("com.amzstudios.cofre.test.documents","invalid");main(()->activity.onActivityResult(14,Activity.RESULT_OK,new Intent().setData(invalid)));waitJob();dismiss();vault().verify(retained.id);assertEquals(1,vault().list().size());
         invoke("requestLock");waitJob();main(()->{((EditText)activity.findViewById(R.id.vault_password)).setText("Nova senha offline 2026");activity.findViewById(R.id.vault_unlock).performClick();});waitJob();assertTrue(vault().isUnlocked());
     }
+    private void login(String pass)throws Exception{main(()->{((EditText)activity.findViewById(R.id.vault_password)).setText(pass);activity.findViewById(R.id.vault_unlock).performClick();});waitJob();assertTrue((Boolean)field(activity,"unlocked"));}
 
     @Test public void backupAfterIndividualMoveKeepsOnlyCurrentVaultFiles()throws Exception{
         VaultEngine.Entry moved=add("","Retirada.txt","foto retirada"),copied=add("","Copiada.txt","foto copiada"),trash=add("","Lixeira.txt","foto na lixeira");seed.trash(Collections.singleton(trash.id));open();
@@ -124,6 +126,43 @@ public class VaultFeaturesActivityTest {
         File restoredRoot=new File(context.getCacheDir(),"test-current-backup-"+UUID.randomUUID());VaultEngine restored=new VaultEngine(restoredRoot);
         try(InputStream in=new FileInputStream(new File(context.getFilesDir(),"fixture-destination.txt"))){restored.restore(in,password.toCharArray());assertEquals(2,restored.list().size());assertThrows(IOException.class,()->restored.get(moved.id));assertFalse(restored.get(copied.id).isTrashed());assertTrue(restored.get(trash.id).isTrashed());restored.verify(copied.id);restored.verify(trash.id);}finally{restored.lock();VaultEngine.removeTree(restoredRoot);}
         assertEquals("foto retirada",new String(Files.readAllBytes(new File(outside,"retirada.txt").toPath()),"UTF-8"));assertEquals("foto copiada",new String(Files.readAllBytes(new File(outside,"copiada.txt").toPath()),"UTF-8"));
+    }
+
+    @Test public void alternatePasswordUsesSameLoginAndIsolatesFilesBackupsAndThumbnails()throws Exception{
+        VaultEngine.Entry secret=add("","Somente principal.txt","conteudo privado");open();Object oldThumbnails=field(activity,"thumbnails");
+        invoke("configureAlternate");AlertDialog setup=dialog();main(()->{((EditText)setup.findViewById(R.id.vault_alternate_password)).setText("Senha alternativa teste 2026");((EditText)setup.findViewById(R.id.vault_alternate_confirmation)).setText("Senha alternativa teste 2026");});positive();dismiss();
+        VaultProfiles profiles=(VaultProfiles)field(activity,"profiles");assertTrue(profiles.isPrimary());vault().verify(secret.id);invoke("requestLock");waitJob();assertNotNull(activity.findViewById(R.id.vault_password));assertNull(activity.findViewById(R.id.vault_alternate_password));
+        login("Senha alternativa teste 2026");assertSame(profiles.alternate,vault());assertFalse(profiles.primary.isUnlocked());assertTrue(vault().list().isEmpty());assertTrue(((Set<?>)field(activity,"selected")).isEmpty());
+        Object newThumbnails=field(activity,"thumbnails");assertNotSame(oldThumbnails,newThumbnails);assertSame(vault(),field(newThumbnails,"vault"));assertEquals(0,((android.util.LruCache<?,?>)field(oldThumbnails,"cache")).size());assertNull(byText(activity.getWindow().getDecorView(),secret.name));
+        File source=new File(context.getFilesDir(),"fixture-source.txt");Files.write(source.toPath(),"lista de compras".getBytes("UTF-8"));Uri sourceUri=DocumentsContract.buildDocumentUri("com.amzstudios.cofre.test.documents","source.txt");main(()->activity.onActivityResult(10,Activity.RESULT_OK,new Intent().setData(sourceUri)));waitJob();dismiss();assertFalse(source.exists());assertEquals(1,vault().list().size());VaultEngine.Entry cover=vault().list().get(0);capture("test-v120-alternate.png");
+        Uri backupUri=DocumentsContract.buildDocumentUri("com.amzstudios.cofre.test.documents","destination.txt");main(()->activity.onActivityResult(12,Activity.RESULT_OK,new Intent().setData(backupUri)));waitJob();dismiss();
+        File restoredRoot=new File(context.getCacheDir(),"alternate-check-"+UUID.randomUUID());VaultEngine restored=new VaultEngine(restoredRoot);try(InputStream in=new FileInputStream(new File(context.getFilesDir(),"fixture-destination.txt"))){restored.restore(in,"Senha alternativa teste 2026".toCharArray());assertEquals(1,restored.list().size());restored.verify(cover.id);assertThrows(IOException.class,()->restored.get(secret.id));}finally{restored.lock();VaultEngine.removeTree(restoredRoot);}
+        invoke("requestLock");waitJob();login(password);assertTrue(profiles.isPrimary());assertFalse(profiles.alternate.isUnlocked());assertEquals(1,vault().list().size());vault().verify(secret.id);assertThrows(IOException.class,()->vault().get(cover.id));
+    }
+
+    @Test public void switchingToLargeCatalogClearsOldRowsBeforeBackgroundFilter()throws Exception{
+        VaultEngine.Entry secret=add("","Somente principal.txt","conteudo privado");open();VaultProfiles profiles=(VaultProfiles)field(activity,"profiles");ExecutorService worker=(ExecutorService)field(activity,"worker");
+        worker.submit(()->{try{profiles.createAlternate("Senha alternativa teste 2026".toCharArray());profiles.unlock("Senha alternativa teste 2026".toCharArray());}catch(Exception e){throw new RuntimeException(e);}}).get(40,TimeUnit.SECONDS);
+        List<VaultEngine.Entry> catalog=new ArrayList<>();for(int i=0;i<600;i++)catalog.add(new VaultEngine.Entry("ui-"+i,"","Cotidiano "+i+".txt","text/plain",false,1,0,new byte[32]));Field entries=VaultEngine.class.getDeclaredField("entries");entries.setAccessible(true);entries.set(profiles.alternate,catalog);set("vault",profiles.alternate);set("visible",new ArrayList<>(Collections.singletonList(secret)));
+        CountDownLatch gate=new CountDownLatch(1);worker.execute(()->{try{gate.await();}catch(InterruptedException e){Thread.currentThread().interrupt();}});
+        try{invoke("enteredVault");assertTrue("Rows from the previous session must disappear before filtering",((List<?>)field(activity,"visible")).isEmpty());assertNull(byText(activity.getWindow().getDecorView(),secret.name));}finally{gate.countDown();}
+        waitJob();assertEquals(600,((List<?>)field(activity,"visible")).size());assertFalse(profiles.primary.isUnlocked());
+    }
+
+    @Test public void expiredPickerCannotBackUpAnotherVaultAfterPasswordSwitch()throws Exception{
+        VaultEngine.Entry secret=add("","Somente principal.txt","conteudo privado");open();VaultProfiles profiles=(VaultProfiles)field(activity,"profiles");((ExecutorService)field(activity,"worker")).submit(()->{try{profiles.createAlternate("Senha alternativa teste 2026".toCharArray());}catch(Exception e){throw new RuntimeException(e);}}).get(40,TimeUnit.SECONDS);
+        VaultEngine origin=vault();set("pickerVault",origin);set("pickerEpoch",field(activity,"accessEpoch"));invoke("requestLock");waitJob();login("Senha alternativa teste 2026");
+        File destination=new File(context.getFilesDir(),"fixture-destination.txt");byte[] before="destino preservado".getBytes("UTF-8");Files.write(destination.toPath(),before);Uri uri=DocumentsContract.buildDocumentUri("com.amzstudios.cofre.test.documents","destination.txt");main(()->activity.onActivityResult(12,Activity.RESULT_OK,new Intent().setData(uri)));waitJob();
+        assertArrayEquals(before,Files.readAllBytes(destination.toPath()));assertTrue(((TextView)dialog().findViewById(android.R.id.message)).getText().toString().contains("escolha os arquivos novamente"));dismiss();assertTrue(vault().list().isEmpty());invoke("requestLock");waitJob();login(password);vault().verify(secret.id);
+    }
+
+    @Test public void alternateBackupRestoreAndRecoveryRouteOnlyToMatchingVault()throws Exception{
+        VaultEngine.Entry secret=add("","Principal.txt","privado");String fake="Senha alternativa teste 2026";File fixtureRoot=new File(context.getCacheDir(),"alternate-fixture-"+UUID.randomUUID());VaultEngine fixture=new VaultEngine(fixtureRoot);String code;VaultEngine.Entry cover;
+        try{fixture.create(fake.toCharArray());cover=fixture.importFile(new ByteArrayInputStream("comum".getBytes("UTF-8")),"Cotidiano.txt","text/plain","",null);code=fixture.createRecoveryKey();try(OutputStream out=new FileOutputStream(new File(context.getFilesDir(),"fixture-source.txt"))){fixture.backup(out);}}finally{fixture.lock();VaultEngine.removeTree(fixtureRoot);}
+        open();invoke("configureAlternate");AlertDialog setup=dialog();main(()->setup.getButton(AlertDialog.BUTTON_NEUTRAL).performClick());assertNotNull(dialog());dismiss();
+        set("restoreAlternate",true);set("restorePassword",fake.toCharArray());set("restoreRecovery",null);Uri uri=DocumentsContract.buildDocumentUri("com.amzstudios.cofre.test.documents","source.txt");main(()->activity.onActivityResult(13,Activity.RESULT_OK,new Intent().setData(uri)));waitJob();dismiss();VaultProfiles profiles=(VaultProfiles)field(activity,"profiles");assertSame(profiles.alternate,vault());vault().verify(cover.id);assertThrows(IOException.class,()->vault().get(secret.id));assertFalse(profiles.primary.isUnlocked());
+        invoke("requestLock");waitJob();clickId(R.id.vault_recover);AlertDialog recovery=dialog();String next="Senha alternativa recuperada 2026";main(()->{((EditText)recovery.findViewById(R.id.vault_recovery_input)).setText(code);((EditText)recovery.findViewById(R.id.vault_new_password)).setText(next);((EditText)recovery.findViewById(R.id.vault_new_confirmation)).setText(next);});positive();dismiss();assertSame(profiles.alternate,vault());vault().verify(cover.id);assertFalse(profiles.primary.isUnlocked());
+        invoke("requestLock");waitJob();login(password);vault().verify(secret.id);assertFalse(profiles.alternate.isUnlocked());
     }
 
     @Test public void lightweightLayoutRecyclesCellsAndKeepsSelectionScroll()throws Exception{

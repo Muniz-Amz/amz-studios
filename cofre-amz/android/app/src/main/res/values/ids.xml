@@ -1,4 +1,6 @@
 <resources>
+    <item name="vault_alternate_password" type="id"/>
+    <item name="vault_alternate_confirmation" type="id"/>
     <item name="vault_password" type="id"/>
     <item name="vault_confirmation" type="id"/>
     <item name="vault_unlock" type="id"/>

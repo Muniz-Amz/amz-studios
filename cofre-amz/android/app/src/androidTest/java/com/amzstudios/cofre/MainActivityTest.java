@@ -13,6 +13,7 @@ import java.lang.reflect.*;
 /** Runs against the real Activity, private storage, and a real Android DocumentsProvider. */
 public class MainActivityTest {
     private MainActivity activity;
+    @Before public void clearAlternateFixture(){VaultEngine.removeTree(new File(InstrumentationRegistry.getInstrumentation().getTargetContext().getFilesDir(),"vault-alternate-v1"));}
     private android.app.Instrumentation getInstrumentation(){return InstrumentationRegistry.getInstrumentation();}
     private MainActivity getActivity(){activity=(MainActivity)getInstrumentation().startActivitySync(new Intent(getInstrumentation().getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));return activity;}
     @After public void finish()throws Exception{if(activity!=null){getInstrumentation().runOnMainSync(()->activity.finish());getInstrumentation().waitForIdleSync();((java.util.concurrent.ExecutorService)field(activity,"worker")).awaitTermination(60,java.util.concurrent.TimeUnit.SECONDS);}}
