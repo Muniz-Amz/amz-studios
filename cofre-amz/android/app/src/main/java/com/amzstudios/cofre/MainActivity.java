@@ -50,6 +50,7 @@ public class MainActivity extends Activity {
     private ProgressDialog progress;
     private Dialog preview;
     private Runnable previewCleanup;
+    private MediaPager mediaPager;
     private final List<Dialog> dialogs=new ArrayList<>();
     private final Runnable timeout=()->requestLock();
     private long lastProgress;
@@ -92,7 +93,7 @@ public class MainActivity extends Activity {
     }
     @Override public void onUserInteraction() { super.onUserInteraction(); if(unlocked&&!busy) armLock(); }
     @Override protected void onDestroy() {
-        unlocked=false;closePreview();ui.removeCallbacksAndMessages(null);filterGeneration++;clearRestorePassword();
+        unlocked=false;closeProgress();closeDialogs();closePreview();ui.removeCallbacksAndMessages(null);filterGeneration++;clearRestorePassword();
         thumbnails.close();pendingRecovery=null;summary=null;
         if(!worker.isShutdown())worker.execute(vault::lock);
         worker.shutdown(); super.onDestroy();
@@ -127,7 +128,7 @@ public class MainActivity extends Activity {
         status=text("",13,0xffffb4ab);add(form,status,2);password.setOnEditorActionListener((v,a,event)->{if(exists){authenticate();return true;}return false;});
         if(!exists){add(content,text("Use pelo menos 10 caracteres. Guarde sua senha e faça um backup antes de trocar de celular ou desinstalar o app.",13,MUTED),18);Button restore=tabButton("Restaurar backup .amzcofre",false);add(content,restore,8);restore.setOnClickListener(v->askRestore());}
         else{if(vault.hasRecovery()){Button recover=tabButton("Esqueci a senha · Recuperar acesso",false);recover.setId(R.id.vault_recover);add(content,recover,12);recover.setOnClickListener(v->recoverAccess());}Button help=tabButton("Sobre minha senha e meus arquivos",false);add(content,help,8);help.setOnClickListener(v->help());}
-        TextView privacy=text("Sem conta. Sem conexão. Só você e seus arquivos.",12,MUTED);privacy.setGravity(Gravity.CENTER);add(content,privacy,22);TextView version=text("Cofre AMZ · v1.1.2",11,MUTED);version.setGravity(Gravity.CENTER);add(content,version,8);
+        TextView privacy=text("Sem conta. Sem conexão. Só você e seus arquivos.",12,MUTED);privacy.setGravity(Gravity.CENTER);add(content,privacy,22);TextView version=text("Cofre AMZ · v1.1.3",11,MUTED);version.setGravity(Gravity.CENTER);add(content,version,8);
     }
     private void authenticate() {
         if(busy) return;
@@ -448,8 +449,8 @@ public class MainActivity extends Activity {
             content.addView(image,new LinearLayout.LayoutParams(-1,0,1));previewCleanup=()->{image.close();if(unlocked)ui.post(resumeThumbnails);};preview.show();return;
         }
         if(e.mime.startsWith("video/")||e.mime.startsWith("audio/")){
-            thumbnails.pause();ui.removeCallbacks(timeout);LinearLayout content=previewFrame(e.name);mediaActive=true;VaultMediaView media=new VaultMediaView(this,vault,e,()->unlocked);
-            content.addView(media,new LinearLayout.LayoutParams(-1,0,1));previewCleanup=()->{mediaActive=false;media.close();if(unlocked){armLock();ui.post(resumeThumbnails);}};preview.show();return;
+            thumbnails.pause();LinearLayout content=previewFrame(e.name);mediaActive=true;ui.removeCallbacks(timeout);MediaPager pager=new MediaPager(content,e);mediaPager=pager;
+            previewCleanup=()->{pager.close();if(mediaPager==pager)mediaPager=null;mediaActive=false;if(unlocked){armLock();ui.post(resumeThumbnails);}};preview.show();return;
         }
         if(e.size>new File(getCacheDir().getPath()).getUsableSpace()-16L*1024*1024){notice("Pouco espaço","Libere espaço para visualizar este arquivo.");return;}
         File dir=new File(getCacheDir(),"preview");dir.mkdirs();File file=new File(dir,e.name);
@@ -461,9 +462,33 @@ public class MainActivity extends Activity {
             }catch(Exception err){clearPreviews();error(err);}
         },err->{clearPreviews();error(err);});
     }
+    /** Keeps one dialog and one decoder; rapid taps coalesce while the old player releases. */
+    private final class MediaPager implements AutoCloseable {
+        private final List<VaultEngine.Entry> entries=new ArrayList<>();
+        private final FrameLayout host;private final TextView title,position;private final Button previous,next;
+        private VaultMediaView playing;private int index;private volatile boolean closed;private boolean releasing;
+        MediaPager(LinearLayout content,VaultEngine.Entry opened){
+            String kind=opened.mime.startsWith("video/")?"video/":"audio/";int found=-1;
+            for(VaultEngine.Entry entry:visible)if(!entry.folder&&!entry.isTrashed()&&entry.mime.startsWith(kind)){if(entry.id.equals(opened.id))found=entries.size();entries.add(entry);}
+            if(found<0){entries.clear();entries.add(opened);index=0;}else index=found;
+            title=preview.findViewById(R.id.vault_preview_title);host=new FrameLayout(MainActivity.this);content.addView(host,new LinearLayout.LayoutParams(-1,0,1));
+            LinearLayout navigation=row();previous=button("Anterior",false);next=button("Próximo",false);previous.setId(R.id.vault_media_previous);next.setId(R.id.vault_media_next);
+            previous.setContentDescription(kind.equals("video/")?"Vídeo anterior":"Áudio anterior");next.setContentDescription(kind.equals("video/")?"Próximo vídeo":"Próximo áudio");previous.setCompoundDrawables(VaultUi.icon(MainActivity.this,"back",ACCENT,20),null,null,null);next.setCompoundDrawables(null,null,VaultUi.icon(MainActivity.this,"arrow",ACCENT,20),null);previous.setCompoundDrawablePadding(dp(6));next.setCompoundDrawablePadding(dp(6));
+            position=text("",12,MUTED);position.setId(R.id.vault_media_position);position.setGravity(Gravity.CENTER);navigation.addView(previous,new LinearLayout.LayoutParams(-2,dp(48)));navigation.addView(position,new LinearLayout.LayoutParams(0,-2,1));navigation.addView(next,new LinearLayout.LayoutParams(-2,dp(48)));add(content,navigation,6);
+            previous.setOnClickListener(v->step(-1));next.setOnClickListener(v->step(1));showTarget();
+        }
+        private void step(int offset){if(closed||!unlocked)return;int target=index+offset;if(target<0||target>=entries.size())return;index=target;showTarget();}
+        private void showTarget(){
+            if(closed||!unlocked)return;title.setText(entries.get(index).name);position.setText((index+1)+" de "+entries.size());previous.setEnabled(index>0);next.setEnabled(index+1<entries.size());previous.setAlpha(previous.isEnabled()?1f:.35f);next.setAlpha(next.isEnabled()?1f:.35f);
+            if(releasing)return;
+            if(playing!=null){VaultMediaView old=playing;playing=null;releasing=true;host.removeAllViews();TextView preparing=text("Preparando mídia…",14,MUTED);preparing.setGravity(Gravity.CENTER);host.addView(preparing,new FrameLayout.LayoutParams(-1,-1));old.close(()->{releasing=false;if(!closed&&unlocked)showTarget();});return;}
+            host.removeAllViews();playing=new VaultMediaView(MainActivity.this,vault,entries.get(index),()->!closed&&unlocked);host.addView(playing,new FrameLayout.LayoutParams(-1,-1));
+        }
+        @Override public void close(){if(closed)return;closed=true;if(playing!=null){playing.close();playing=null;}host.removeAllViews();entries.clear();}
+    }
     private LinearLayout previewFrame(String title){
         closePreview();Dialog dialog=new Dialog(this,R.style.AppTheme);dialog.getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,WindowManager.LayoutParams.FLAG_SECURE);
-        LinearLayout content=column();content.setPadding(dp(16),dp(16),dp(16),dp(16));content.setBackgroundColor(BG);LinearLayout bar=row();TextView label=text(title,19,INK);label.setSingleLine();label.setEllipsize(TextUtils.TruncateAt.END);bar.addView(label,new LinearLayout.LayoutParams(0,-2,1));Button close=iconButton("close","Fechar visualização");bar.addView(close,new LinearLayout.LayoutParams(dp(48),dp(48)));close.setOnClickListener(v->closePreview());content.addView(bar);dialog.setContentView(content);
+        LinearLayout content=column();content.setPadding(dp(16),dp(16),dp(16),dp(16));content.setBackgroundColor(BG);LinearLayout bar=row();TextView label=text(title,19,INK);label.setId(R.id.vault_preview_title);label.setSingleLine();label.setEllipsize(TextUtils.TruncateAt.END);bar.addView(label,new LinearLayout.LayoutParams(0,-2,1));Button close=iconButton("close","Fechar visualização");bar.addView(close,new LinearLayout.LayoutParams(dp(48),dp(48)));close.setOnClickListener(v->closePreview());content.addView(bar);dialog.setContentView(content);
         dialog.setOnDismissListener(d->{if(preview!=dialog)return;Runnable cleanup=previewCleanup;previewCleanup=null;preview=null;if(cleanup!=null)cleanup.run();clearPreviews();});preview=dialog;return content;
     }
     private void showText(VaultEngine.Entry entry,File file)throws Exception{
@@ -483,7 +508,7 @@ public class MainActivity extends Activity {
     private void clearPreviews(){
         File dir=new File(getCacheDir(),"preview");File[] files=dir.listFiles();if(files!=null)for(File f:files){try{Uri uri=FileProvider.getUriForFile(this,getPackageName()+".preview",f);revokeUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}f.delete();}
     }
-    private void help(){notice("Cofre AMZ 1.1.2","• Funciona offline, sem permissão de internet.\n\n• Use Selecionar ou segure um item para mover, retirar ou enviar vários arquivos à lixeira.\n\n• Grade mostra miniaturas de fotos e vídeos compatíveis. As miniaturas não são salvas em texto legível.\n\n• A lixeira continua criptografada. Restaure os itens ou exclua definitivamente para liberar espaço. Não há exclusão automática.\n\n• Gere sua chave de recuperação no menu e guarde o código fora do cofre. Quem tiver o código e os dados do cofre pode recuperar o acesso. Sem senha ou código previamente gerado, não é possível recuperar.\n\n• Salve um backup sempre que aparecer o aviso. Ele inclui os arquivos, a lixeira e a recuperação ativada. Backups antigos mantêm a senha e a chave que tinham ao ser salvos.\n\n• Desinstalar o app ou limpar seus dados apaga o cofre. Instale atualizações por cima para manter seus arquivos.\n\n• Ao importar, o original só é removido após a verificação. Se o Android não permitir apagar na origem, o app avisa.\n\n• Bloqueio ao sair do app e após 2 minutos sem interação.\n\nAES-256-GCM · Android 8+");}
+    private void help(){notice("Cofre AMZ 1.1.3","• Funciona offline, sem permissão de internet.\n\n• Use Selecionar ou segure um item para mover, retirar ou enviar vários arquivos à lixeira.\n\n• Grade mostra miniaturas de fotos e vídeos compatíveis. As miniaturas não são salvas em texto legível.\n\n• A lixeira continua criptografada. Restaure os itens ou exclua definitivamente para liberar espaço. Não há exclusão automática.\n\n• Gere sua chave de recuperação no menu e guarde o código fora do cofre. Quem tiver o código e os dados do cofre pode recuperar o acesso. Sem senha ou código previamente gerado, não é possível recuperar.\n\n• Salve um backup sempre que aparecer o aviso. Ele inclui os arquivos, a lixeira e a recuperação ativada. Backups antigos mantêm a senha e a chave que tinham ao ser salvos.\n\n• Desinstalar o app ou limpar seus dados apaga o cofre. Instale atualizações por cima para manter seus arquivos.\n\n• Ao importar, o original só é removido após a verificação. Se o Android não permitir apagar na origem, o app avisa.\n\n• Bloqueio ao sair do app e após 2 minutos sem interação.\n\nAES-256-GCM · Android 8+");}
     private interface Job{void execute()throws Exception;}
     private interface Failure{void accept(Exception e);}
     private void run(String label,Job job,Runnable done,Failure failed){
@@ -491,8 +516,9 @@ public class MainActivity extends Activity {
         progress=new ProgressDialog(this);progress.setTitle(label);progress.setMessage("Aguarde. Seus arquivos estão sendo verificados.");progress.setIndeterminate(true);progress.setCancelable(false);progress.getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,WindowManager.LayoutParams.FLAG_SECURE);boolean cancellable=label.startsWith("Movendo arquivos")||label.startsWith("Retirando")||label.startsWith("Salvando backup")||label.startsWith("Salvando e conferindo")||label.startsWith("Abrindo arquivo")||label.startsWith("Restaurando e verificando");if(cancellable)progress.setButton(DialogInterface.BUTTON_NEGATIVE,"Interromper",(d,w)->{});progress.show();
         if(cancellable)progress.getButton(DialogInterface.BUTTON_NEGATIVE).setOnClickListener(v->{cancelRequested=true;progress.getButton(DialogInterface.BUTTON_NEGATIVE).setEnabled(false);progress.setMessage("Interrompendo com segurança. Aguarde…");});
         worker.execute(()->{Exception failure=null;try{job.execute();}catch(Exception e){failure=e;}loadSummary();Exception outcome=failure;
-            ui.post(()->{busy=false;getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);if(progress!=null){progress.dismiss();progress=null;}if(isFinishing()||isDestroyed()){vault.lock();return;}if(lockAfter||stopped){vault.lock();unlocked=false;lockAfter=false;clearPreviews();showLocked();return;}if(outcome==null)done.run();else failed.accept(outcome);if(unlocked)armLock();});});
+            ui.post(()->{busy=false;if(isFinishing()||isDestroyed()){vault.lock();return;}getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);closeProgress();if(lockAfter||stopped){vault.lock();unlocked=false;lockAfter=false;clearPreviews();showLocked();return;}if(outcome==null)done.run();else failed.accept(outcome);if(unlocked)armLock();});});
     }
+    private void closeProgress(){ProgressDialog old=progress;progress=null;if(old!=null&&old.isShowing()&&old.getWindow()!=null&&old.getWindow().getDecorView().isAttachedToWindow())old.dismiss();}
     private void progressBytes(long bytes){if(cancelRequested)throw new CancellationException("Operação interrompida. Os arquivos ainda não transferidos permanecem na origem.");long now=SystemClock.elapsedRealtime();if(now-lastProgress<300)return;lastProgress=now;ui.post(()->{if(progress!=null&&!cancelRequested)progress.setMessage(progressPhase+"\n"+size(bytes)+" processados nesta etapa.\nMantenha o app aberto até concluir.");});}
     private void error(Exception e){notice("Não foi possível concluir",friendly(e)+"\n\nSe a retirada falhou, a versão do cofre foi preservada. Confira qualquer arquivo parcial no destino antes de apagá-lo.");}
     private String friendly(Exception e){if(e instanceof CancellationException)return "Operação interrompida. Os arquivos ainda não transferidos foram preservados.";if(e instanceof javax.crypto.AEADBadTagException)return "Senha incorreta ou arquivo danificado.";String m=e.getMessage();return m==null?"Verifique o espaço disponível e a permissão para acessar os arquivos.":m;}

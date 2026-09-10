@@ -8,6 +8,7 @@ import android.os.*;
 import android.view.*;
 import android.widget.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 
 /** Preparation, seeking and authenticated reads stay off the Activity thread. */
@@ -15,6 +16,7 @@ final class VaultMediaView extends LinearLayout implements AutoCloseable {
     private final Handler ui=new Handler(Looper.getMainLooper());
     private final HandlerThread thread=new HandlerThread("cofre-media");private final Handler control;
     private final AtomicBoolean closed=new AtomicBoolean();private final VaultMediaSource source;
+    private final CompletableFuture<Void> released=new CompletableFuture<>();
     private MediaPlayer player;private boolean prepared;private volatile boolean dragging;
     private final TextView status,elapsed,total;private final ImageButton toggle;private final SeekBar seek;private final ProgressBar loading;
     private final boolean video;private final AspectSurface surface;
@@ -53,7 +55,8 @@ final class VaultMediaView extends LinearLayout implements AutoCloseable {
     private TextView label(String text,int sp){TextView v=new TextView(getContext());v.setText(text);v.setTextSize(sp);v.setTextColor(VaultUi.MUTED);return v;}
     private Button skipButton(String text,String description){Button v=new Button(getContext());v.setText(text);v.setTextColor(VaultUi.INK);v.setTextSize(14);v.setAllCaps(false);v.setContentDescription(description);v.setPadding(0,0,0,0);v.setMinWidth(0);v.setMinimumWidth(0);v.setBackground(VaultUi.ripple(getContext(),VaultUi.SURFACE,18));v.setStateListAnimator(null);return v;}
     private int dp(int n){return VaultUi.dp(getContext(),n);}
-    @Override public void close(){if(!closed.compareAndSet(false,true))return;setKeepScreenOn(false);control.removeCallbacksAndMessages(null);ui.removeCallbacksAndMessages(null);control.post(()->{try{if(player!=null)player.release();}finally{try{source.close();}catch(Exception ignored){}thread.quitSafely();}});}
+    void close(Runnable afterRelease){close();released.whenComplete((ignored,error)->ui.post(afterRelease));}
+    @Override public void close(){if(!closed.compareAndSet(false,true))return;setKeepScreenOn(false);control.removeCallbacksAndMessages(null);ui.removeCallbacksAndMessages(null);control.post(()->{try{if(player!=null)player.release();}catch(Exception ignored){}finally{try{source.close();}catch(Exception ignored){}thread.quitSafely();released.complete(null);}});}
     static final class AspectSurface extends SurfaceView {
         private int videoWidth=16,videoHeight=9;
         AspectSurface(Context c){super(c);}

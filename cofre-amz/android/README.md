@@ -1,9 +1,16 @@
-# Cofre AMZ — Android 1.1.2
+# Cofre AMZ — Android 1.1.3
 
 Aplicativo nativo offline, Java, Android 8+ (API 26). ID permanente
-`com.amzstudios.cofre`, versionCode 4.
+`com.amzstudios.cofre`, versionCode 5.
 
 ## Recursos
+
+- Navegação Anterior/Próximo no visualizador de vídeos e áudios, com posição
+  na sequência. Mantém a ordem da pasta ou busca exibida, separa vídeos de
+  áudios e ignora pastas/lixeira. As pontas da sequência ficam desativadas.
+  Não avança automaticamente ao terminar. A troca conserva o diálogo e
+  aguarda a liberação do player/leitor anterior antes de criar outro.
+  Toques rápidos durante a liberação escolhem apenas o último destino solicitado.
 
 - Interface nativa em grafite e verde suave, ícones vetoriais, ações na base e
   feedback de toque. Sem biblioteca visual adicional, blur ou animação decorativa contínua.
@@ -104,7 +111,7 @@ de um backup produzido pelo código original v1, lixeira aninhada, restauração
 colisões, movimentos múltiplos atômicos, recuperação errada/de outro cofre,
 rotação do código, restauração por recuperação e marcador de backup adulterado.
 
-Oito testes instrumentados no emulador Android 14 em modo avião exercitam
+Dez testes instrumentados no emulador Android 14 em modo avião exercitam
 criptografia Android, criação e bloqueio, transferência real via DocumentsProvider,
 miniaturas PNG/MP4, grade/lista, seleção, lixeira/restauração/exclusão, recuperação
 pela tela, backup verificado e retirada em árvore com colisões e destino inválido.
@@ -113,6 +120,10 @@ cache, controle de bloqueio durante reprodução e interrupção imediata da imp
 Incluem também reciclagem sem miniatura residual, seleção sem reconstrução da
 Activity, busca/rolagem com 5.000 entradas de metadados, imagem sem cópia no cache,
 proporção horizontal/vertical de vídeo e navegação em PDF de duas páginas.
+A navegação testa ordem, limites, isolamento de pasta/lixeira/tipos, busca com
+vídeo único, toques rápidos, liberação do leitor anterior, retorno à mesma lista
+e bloqueio com reprodução aberta. Há também regressão para fechar a Activity
+durante uma operação pendente, sem tentar remover uma janela já destruída.
 O provedor e os arquivos sintéticos de teste não entram no APK de produção.
 Imagens de QA são geradas apenas com dados fictícios dos testes.
 

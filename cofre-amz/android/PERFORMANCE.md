@@ -1,4 +1,26 @@
-# Desempenho — 1.1.2
+# Desempenho — 1.1.3
+
+## Navegação de mídia na v1.1.3
+
+A sequência guarda somente os metadados dos vídeos (ou áudios) visíveis na
+pasta/busca, sem pré-carregar arquivos. A troca conserva o diálogo e encerra
+o player e o leitor autenticado em seu HandlerThread antes de preparar o
+próximo. Durante a liberação, toques adicionais mudam o destino pendente;
+somente o último é preparado. O fechamento/bloqueio invalida a sequência,
+impedindo que um callback tardio abra outro vídeo. As setas ficam desativadas
+nos extremos, sem reprodução automática do próximo arquivo.
+
+A validação Android usa três MP4s sintéticos, vídeo em outra pasta, item na
+lixeira e documento intercalado. Verifica sequência, toques rápidos, liberação
+do leitor anterior, diálogo preservado, limites, busca com um único vídeo,
+cache sem cópia legível e bloqueio. Nove testes instrumentados, incluindo
+essa navegação, passaram na mesma execução; a regressão de fechamento passou em 9,619 s
+após ajustar o teste para aguardar a destruição assíncrona da Activity.
+
+Também foi corrigida a conclusão tardia de uma operação após fechar a Activity:
+o diálogo de progresso é encerrado na destruição e o callback verifica o ciclo
+de vida antes de acessar janelas. A regressão mantém um trabalho pendente até
+a Activity ser destruída e só então permite sua conclusão.
 
 ## Interface na v1.1.2
 
@@ -19,7 +41,7 @@
 - O tema usa fontes do Android, caminhos vetoriais e formas sólidas; nenhuma
   dependência visual adicional ou animação decorativa contínua foi adicionada.
 
-## Validação da interface
+## Validação da interface na v1.1.2
 
 Em emulador Android 14, modo avião, os oito testes instrumentados passaram
 na compilação final em 134,589 s. A preparação do MP4 sintético pequeno após

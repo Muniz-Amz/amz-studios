@@ -15,7 +15,7 @@ public class MainActivityTest {
     private MainActivity activity;
     private android.app.Instrumentation getInstrumentation(){return InstrumentationRegistry.getInstrumentation();}
     private MainActivity getActivity(){activity=(MainActivity)getInstrumentation().startActivitySync(new Intent(getInstrumentation().getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));return activity;}
-    @After public void finish(){if(activity!=null)getInstrumentation().runOnMainSync(()->activity.finish());}
+    @After public void finish()throws Exception{if(activity!=null){getInstrumentation().runOnMainSync(()->activity.finish());getInstrumentation().waitForIdleSync();((java.util.concurrent.ExecutorService)field(activity,"worker")).awaitTermination(60,java.util.concurrent.TimeUnit.SECONDS);}}
     private Object field(MainActivity a,String name)throws Exception{Field f=MainActivity.class.getDeclaredField(name);f.setAccessible(true);return f.get(a);}
     private void waitForIdleJob(MainActivity a)throws Exception{for(int i=0;i<400;i++){getInstrumentation().waitForIdleSync();if(!(Boolean)field(a,"busy"))return;Thread.sleep(100);}fail("Operation timed out");}
     private void dismiss(MainActivity a)throws Exception{getInstrumentation().runOnMainSync(()->{try{Method m=MainActivity.class.getDeclaredMethod("closeDialogs");m.setAccessible(true);m.invoke(a);}catch(Exception e){throw new RuntimeException(e);}});}
@@ -50,5 +50,12 @@ public class MainActivityTest {
         android.net.Uri uri=android.provider.DocumentsContract.buildDocumentUri("com.amzstudios.cofre.test.documents","source.txt");
         getInstrumentation().runOnMainSync(()->{a.onActivityResult(10,Activity.RESULT_OK,new Intent().setData(uri));try{ProgressDialog progress=(ProgressDialog)field(a,"progress");assertNotNull(progress);progress.getButton(DialogInterface.BUTTON_NEGATIVE).performClick();}catch(Exception e){throw new RuntimeException(e);}});
         waitForIdleJob(a);assertTrue("Original must survive interruption",source.exists());assertNotNull(a.findViewById(R.id.vault_import));VaultEngine vault=(VaultEngine)field(a,"vault");for(VaultEngine.Entry entry:vault.list())if(!entry.folder)vault.verify(entry.id);dismiss(a);source.delete();
+    }
+
+    @Test public void finishDuringQueuedOperationDoesNotDismissDetachedWindow()throws Exception{
+        Context context=getInstrumentation().getTargetContext();VaultEngine.removeTree(new File(context.getFilesDir(),"vault-v1"));MainActivity a=getActivity();getInstrumentation().waitForIdleSync();
+        java.util.concurrent.CountDownLatch gate=new java.util.concurrent.CountDownLatch(1);java.util.concurrent.ExecutorService worker=(java.util.concurrent.ExecutorService)field(a,"worker");worker.execute(()->{try{gate.await();}catch(InterruptedException e){Thread.currentThread().interrupt();}});
+        try{getInstrumentation().runOnMainSync(()->{((EditText)a.findViewById(R.id.vault_password)).setText("Teste fechamento seguro 2026");((EditText)a.findViewById(R.id.vault_confirmation)).setText("Teste fechamento seguro 2026");a.findViewById(R.id.vault_unlock).performClick();a.finish();});for(int i=0;i<100&&!a.isDestroyed();i++){getInstrumentation().waitForIdleSync();Thread.sleep(50);}assertTrue("Activity did not finish",a.isDestroyed());assertNull(field(a,"progress"));}finally{gate.countDown();}
+        assertTrue(worker.awaitTermination(60,java.util.concurrent.TimeUnit.SECONDS));getInstrumentation().waitForIdleSync();assertFalse(((VaultEngine)field(a,"vault")).isUnlocked());assertNull(field(a,"progress"));
     }
 }

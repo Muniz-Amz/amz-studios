@@ -16,4 +16,8 @@
     <item name="vault_new_password" type="id"/>
     <item name="vault_new_confirmation" type="id"/>
     <item name="vault_media_status" type="id"/>
+    <item name="vault_preview_title" type="id"/>
+    <item name="vault_media_previous" type="id"/>
+    <item name="vault_media_next" type="id"/>
+    <item name="vault_media_position" type="id"/>
 </resources>
