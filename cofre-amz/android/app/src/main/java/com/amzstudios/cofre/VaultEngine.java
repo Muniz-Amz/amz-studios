@@ -365,6 +365,7 @@ public final class VaultEngine {
             atomicMove(staged,root); unlock(password);if(recovery==null)markBackupCompleted();
         } finally { removeTree(staged); }
     }
+    /** Only current index references; never scan the gallery, export destinations or orphaned blobs. Trash is still inside the vault. */
     private List<File> backupFiles() {
         List<File> files=new ArrayList<>(); files.add(new File(root,CONFIG)); files.add(new File(root,INDEX));
         if(hasRecovery())files.add(new File(root,RECOVERY));

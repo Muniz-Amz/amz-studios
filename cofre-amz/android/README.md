@@ -1,9 +1,16 @@
-# Cofre AMZ — Android 1.1.3
+# Cofre AMZ — Android 1.1.4
 
 Aplicativo nativo offline, Java, Android 8+ (API 26). ID permanente
-`com.amzstudios.cofre`, versionCode 5.
+`com.amzstudios.cofre`, versionCode 6.
 
 ## Recursos
+
+- Antes e depois de salvar o backup, a tela mostra quantos arquivos ativos e
+  quantos arquivos da lixeira estão incluídos. Cofre vazio é identificado como
+  backup somente da estrutura e dos dados de acesso. As contagens usam o índice
+  no worker; não há leitura de fotos/vídeos nem consulta à galeria para o resumo.
+- A cópia externa agora se chama “Copiar para fora (manter no cofre)”. Mensagens
+  de retirada e cópia explicam sua participação nos próximos backups.
 
 - Navegação Anterior/Próximo no visualizador de vídeos e áudios, com posição
   na sequência. Mantém a ordem da pasta ou busca exibida, separa vídeos de
@@ -104,14 +111,18 @@ junto do SHA-256. Atualize a página do cofre e o link na raiz do site.
 
 ## Validação
 
-30 testes JVM cobrem criptografia por blocos, senha errada, adulteração,
+32 testes JVM cobrem criptografia por blocos, senha errada, adulteração,
 truncamento, bytes extras, hierarquia, ciclos, backup/restauração, zip traversal,
 importação interrompida, erro de destino e alterações na origem. Incluem migração
 de um backup produzido pelo código original v1, lixeira aninhada, restauração com
 colisões, movimentos múltiplos atômicos, recuperação errada/de outro cofre,
 rotação do código, restauração por recuperação e marcador de backup adulterado.
+As regressões de backup conferem o ZIP e restauram o resultado depois de retirar
+arquivos: itens retirados, purgados, órfãos e externos ficam de fora; cópias
+mantidas no cofre e lixeira permanecem. Um backup antigo preserva seu retrato
+anterior e um novo backup do cofre vazio restaura somente estrutura e recuperação.
 
-Dez testes instrumentados no emulador Android 14 em modo avião exercitam
+Onze testes instrumentados no emulador Android 14 em modo avião exercitam
 criptografia Android, criação e bloqueio, transferência real via DocumentsProvider,
 miniaturas PNG/MP4, grade/lista, seleção, lixeira/restauração/exclusão, recuperação
 pela tela, backup verificado e retirada em árvore com colisões e destino inválido.
@@ -124,6 +135,9 @@ A navegação testa ordem, limites, isolamento de pasta/lixeira/tipos, busca com
 vídeo único, toques rápidos, liberação do leitor anterior, retorno à mesma lista
 e bloqueio com reprodução aberta. Há também regressão para fechar a Activity
 durante uma operação pendente, sem tentar remover uma janela já destruída.
+As regressões de retirada individual e em árvore salvam e restauram um novo
+backup pelo fluxo real da Activity, verificam as contagens e a ausência dos
+arquivos retirados. A cópia externa preservada continua presente e legível.
 O provedor e os arquivos sintéticos de teste não entram no APK de produção.
 Imagens de QA são geradas apenas com dados fictícios dos testes.
 

@@ -57,4 +57,28 @@ public class VaultUpgradeTest {
     @Test public void corruptBackupMarkerTriggersReminderWithoutBlockingVault()throws Exception{
         file("","a.txt");backup();v.markBackupCompleted();Files.write(new File(root,"backup.state").toPath(),new byte[]{1,2});v.lock();v.unlock(password);assertTrue(v.needsBackup());assertEquals(0,v.lastBackupAt());
     }
+    @Test public void newBackupExcludesMovedPurgedOrphanAndExternalFilesButKeepsCurrentCopies()throws Exception{
+        VaultEngine.Entry moved=file("","retirada.txt"),copied=file("","copiada.txt"),trash=file("","lixeira.txt"),purged=file("","apagada.txt");
+        byte[] oldBackup=backup(),orphan=Files.readAllBytes(new File(root,moved.id+".bin").toPath());
+        v.markBackupCompleted();
+        // Model a successful verified move, and a copy which intentionally remains inside.
+        ByteArrayOutputStream outside=new ByteArrayOutputStream();v.exportFile(moved.id,outside,null);assertTrue(v.matches(moved.id,new ByteArrayInputStream(outside.toByteArray())));v.delete(moved.id);
+        Files.write(new File(temp,"galeria.txt").toPath(),outside.toByteArray());
+        outside.reset();v.exportFile(copied.id,outside,null);assertTrue(v.matches(copied.id,new ByteArrayInputStream(outside.toByteArray())));
+        v.trash(Arrays.asList(trash.id,purged.id));v.purgeTrash(Collections.singleton(purged.id));assertTrue(v.needsBackup());
+        // Simulate deletion of ciphertext failing after the index was committed.
+        Files.write(new File(root,moved.id+".bin").toPath(),orphan);Files.write(new File(root,"unfinished.part").toPath(),new byte[]{1,2,3});
+        byte[] current=backup();Set<String> names=new HashSet<>();
+        try(java.util.zip.ZipInputStream zip=new java.util.zip.ZipInputStream(new ByteArrayInputStream(current))){java.util.zip.ZipEntry entry;while((entry=zip.getNextEntry())!=null)names.add(entry.getName());}
+        assertEquals(new HashSet<>(Arrays.asList("vault.key","index.enc",copied.id+".bin",trash.id+".bin")),names);
+        VaultEngine restored=new VaultEngine(new File(temp,"current-backup"));
+        try{restored.restore(new ByteArrayInputStream(current),password);assertEquals(2,restored.list().size());assertFalse(restored.get(copied.id).isTrashed());assertTrue(restored.get(trash.id).isTrashed());restored.verify(copied.id);restored.verify(trash.id);assertThrows(IOException.class,()->restored.get(moved.id));assertThrows(IOException.class,()->restored.get(purged.id));}finally{restored.lock();}
+        VaultEngine previous=new VaultEngine(new File(temp,"previous-backup"));
+        try{previous.restore(new ByteArrayInputStream(oldBackup),password);assertEquals(4,previous.list().size());previous.verify(moved.id);}finally{previous.lock();}
+    }
+    @Test public void backupAfterRemovingLastFileRestoresAnEmptyVaultWithRecovery()throws Exception{
+        VaultEngine.Entry removed=file("","ultima.txt");String code=v.createRecoveryKey();v.delete(removed.id);byte[] current=backup();v.markBackupCompleted();assertFalse(v.needsBackup());
+        VaultEngine restored=new VaultEngine(new File(temp,"empty-backup"));
+        try{restored.restoreUsingRecovery(new ByteArrayInputStream(current),code,password);assertTrue(restored.list().isEmpty());assertTrue(restored.hasRecovery());assertFalse(new File(temp,"empty-backup/"+removed.id+".bin").exists());}finally{restored.lock();}
+    }
 }

@@ -1,4 +1,20 @@
-# Desempenho — 1.1.3
+# Desempenho — 1.1.4
+
+## Resumo do backup na v1.1.4
+
+As contagens de arquivos ativos e da lixeira são obtidas no mesmo percurso dos
+metadados usado pelo resumo da interface, no worker. Mostrar o resumo não abre
+fotos/vídeos nem busca dados na galeria. Nenhuma dependência nova foi adicionada;
+o formato, a lista de arquivos incluídos e a verificação do backup são preservados.
+
+Validação desta versão: 32 testes JVM passaram. Dois testes instrumentados
+voltados a backup e retirada passaram no Android 14 em modo avião, em 111,683 s.
+Exercitam retirada individual, cópia mantida, lixeira, retirada de pasta inteira,
+backup vazio com recuperação e restauração dos resultados. Conferem as contagens
+da tela e os arquivos que continuam legíveis no destino externo. A tela de resumo
+foi inspecionada com dados sintéticos, sem cortes nos textos e botões.
+Compilação de produção e lint passaram (zero erros, 35 avisos). APK de 1.208.852
+bytes, versionCode 6, com o mesmo certificado e sem permissão de internet.
 
 ## Navegação de mídia na v1.1.3
 

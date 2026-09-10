@@ -37,6 +37,13 @@ A chave existe em memória enquanto o cofre está aberto.
   limita a extração ao espaço disponível e verifica todos os arquivos antes
   de promover a pasta temporária. Nunca substitui um cofre existente.
 
+O produtor de backup usa exclusivamente `vault.key`, `index.enc`, `recovery.key`
+opcional e ciphertexts referenciados pelo índice atual. Não percorre galeria,
+destinos de exportação ou arquivos órfãos. Retirar ou purgar atualiza esse índice
+antes de remover o ciphertext; mesmo uma falha na exclusão física não inclui
+o arquivo órfão no próximo backup. Cópias mantidas no cofre e a lixeira continuam
+incluídas. Backups existentes não são reescritos após alterações no cofre.
+
 ## Escrita e remoção
 
 Escrita de ciphertext e índice em temporário, fsync e rename. Importações passam

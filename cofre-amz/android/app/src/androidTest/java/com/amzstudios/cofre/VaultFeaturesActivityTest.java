@@ -97,10 +97,33 @@ public class VaultFeaturesActivityTest {
         Uri tree=DocumentsContract.buildTreeDocumentUri("com.amzstudios.cofre.test.documents","export");main(()->activity.onActivityResult(14,Activity.RESULT_OK,new Intent().setData(tree)));waitJob();dismiss();
         assertTrue(vault().list().isEmpty());assertEquals("conteudo um",new String(Files.readAllBytes(new File(destination,"Documentos/um.txt").toPath()),"UTF-8"));assertEquals("conteudo dois",new String(Files.readAllBytes(new File(destination,"dois (2).txt").toPath()),"UTF-8"));assertEquals("preexistente",new String(Files.readAllBytes(new File(destination,"dois.txt").toPath()),"UTF-8"));
         assertTrue(vault().needsBackup());assertNotNull(activity.findViewById(R.id.vault_backup_reminder));
+        // A new backup after withdrawing the whole tree must not bring those files back.
+        invoke("saveBackup");assertTrue(((TextView)dialog().findViewById(android.R.id.message)).getText().toString().contains("Nenhum arquivo para incluir"));dismiss();
+        main(()->activity.onActivityResult(12,Activity.RESULT_OK,new Intent().setData(document)));waitJob();dismiss();
+        File emptyRoot=new File(context.getCacheDir(),"test-empty-backup-"+UUID.randomUUID());VaultEngine empty=new VaultEngine(emptyRoot);
+        try(InputStream in=new FileInputStream(backup)){empty.restore(in,"Nova senha offline 2026".toCharArray());assertTrue(empty.list().isEmpty());assertTrue(empty.hasRecovery());}finally{empty.lock();VaultEngine.removeTree(emptyRoot);}
+        assertEquals("conteudo um",new String(Files.readAllBytes(new File(destination,"Documentos/um.txt").toPath()),"UTF-8"));
         // A rejected tree must preserve every original in the cofre.
         VaultEngine.Entry retained=vault().importFile(new ByteArrayInputStream(new byte[]{1,2,3}),"preservado.bin","application/octet-stream","",null);invoke("showExplorer");set("pendingExports",new ArrayList<>(Collections.singletonList(retained.id)));
         Uri invalid=DocumentsContract.buildTreeDocumentUri("com.amzstudios.cofre.test.documents","invalid");main(()->activity.onActivityResult(14,Activity.RESULT_OK,new Intent().setData(invalid)));waitJob();dismiss();vault().verify(retained.id);assertEquals(1,vault().list().size());
         invoke("requestLock");waitJob();main(()->{((EditText)activity.findViewById(R.id.vault_password)).setText("Nova senha offline 2026");activity.findViewById(R.id.vault_unlock).performClick();});waitJob();assertTrue(vault().isUnlocked());
+    }
+
+    @Test public void backupAfterIndividualMoveKeepsOnlyCurrentVaultFiles()throws Exception{
+        VaultEngine.Entry moved=add("","Retirada.txt","foto retirada"),copied=add("","Copiada.txt","foto copiada"),trash=add("","Lixeira.txt","foto na lixeira");seed.trash(Collections.singleton(trash.id));open();
+        File outside=new File(context.getFilesDir(),"fixture-export");assertTrue(outside.mkdirs());
+        Uri movedUri=DocumentsContract.buildDocumentUri("com.amzstudios.cofre.test.documents","export/retirada.txt"),copiedUri=DocumentsContract.buildDocumentUri("com.amzstudios.cofre.test.documents","export/copiada.txt");
+        set("pendingId",copied.id);set("removeOnExport",false);main(()->activity.onActivityResult(11,Activity.RESULT_OK,new Intent().setData(copiedUri)));waitJob();
+        assertTrue(((TextView)dialog().findViewById(android.R.id.message)).getText().toString().contains("continua no cofre"));dismiss();vault().verify(copied.id);
+        set("pendingId",moved.id);set("removeOnExport",true);main(()->activity.onActivityResult(11,Activity.RESULT_OK,new Intent().setData(movedUri)));waitJob();
+        assertTrue(((TextView)dialog().findViewById(android.R.id.message)).getText().toString().contains("Não entrará nos novos backups"));dismiss();assertThrows(IOException.class,()->vault().get(moved.id));
+        invoke("saveBackup");AlertDialog confirmation=dialog();String message=((TextView)confirmation.findViewById(android.R.id.message)).getText().toString();assertTrue(message,message.contains("Meus arquivos: 1 arquivo"));assertTrue(message,message.contains("Lixeira: 1 arquivo"));
+        main(()->{View decor=confirmation.getWindow().getDecorView();Bitmap bitmap=Bitmap.createBitmap(decor.getWidth(),decor.getHeight(),Bitmap.Config.ARGB_8888);decor.draw(new Canvas(bitmap));try(FileOutputStream out=new FileOutputStream(new File(activity.getExternalFilesDir(null),"test-v114-backup.png"))){bitmap.compress(Bitmap.CompressFormat.PNG,100,out);}catch(IOException e){throw new RuntimeException(e);}finally{bitmap.recycle();}});dismiss();
+        Uri backupUri=DocumentsContract.buildDocumentUri("com.amzstudios.cofre.test.documents","destination.txt");main(()->activity.onActivityResult(12,Activity.RESULT_OK,new Intent().setData(backupUri)));waitJob();
+        String saved=((TextView)dialog().findViewById(android.R.id.message)).getText().toString();assertTrue(saved,saved.contains("Meus arquivos: 1 arquivo"));dismiss();assertFalse(vault().needsBackup());
+        File restoredRoot=new File(context.getCacheDir(),"test-current-backup-"+UUID.randomUUID());VaultEngine restored=new VaultEngine(restoredRoot);
+        try(InputStream in=new FileInputStream(new File(context.getFilesDir(),"fixture-destination.txt"))){restored.restore(in,password.toCharArray());assertEquals(2,restored.list().size());assertThrows(IOException.class,()->restored.get(moved.id));assertFalse(restored.get(copied.id).isTrashed());assertTrue(restored.get(trash.id).isTrashed());restored.verify(copied.id);restored.verify(trash.id);}finally{restored.lock();VaultEngine.removeTree(restoredRoot);}
+        assertEquals("foto retirada",new String(Files.readAllBytes(new File(outside,"retirada.txt").toPath()),"UTF-8"));assertEquals("foto copiada",new String(Files.readAllBytes(new File(outside,"copiada.txt").toPath()),"UTF-8"));
     }
 
     @Test public void lightweightLayoutRecyclesCellsAndKeepsSelectionScroll()throws Exception{
