@@ -1,4 +1,4 @@
-# Formato e limites de segurança — aplicativo 1.2.0
+# Formato e limites de segurança — aplicativo 1.3.0
 
 O diretório privado `files/vault-v1` contém metadados e conteúdo criptografados.
 Não armazena senha, derivação da senha ou chave mestre em texto puro.
@@ -79,16 +79,62 @@ incluídas. Backups existentes não são reescritos após alterações no cofre.
 
 Escrita de ciphertext e índice em temporário, fsync e rename. Importações passam
 por leitura autenticada antes de entrar no índice. Antes de excluir o documento
-original, a Activity sincroniza também o diretório do cofre e relê a origem para
+original, o coordenador de transferência sincroniza o diretório do cofre e relê a origem para
 conferir tamanho e SHA-256. Falhas conservam a origem ou uma cópia cifrada confirmada.
 Não transforme erro de permissão para excluir em mensagem de sucesso.
 
 Enviar à lixeira altera somente o índice. Não há expiração automática.
 Restaurar resolve colisões sem sobrescrever entradas existentes. Exclusão definitiva
 e retirada verificada atualizam o índice antes de apagar o ciphertext. Grupos já
-excluídos separadamente permanecem independentes. Ciphertexts órfãos são limpos na
-próxima abertura bem-sucedida. Nunca apague dados para resolver erro de senha ou
+excluídos separadamente permanecem independentes. Ciphertexts órfãos e parciais
+são preservados ao desbloquear; abrir o app não faz limpeza destrutiva. Nunca apague dados para resolver erro de senha ou
 integridade. A v1.1 preserva conteúdos v1; apenas novas escritas de índice usam v2.
+
+## Retomada e confirmação de gravação
+
+`operation.state` usa AES-GCM por finalidade para o journal da operação, contendo
+URIs, UUIDs e metadados, sem conteúdo legível, senha ou chave mestre persistida.
+O engine mantém checkpoints cifrados em `transfers/` e sincroniza o progresso a
+cada 8 MiB. Depois de uma interrupção, valida o prefixo autenticado e o compara
+com a origem reaberta antes de descartar uma cauda não confirmada. UUIDs estáveis
+tornam a confirmação idempotente; reutilizar o UUID com outra origem é recusado.
+
+A retirada só acrescenta bytes depois de comparar todo o prefixo existente com
+o leitor autenticado. Após fsync, relê e compara todo o resultado; para pastas,
+confere novamente os descendentes antes de remover o grupo. Uma alteração desde
+a pausa impede remover arquivos novos. Falha de gravação do índice bloqueia a
+sessão para impedir que uma cópia antiga em memória sobrescreva o estado gravado.
+Leituras sequenciais, comparações e leitores de mídia verificam revogação de sessão.
+
+O serviço mantém as chaves apenas na memória enquanto a operação autorizada está
+ativa. Ao terminar ou pausar, bloqueia. O app precisa de nova autenticação após
+encerramento do processo; não guarda segredo de desbloqueio no journal. Notificação
+e resultado na tela bloqueada usam texto genérico, sem nomes privados.
+
+`playback.state` guarda posição, duração e vínculo UUID/digest sob a finalidade
+`playback-resume-v1`, limitado a 2048 registros. É metadado opcional: dano impede
+a retomada da posição, mas não impede abrir conteúdo válido. Não entra no backup.
+
+## Backup incremental
+
+`VaultBackupSet` aceita somente os arquivos da lista atual autenticada. Objetos
+de até 4 MiB têm digest do ciphertext no nome, sufixo aleatório e são imutáveis.
+Cada objeto novo passa por fechamento, sincronização e releitura. Objetos existentes
+são relidos antes de reutilizar; arquivos parciais/danificados não são sobrescritos.
+O manifesto cifrado autentica a lista, ordem, tamanhos e envelopes; a confirmação
+que vincula seu digest é gravada por último. A pasta tem identidade autenticada
+por chave mestre e recusa mistura entre cofres.
+
+Restauração verifica manifesto, objetos, envelope, índice e conteúdo integral antes
+de promover um destino vazio. O produtor ZIP interno transmite seu resultado final
+antes da promoção; uma falha tardia não pode virar restauração bem-sucedida. Uma
+versão mais recente danificada não provoca retorno silencioso a uma versão antiga.
+O usuário pode selecionar explicitamente uma versão anterior.
+
+Versões anteriores conservam arquivos retirados depois e os dados de acesso da
+época. Não há coleta automática de objetos antigos; o tamanho da pasta de backup
+pode crescer. Um invasor com acesso à pasta pode apagar versões inteiras: sem um
+registro confiável externo, não há detecção garantida de remoção/rollback completo.
 
 ## Limites
 

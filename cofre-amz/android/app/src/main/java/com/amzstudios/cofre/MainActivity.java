@@ -21,13 +21,17 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class MainActivity extends Activity {
-    private static final int PICK_FILES=10, SAVE_FILE=11, SAVE_BACKUP=12, RESTORE=13, EXPORT_MANY=14, SAVE_RECOVERY=15;
+    private static final int PICK_FILES=10, SAVE_FILE=11, SAVE_BACKUP=12, RESTORE=13, EXPORT_MANY=14, SAVE_RECOVERY=15, BACKUP_SET=16, RESTORE_SET=17;
     private static final int BG=VaultUi.BG, SURFACE=VaultUi.SURFACE, BORDER=VaultUi.BORDER, INK=VaultUi.INK, MUTED=VaultUi.MUTED, ACCENT=VaultUi.ACCENT;
     private static final long LOCK_DELAY=120000;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private final Handler ui=new Handler(Looper.getMainLooper());
     private VaultEngine vault;
     private VaultProfiles profiles;
+    private VaultTransferService.Session transferSession;
+    private CompletableFuture<Void> mediaRelease=CompletableFuture.completedFuture(null);
+    private int sortMode;
+    private final Runnable transferPoll=()->pollTransfer();
     private VaultEngine pickerVault;
     private int accessEpoch,pickerEpoch;
     private boolean restoreAlternate;
@@ -83,10 +87,10 @@ public class MainActivity extends Activity {
         super.onCreate(saved);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,WindowManager.LayoutParams.FLAG_SECURE);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-        profiles=new VaultProfiles(getFilesDir());vault=profiles.active();
+        transferSession=VaultTransferService.active();profiles=transferSession==null?new VaultProfiles(getFilesDir()):transferSession.profiles;vault=profiles.active();
         gridMode=getPreferences(MODE_PRIVATE).getBoolean("grid",true);
         thumbnails=new ThumbnailLoader(vault,new File(getCacheDir(),"thumb-work"),worker,ui,()->unlocked&&!busy&&!mediaActive&&!scrolling);
-        clearPreviews(); showLocked();
+        clearPreviews();if(transferSession!=null)showTransfer();else showLocked();
     }
     @Override protected void onResume() {
         super.onResume(); stopped=false;
@@ -102,16 +106,68 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() {
         unlocked=false;closeProgress();closeDialogs();closePreview();ui.removeCallbacksAndMessages(null);filterGeneration++;clearRestorePassword();
         thumbnails.close();pendingRecovery=null;summary=null;
-        if(!worker.isShutdown())worker.execute(profiles::lock);
+        if(!ownsTransfer()&&!worker.isShutdown())worker.execute(this::lockProfiles);
         worker.shutdown(); super.onDestroy();
     }
     private void armLock() { ui.removeCallbacks(timeout); if(!mediaActive)ui.postDelayed(timeout,LOCK_DELAY); }
+    private void rememberRelease(VaultMediaView player){mediaRelease=CompletableFuture.allOf(mediaRelease,player.releaseFuture());}
+    private void lockProfiles(){mediaRelease.join();profiles.lock();}
+    private boolean ownsTransfer(){return transferSession!=null&&transferSession.running;}
+    private void prepareTransfer(Job prepare){
+        if(new VaultTransfers(this,vault).pending()){showPendingTransfer();return;}
+        closePreview();run("Preparando transferência…",()->{mediaRelease.join();prepare.execute();},this::startTransfer,this::error);
+    }
+    private void startTransfer(){
+        if(!unlocked||busy)return;
+        closePreview();run("Preparando retomada…",()->mediaRelease.join(),()->{
+            if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED&&!getPreferences(MODE_PRIVATE).getBoolean("notification-asked",false)){
+                getPreferences(MODE_PRIVATE).edit().putBoolean("notification-asked",true).apply();requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},90);return;
+            }launchPreparedTransfer();
+        },this::error);
+    }
+    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){super.onRequestPermissionsResult(request,permissions,results);if(request==90&&unlocked&&!busy&&!stopped)launchPreparedTransfer();}
+    private void launchPreparedTransfer(){
+        if(!unlocked||busy||stopped)return;
+        try{transferSession=VaultTransferService.start(this,profiles);showTransfer();}
+        catch(Exception error){notice("Operação salva para retomar",friendly(error));}
+    }
+    private void showTransfer(){
+        ui.removeCallbacks(timeout);closeDialogs();closePreview();thumbnails.clear();all.clear();visible.clear();selected.clear();summary=null;unlocked=false;busy=true;
+        frame();LinearLayout center=column();center.setGravity(Gravity.CENTER);page.addView(center,new LinearLayout.LayoutParams(-1,-1));add(center,text("Operação em andamento",25,INK),0);
+        TextView info=text("Você pode apagar a tela. O progresso será salvo para retomar caso haja uma interrupção. Para acessar os arquivos novamente, desbloqueie ao terminar.",15,MUTED);add(center,info,18);
+        TextView amount=text("Verificando os dados…",14,ACCENT);amount.setId(R.id.vault_transfer_status);add(center,amount,24);
+        Button pause=button("Pausar com segurança",false);pause.setId(R.id.vault_transfer_pause);add(center,pause,18);pause.setOnClickListener(v->{if(transferSession!=null)transferSession.paused=true;pause.setEnabled(false);pause.setText("Salvando o progresso…");});
+        ui.removeCallbacks(transferPoll);ui.post(transferPoll);
+    }
+    private void pollTransfer(){
+        if(isDestroyed()||isFinishing()||transferSession==null)return;
+        if(transferSession.running){TextView info=findViewById(R.id.vault_transfer_status);if(info!=null)info.setText(size(transferSession.bytes)+" conferidos nesta etapa");ui.postDelayed(transferPoll,400);return;}
+        String result=transferSession.result;transferSession=null;busy=false;unlocked=false;lockAfter=false;showLocked();if(!stopped)notice("Operação do cofre",result);
+    }
+    private void showPendingTransfer(){
+        if(!unlocked||busy)return;
+        track(new AlertDialog.Builder(this).setTitle("Operação pendente").setMessage("Há uma operação que ainda não terminou. Retomar confere os dados já gravados antes de continuar. Encerrar preserva os arquivos concluídos e os originais; destinos externos podem conter cópias parciais.")
+            .setPositiveButton("Retomar",(d,w)->startTransfer()).setNegativeButton("Depois",null).setNeutralButton("Encerrar operação",(d,w)->{
+                track(new AlertDialog.Builder(this).setTitle("Encerrar esta operação?").setMessage("O progresso parcial da importação será removido. Os arquivos já protegidos, os originais e os backups válidos serão mantidos. Cópias parciais fora do app devem ser conferidas no destino.").setNegativeButton("Voltar",null).setPositiveButton("Encerrar",(dialog,which)->run("Encerrando operação…",()->new VaultTransfers(this,vault).discard(),this::showExplorer,this::error)).show());
+            }).show());
+    }
+    private void persistGrant(Uri uri,int flags){try{getContentResolver().takePersistableUriPermission(uri,flags&(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION));}catch(SecurityException ignored){/* The provider may allow this session only. A failed retry preserves both sides. */}}
+    private int compareEntries(VaultEngine.Entry a,VaultEngine.Entry b){
+        if(a.folder!=b.folder)return a.folder?-1:1;int order=0;
+        if(sortMode==1)order=Long.compare(b.size,a.size);else if(sortMode==2)order=Long.compare(b.modified,a.modified);else if(sortMode==3)order=a.mime.compareToIgnoreCase(b.mime);
+        if(order==0)order=a.name.compareToIgnoreCase(b.name);return order==0?a.id.compareTo(b.id):order;
+    }
+    private void chooseSort(){
+        String[] orders={"Nome · A–Z","Maiores primeiro","Mais recentes","Tipo de arquivo"};
+        track(new AlertDialog.Builder(this).setTitle("Ordenar arquivos").setSingleChoiceItems(orders,sortMode,(d,which)->{sortMode=which;getPreferences(MODE_PRIVATE).edit().putInt(profiles.isPrimary()?"sort":"sort-alternate",which).apply();d.dismiss();refresh();}).setNegativeButton("Fechar",null).show());
+    }
     private void requestLock() {
+        if(ownsTransfer()){unlocked=false;closeDialogs();closePreview();all.clear();visible.clear();thumbnails.clear();return;}
         accessEpoch++;pendingId=null;removeOnExport=false;clearRestorePassword();
         ui.removeCallbacks(timeout);ui.removeCallbacks(searchRefresh);ui.removeCallbacks(resumeThumbnails);filterGeneration++; unlocked=false; all.clear(); visible.clear();selected.clear();selectionMode=false;trashView=false;pendingRecovery=null;pendingExports.clear();summary=null;thumbnails.clear();
         closeDialogs(); closePreview();
         if(busy) { lockAfter=true; return; }
-        if(!worker.isShutdown())worker.execute(profiles::lock); folder=""; showLocked();
+        if(!worker.isShutdown())worker.execute(this::lockProfiles); folder=""; showLocked();
     }
     private void frame() {
         page=new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL); page.setPadding(dp(20),dp(12),dp(20),dp(12)); page.setBackgroundColor(BG);
@@ -134,9 +190,9 @@ public class MainActivity extends Activity {
         show.setOnCheckedChangeListener((b,on)->{password.setTransformationMethod(on?HideReturnsTransformationMethod.getInstance():PasswordTransformationMethod.getInstance());if(confirmation!=null)confirmation.setTransformationMethod(on?HideReturnsTransformationMethod.getInstance():PasswordTransformationMethod.getInstance());});add(form,show,6);
         Button enter=button(exists?"Desbloquear cofre":"Criar meu cofre",true);enter.setId(R.id.vault_unlock);enter.setCompoundDrawables(null,null,VaultUi.icon(this,"arrow",BG,20),null);add(form,enter,10);enter.setOnClickListener(v->authenticate());
         status=text("",13,0xffffb4ab);add(form,status,2);password.setOnEditorActionListener((v,a,event)->{if(exists){authenticate();return true;}return false;});
-        if(!exists){add(content,text("Use pelo menos 10 caracteres. Guarde sua senha e faça um backup antes de trocar de celular ou desinstalar o app.",13,MUTED),18);Button restore=tabButton("Restaurar backup .amzcofre",false);add(content,restore,8);restore.setOnClickListener(v->askRestore());}
+        if(!exists){add(content,text("Use pelo menos 10 caracteres. Guarde sua senha e faça um backup antes de trocar de celular ou desinstalar o app.",13,MUTED),18);Button restore=tabButton("Restaurar backup",false);add(content,restore,8);restore.setOnClickListener(v->askRestore());}
         else{if(profiles.hasRecovery()){Button recover=tabButton("Esqueci a senha · Recuperar acesso",false);recover.setId(R.id.vault_recover);add(content,recover,12);recover.setOnClickListener(v->recoverAccess());}Button help=tabButton("Sobre minha senha e meus arquivos",false);add(content,help,8);help.setOnClickListener(v->help());}
-        TextView privacy=text("Sem conta. Sem conexão. Só você e seus arquivos.",12,MUTED);privacy.setGravity(Gravity.CENTER);add(content,privacy,22);TextView version=text("Cofre AMZ · v1.2.0",11,MUTED);version.setGravity(Gravity.CENTER);add(content,version,8);
+        TextView privacy=text("Sem conta. Sem conexão. Só você e seus arquivos.",12,MUTED);privacy.setGravity(Gravity.CENTER);add(content,privacy,22);TextView version=text("Cofre AMZ · v1.3.0",11,MUTED);version.setGravity(Gravity.CENTER);add(content,version,8);
     }
     private void authenticate() {
         if(busy) return;
@@ -156,7 +212,8 @@ public class MainActivity extends Activity {
         thumbnails=new ThumbnailLoader(vault,new File(getCacheDir(),"thumb-work"),worker,ui,()->unlocked&&!busy&&!mediaActive&&!scrolling);
         all.clear();visible.clear();folder="";pendingId=null;pendingExports.clear();pendingRecovery=null;selected.clear();selectionMode=false;trashView=false;
         gridMode=getPreferences(MODE_PRIVATE).getBoolean(profiles.isPrimary()?"grid":"grid-alternate",true);
-        unlocked=true;showExplorer();armLock();
+        sortMode=getPreferences(MODE_PRIVATE).getInt(profiles.isPrimary()?"sort":"sort-alternate",0);
+        unlocked=true;showExplorer();armLock();if(new VaultTransfers(this,vault).pending())showPendingTransfer();
     }
     private void showExplorer() {
         if(!vault.isUnlocked()||isFinishing()||isDestroyed())return;
@@ -221,7 +278,7 @@ public class MainActivity extends Activity {
         Runnable filter=()->{
             List<VaultEngine.Entry> result=new ArrayList<>();int count=0;
             for(VaultEngine.Entry e:snapshot){if(!e.folder&&!e.isTrashed())count++;boolean eligible=trash?e.isTrashed()&&e.id.equals(e.trashRoot):!e.isTrashed();if(eligible&&(query.isEmpty()?(trash||e.parent.equals(currentFolder)):e.name.toLowerCase(Locale.ROOT).contains(query)))result.add(e);}
-            Collections.sort(result,(a,b)->a.folder!=b.folder?(a.folder?-1:1):a.name.compareToIgnoreCase(b.name));int fileCount=count;
+            Collections.sort(result,(a,b)->compareEntries(a,b));int fileCount=count;
             Runnable apply=()->{if(!unlocked||epoch!=filterGeneration||isDestroyed())return;visible=result;counter.setText(size(summary==null?0:summary.stored)+" no cofre");freeSpace.setText(fileCount+" arquivo"+(fileCount==1?"":"s")+" · "+size(summary==null?0:summary.free)+" livres");list.setNumColumns(visible.isEmpty()?1:gridMode?Math.max(2,getResources().getConfiguration().screenWidthDp/180):1);adapter.notifyDataSetChanged();};
             if(Looper.myLooper()==Looper.getMainLooper())apply.run();else ui.post(apply);
         };
@@ -269,8 +326,8 @@ public class MainActivity extends Activity {
 
     private void options(View anchor){
         if(!unlocked||busy)return;
-        PopupMenu menu=new PopupMenu(this,anchor);String[] labels={"Salvar backup criptografado","Chave de recuperação","Armazenamento","Alterar senha","Ajuda e informações"};for(String label:labels)menu.getMenu().add(label);if(profiles.isPrimary())menu.getMenu().add("Senha alternativa");
-        menu.setOnMenuItemClickListener(item->{String label=item.getTitle().toString();if(label.equals(labels[0]))saveBackup();else if(label.equals(labels[1]))createRecovery();else if(label.equals(labels[2]))storageInfo();else if(label.equals(labels[3]))changePassword();else if(label.equals("Senha alternativa"))configureAlternate();else help();return true;});menu.show();
+        PopupMenu menu=new PopupMenu(this,anchor);String[] labels={"Salvar backup criptografado","Chave de recuperação","Armazenamento","Alterar senha","Ajuda e informações"};for(String label:labels)menu.getMenu().add(label);menu.getMenu().add("Ordenar arquivos");if(new VaultTransfers(this,vault).pending())menu.getMenu().add("Operação pendente");if(profiles.isPrimary())menu.getMenu().add("Senha alternativa");
+        menu.setOnMenuItemClickListener(item->{String label=item.getTitle().toString();if(label.equals(labels[0]))saveBackup();else if(label.equals(labels[1]))createRecovery();else if(label.equals(labels[2]))storageInfo();else if(label.equals(labels[3]))changePassword();else if(label.equals("Senha alternativa"))configureAlternate();else if(label.equals("Ordenar arquivos"))chooseSort();else if(label.equals("Operação pendente"))showPendingTransfer();else help();return true;});menu.show();
     }
     private void configureAlternate(){
         if(!unlocked||busy||!profiles.isPrimary())return;
@@ -336,32 +393,11 @@ public class MainActivity extends Activity {
         track(new AlertDialog.Builder(this).setTitle("Retirar itens do cofre").setMessage("Escolha uma pasta de destino. Você pode criar uma subpasta pelo seletor do Android.\n\nCada arquivo será conferido antes da remoção do cofre. Pastas são retiradas com seus arquivos, mantendo a organização.").setNegativeButton("Cancelar",null).setPositiveButton("Escolher pasta",(d,w)->launch(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).putExtra(Intent.EXTRA_LOCAL_ONLY,true).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION),EXPORT_MANY)).show());
     }
     private void exportMany(Uri tree,List<String> ids){
-        int[] success={0},failed={0};StringBuilder details=new StringBuilder();
-        run("Retirando os itens selecionados…",()->{
-            Uri target=DocumentsContract.buildDocumentUriUsingTree(tree,DocumentsContract.getTreeDocumentId(tree));
-            for(VaultEngine.Entry root:vault.selectionRoots(ids)){
-                if(cancelRequested)break;
-                try{exportBranch(root,target);if(cancelRequested)throw new CancellationException();vault.delete(root.id);success[0]++;}
-                catch(Exception e){failed[0]++;details.append("\n• ").append(root.name).append(": preservado no cofre. ").append(friendly(e));}
-            }
-        },()->{selectionDone();notice(cancelRequested?"Retirada interrompida":"Retirada concluída",success[0]+" item(ns) retirado(s). "+failed[0]+" preservado(s)."+details+(failed[0]>0?"\n\nOs destinos com falha podem conter cópias parciais.":"")+"\n\nItens retirados não entram nos novos backups. Itens preservados continuam no cofre. Backups antigos permanecem como foram salvos.");},this::error);
-    }
-    private void exportBranch(VaultEngine.Entry entry,Uri parent)throws Exception{
-        if(cancelRequested)throw new CancellationException();operationProgress.phase("Retirando · "+entry.name);
-        Uri target=createDestination(parent,entry.folder?DocumentsContract.Document.MIME_TYPE_DIR:entry.mime,entry.name);
-        if(entry.folder){List<VaultEngine.Entry> children=new ArrayList<>();for(VaultEngine.Entry e:vault.list())if(!e.isTrashed()&&e.parent.equals(entry.id))children.add(e);for(VaultEngine.Entry child:children)exportBranch(child,target);}
-        else{try(OutputStream out=write(target)){vault.exportFile(entry.id,out,operationProgress);}try(InputStream in=read(target)){if(!vault.matches(entry.id,in,operationProgress))throw new IOException("A verificação do destino falhou.");}}
-    }
-    private Uri createDestination(Uri parent,String mime,String name)throws Exception{
-        Uri children=DocumentsContract.buildChildDocumentsUriUsingTree(parent,DocumentsContract.getDocumentId(parent));Set<String> names=new HashSet<>();
-        try(Cursor c=getContentResolver().query(children,new String[]{DocumentsContract.Document.COLUMN_DISPLAY_NAME},null,null,null)){if(c==null)throw new IOException("Não foi possível conferir a pasta de destino.");while(c.moveToNext())names.add(c.getString(0).toLowerCase(Locale.ROOT));}
-        String candidate=name;int suffix=2,dot=name.lastIndexOf('.');boolean folderType=DocumentsContract.Document.MIME_TYPE_DIR.equals(mime);String base=dot>0&&!folderType?name.substring(0,dot):name,ext=dot>0&&!folderType?name.substring(dot):"";
-        while(names.contains(candidate.toLowerCase(Locale.ROOT)))candidate=base+" ("+(suffix++)+")"+ext;
-        Uri created=DocumentsContract.createDocument(getContentResolver(),parent,mime.isEmpty()?"application/octet-stream":mime,candidate);if(created==null)throw new IOException("Não foi possível criar o arquivo de destino.");return created;
+        prepareTransfer(()->new VaultTransfers(this,vault).prepareExport(ids,tree,true,true));
     }
     private void storageInfo(){
         if(!unlocked)return;
-        run("Consultando armazenamento…",()->{},()->{Summary info=summary;if(info==null)return;notice("Armazenamento do cofre","Cofre: "+size(info.stored)+"\nNa lixeira: "+size(info.trash)+"\nLivre no aparelho: "+size(info.free)+"\n\nÚltimo backup confirmado: "+(info.lastBackup==0?"ainda não há":DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT,new Locale("pt","BR")).format(new Date(info.lastBackup)))+"\n"+(info.needsBackup?"Há alterações ainda sem backup.":"Nenhuma alteração pendente de backup.")+"\n\nPara mover um arquivo, é necessário espaço livre para uma cópia criptografada dele antes de remover o original. Backups precisam de espaço para o cofre inteiro no destino.");},this::error);
+        run("Consultando armazenamento…",()->{},()->{Summary info=summary;if(info==null)return;notice("Armazenamento do cofre","Cofre: "+size(info.stored)+"\nNa lixeira: "+size(info.trash)+"\nLivre no aparelho: "+size(info.free)+"\n\nÚltimo backup confirmado: "+(info.lastBackup==0?"ainda não há":DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT,new Locale("pt","BR")).format(new Date(info.lastBackup)))+"\n"+(info.needsBackup?"Há alterações ainda sem backup.":"Nenhuma alteração pendente de backup.")+"\n\nPara mover um arquivo, é necessário espaço livre para uma cópia criptografada dele antes de remover o original. O primeiro backup precisa de espaço para o cofre inteiro no destino. Backups em pasta seguintes reaproveitam blocos verificados e preservam as versões antigas.");},this::error);
     }
     private void chooseFiles(){
         track(new AlertDialog.Builder(this).setTitle("Mover para o cofre").setMessage("Escolha os arquivos no aparelho. O app criptografa, confere a gravação e só então pede a remoção do original.\n\nSe o local de origem não permitir apagar, o app avisará que o original continua lá.").setNegativeButton("Cancelar",null).setPositiveButton("Escolher arquivos",(d,w)->{
@@ -370,7 +406,7 @@ public class MainActivity extends Activity {
         }).show());
     }
     private void launch(Intent intent,int code){
-        pickerVault=unlocked?vault:null;pickerEpoch=accessEpoch;external=true;
+        intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION|Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);pickerVault=unlocked?vault:null;pickerEpoch=accessEpoch;external=true;
         try{startActivityForResult(intent,code);}catch(ActivityNotFoundException e){external=false;notice("Seletor indisponível","Ative o aplicativo Arquivos do Android para escolher o destino.");}
     }
     private boolean removeOnExport;
@@ -380,6 +416,12 @@ public class MainActivity extends Activity {
         launch(i,SAVE_FILE);
     }
     private void saveBackup(){
+        if(!unlocked||busy)return;
+        track(new AlertDialog.Builder(this).setTitle("Salvar backup").setMessage("O backup em pasta pode ser pausado e retomado. Novas versões reaproveitam os blocos já verificados. Somente o conteúdo atual do cofre, incluindo a lixeira, entra na versão mais recente. Arquivos retirados ficam somente nas versões antigas já salvas.")
+            .setPositiveButton("Backup em pasta",(d,w)->launch(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).putExtra(Intent.EXTRA_LOCAL_ONLY,true),BACKUP_SET))
+            .setNeutralButton("Arquivo .amzcofre",(d,w)->saveLegacyBackup()).setNegativeButton("Cancelar",null).show());
+    }
+    private void saveLegacyBackup(){
         if(!unlocked||summary==null)return;
         track(new AlertDialog.Builder(this).setTitle("O que entra neste backup").setMessage(backupContents()+"\n\nSomente o conteúdo atual do cofre. Fotos e vídeos da galeria, arquivos retirados e itens excluídos definitivamente não entram. A lixeira continua dentro do cofre.\n\nCopiar para fora mantém o arquivo no cofre e no backup. Para retirá-lo, use Mover para fora do cofre.\n\nReserve espaço para todo o cofre e mantenha o app aberto até concluir. Backups antigos não são alterados; conservam os arquivos, a senha e a chave da data em que foram salvos.").setNegativeButton("Cancelar",null).setPositiveButton("Escolher destino",(d,w)->{
             Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/octet-stream").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"Cofre-AMZ-"+new java.text.SimpleDateFormat("yyyy-MM-dd-HHmm",Locale.ROOT).format(new Date())+".amzcofre");launch(i,SAVE_BACKUP);
@@ -391,11 +433,23 @@ public class MainActivity extends Activity {
     }
     private String backupFileCount(int count){return count+" arquivo"+(count==1?"":"s");}
     private void askRestore(){askRestore(false);}
+    private void chooseBackupVersion(Uri uri){
+        DocumentStore store=new DocumentStore(this,uri);List<VaultBackupSet.SnapshotInfo> versions=new ArrayList<>();
+        run("Conferindo versões do backup…",()->versions.addAll(VaultBackupSet.snapshots(store)),()->{
+            if(restorePassword==null)return;
+            if(versions.isEmpty()){clearRestorePassword();notice("Nenhuma versão concluída","A pasta não contém uma versão concluída. Os dados de um backup interrompido podem ser aproveitados ao retomar no aparelho de origem.");return;}
+            String[] labels=new String[Math.min(versions.size(),100)];for(int i=0;i<labels.length;i++){VaultBackupSet.SnapshotInfo v=versions.get(i);labels[i]=(i==0?"Mais recente · ":"")+DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT,new Locale("pt","BR")).format(new Date(v.createdAt))+(v.complete?"":" · incompleta");}
+            AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Escolha a versão para restaurar").setItems(labels,(d,which)->{
+                if(restorePassword==null)return;char[] pass=restorePassword;String code=restoreRecovery;boolean alternate=restoreAlternate;restorePassword=null;restoreRecovery=null;restoreAlternate=false;String snapshot=versions.get(which).name;
+                run("Restaurando e verificando arquivos…",()->{try{profiles.restoreSet(store,snapshot,pass,code,alternate,operationProgress);}finally{Arrays.fill(pass,'\0');}},()->{enteredVault();notice("Cofre restaurado","Todos os arquivos da versão escolhida foram verificados. Versões antigas podem conter arquivos que você retirou depois.");},this::error);
+            }).setNegativeButton("Cancelar",null).create();dialog.setOnDismissListener(d->clearRestorePassword());track(dialog);dialog.show();
+        },failure->{clearRestorePassword();error(failure);});
+    }
     private void askRestore(boolean alternate){
-        LinearLayout fields=column();CheckBox useCode=new CheckBox(this);useCode.setText("Usar chave de recuperação");useCode.setTextColor(INK);fields.addView(useCode);EditText code=input("Código AMZ1-…",true),pass=input("Senha usada no backup",true),again=input("Repita a nova senha",true);fields.addView(code);fields.addView(pass);fields.addView(again);code.setVisibility(View.GONE);again.setVisibility(View.GONE);
+        LinearLayout fields=column();CheckBox folderBackup=new CheckBox(this);folderBackup.setText("Backup em pasta (incremental)");folderBackup.setTextColor(INK);folderBackup.setChecked(true);fields.addView(folderBackup);CheckBox useCode=new CheckBox(this);useCode.setText("Usar chave de recuperação");useCode.setTextColor(INK);fields.addView(useCode);EditText code=input("Código AMZ1-…",true),pass=input("Senha usada no backup",true),again=input("Repita a nova senha",true);fields.addView(code);fields.addView(pass);fields.addView(again);code.setVisibility(View.GONE);again.setVisibility(View.GONE);
         useCode.setOnCheckedChangeListener((b,on)->{code.setVisibility(on?View.VISIBLE:View.GONE);again.setVisibility(on?View.VISIBLE:View.GONE);pass.setHint(on?"Nova senha (10 ou mais caracteres)":"Senha usada no backup");});
         AlertDialog d=new AlertDialog.Builder(this).setTitle("Restaurar cofre").setMessage("Use a senha ou a chave de recuperação que o backup tinha quando foi salvo.").setView(padded(fields)).setNegativeButton("Cancelar",null).setPositiveButton("Escolher backup",null).create();
-        d.setOnShowListener(x->d.getButton(-1).setOnClickListener(v->{boolean recovery=useCode.isChecked();if(pass.length()==0||(recovery&&(pass.length()<10||!pass.getText().toString().equals(again.getText().toString())||code.length()==0))){pass.setError(recovery?"Informe o código e repita uma nova senha de 10+ caracteres.":"Digite a senha do backup");return;}clearRestorePassword();restorePassword=pass.getText().toString().toCharArray();restoreRecovery=recovery?code.getText().toString():null;restoreAlternate=alternate;pass.setText("");again.setText("");code.setText("");d.dismiss();launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),RESTORE);}));track(d);d.show();
+        d.setOnShowListener(x->d.getButton(-1).setOnClickListener(v->{boolean recovery=useCode.isChecked();if(pass.length()==0||(recovery&&(pass.length()<10||!pass.getText().toString().equals(again.getText().toString())||code.length()==0))){pass.setError(recovery?"Informe o código e repita uma nova senha de 10+ caracteres.":"Digite a senha do backup");return;}clearRestorePassword();restorePassword=pass.getText().toString().toCharArray();restoreRecovery=recovery?code.getText().toString():null;restoreAlternate=alternate;pass.setText("");again.setText("");code.setText("");d.dismiss();if(folderBackup.isChecked())launch(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).putExtra(Intent.EXTRA_LOCAL_ONLY,true),RESTORE_SET);else launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),RESTORE);}));track(d);d.show();
     }
     private void createRecovery(){
         boolean exists=vault.hasRecovery();track(new AlertDialog.Builder(this).setTitle(exists?"Gerar outra chave de recuperação?":"Criar chave de recuperação").setMessage((exists?"A chave anterior deixará de funcionar neste cofre. Backups antigos continuam com a chave antiga.\n\n":"")+"Guarde o código fora do cofre. Quem tiver esse código e os dados do cofre poderá recuperar o acesso. O app não guarda o código em texto legível.").setNegativeButton("Cancelar",null).setPositiveButton(exists?"Gerar nova chave":"Gerar código",(d,w)->{
@@ -416,15 +470,21 @@ public class MainActivity extends Activity {
         super.onActivityResult(request,result,data);external=false;stopped=false;
         VaultEngine origin=pickerVault;pickerVault=null;
         if(origin!=null&&(!unlocked||origin!=vault||pickerEpoch!=accessEpoch)){
-            if(request==RESTORE)clearRestorePassword();pendingId=null;pendingExports.clear();pendingRecovery=null;
+            if(request==RESTORE||request==RESTORE_SET)clearRestorePassword();pendingId=null;pendingExports.clear();pendingRecovery=null;
             notice("Seleção expirada","Desbloqueie o cofre e escolha os arquivos novamente.");return;
         }
-        if(result!=RESULT_OK||data==null){if(request==RESTORE)clearRestorePassword();if(request==SAVE_RECOVERY)pendingRecovery=null;if(unlocked)armLock();return;}
+        if(result!=RESULT_OK||data==null){if(request==RESTORE||request==RESTORE_SET)clearRestorePassword();if(request==SAVE_RECOVERY)pendingRecovery=null;if(unlocked)armLock();return;}
+        if(data.getData()!=null)persistGrant(data.getData(),data.getFlags());
+        if(data.getClipData()!=null)for(int i=0;i<data.getClipData().getItemCount();i++)persistGrant(data.getClipData().getItemAt(i).getUri(),data.getFlags());
+        if(request==RESTORE_SET){
+            Uri uri=data.getData();if(uri==null||restorePassword==null){clearRestorePassword();return;}chooseBackupVersion(uri);return;
+        }
         if(request==RESTORE){
             Uri uri=data.getData();if(uri==null||restorePassword==null){clearRestorePassword();return;}char[] pass=restorePassword;String code=restoreRecovery;boolean alternate=restoreAlternate;restorePassword=null;restoreRecovery=null;restoreAlternate=false;
             run("Restaurando e verificando arquivos…",()->{try(InputStream in=read(uri)){profiles.restore(in,pass,code,alternate,operationProgress);}finally{Arrays.fill(pass,'\0');}},()->{enteredVault();notice("Cofre restaurado","Todos os arquivos foram verificados. Guarde seu backup em um local seguro.");},e->notice("Não foi possível restaurar","Confira a senha ou chave de recuperação, a integridade do backup e o espaço disponível. "+friendly(e)));return;
         }
         if(!unlocked){notice("Cofre bloqueado","Desbloqueie e selecione os arquivos novamente. Nenhum original foi removido.");return;}
+        if(request==BACKUP_SET){Uri tree=data.getData();if(tree!=null)prepareTransfer(()->new VaultTransfers(this,vault).prepareBackup(tree));return;}
         if(request==PICK_FILES){
             List<Uri> uris=new ArrayList<>();if(data.getClipData()!=null){for(int n=0;n<data.getClipData().getItemCount();n++)uris.add(data.getClipData().getItemAt(n).getUri());}else if(data.getData()!=null)uris.add(data.getData());
             importFiles(uris);return;
@@ -437,40 +497,15 @@ public class MainActivity extends Activity {
         }
         if(request==SAVE_FILE){
             String id=pendingId;boolean move=removeOnExport;
-            run("Salvando e conferindo o arquivo…",()->{
-                try(OutputStream out=write(uri)){vault.exportFile(id,out,operationProgress);}
-                try(InputStream in=read(uri)){if(!vault.matches(id,in,operationProgress))throw new IOException("A cópia salva não passou na verificação. O original permanece no cofre.");}
-                if(cancelRequested)throw new CancellationException();if(move)vault.delete(id);
-            },()->{showExplorer();notice(move?"Arquivo retirado":"Cópia salva",move?"O arquivo está no destino escolhido e foi removido do cofre. Não entrará nos novos backups. Backups antigos permanecem como foram salvos.":"A cópia normal está no destino escolhido. O arquivo continua no cofre e será incluído nos backups. Para removê-lo do cofre, use Mover para fora do cofre.");},e->{error(e);});
+            prepareTransfer(()->new VaultTransfers(this,vault).prepareExport(Collections.singletonList(id),uri,false,move));
         }else if(request==SAVE_BACKUP){
             run("Salvando backup criptografado…",()->{try(OutputStream out=write(uri)){vault.backup(out,operationProgress);}try(InputStream in=read(uri)){vault.verifyBackup(in,operationProgress);}if(cancelRequested)throw new CancellationException();vault.markBackupCompleted();},()->{showExplorer();notice("Backup salvo e verificado",backupContents()+"\n\nSomente o que está no cofre foi salvo. Arquivos retirados não foram incluídos. Guarde o backup fora do app; use a senha ou chave da data em que foi salvo para restaurar.");},this::error);
         }
     }
     private void importFiles(List<Uri> uris){
-        String parent=folder;StringBuilder report=new StringBuilder();int[] moved={0},retained={0},failed={0};
-        run("Movendo arquivos para o cofre…",()->{
-            for(Uri uri:uris){
-                if(cancelRequested)break;
-                String name=displayName(uri);VaultEngine.Entry entry;operationProgress.phase("Criptografando · "+name);
-                try{
-                    String mime=getContentResolver().getType(uri);String unique=uniqueName(parent,name);
-                    long sourceSize=documentSize(uri);
-                    if(sourceSize>=0&&VaultEngine.encryptedSize(sourceSize)+32L*1024*1024>vault.availableBytes())throw new IOException("Espaço livre insuficiente para proteger este arquivo. É necessário espaço temporário para uma cópia dele.");
-                    try(InputStream input=read(uri)){entry=vault.importFile(input,unique,mime,parent,operationProgress);}
-                }catch(Exception e){failed[0]++;report.append("\n• ").append(name).append(": não importado; original preservado. ").append(friendly(e));continue;}
-                try{
-                    // Detect a source changed since encryption; never remove the newly changed source.
-                    // Flush the directory entry too, before removing an original outside the app.
-                    FileDescriptor directory=android.system.Os.open(new File(getFilesDir(),"vault-v1").getPath(),android.system.OsConstants.O_RDONLY,0);
-                    try{android.system.Os.fsync(directory);}finally{android.system.Os.close(directory);}
-                    try(InputStream input=read(uri)){if(!vault.matches(entry.id,input,operationProgress))throw new IOException("O original mudou durante a transferência.");}
-                    if(cancelRequested)throw new CancellationException();
-                    if(!DocumentsContract.isDocumentUri(this,uri)||!DocumentsContract.deleteDocument(getContentResolver(),uri))throw new IOException("O local de origem não permitiu apagar.");
-                    moved[0]++;
-                }catch(Exception e){retained[0]++;report.append("\n• ").append(name).append(": protegido no cofre; original ainda está na origem.");}
-            }
-        },()->{showExplorer();String summary=moved[0]+" movido(s). "+retained[0]+" protegido(s), com original mantido. "+failed[0]+" não importado(s).";notice(cancelRequested?"Transferência interrompida":retained[0]>0?"Confira os originais":"Transferência concluída",summary+(cancelRequested?" Os itens restantes continuam na origem.":"")+report.toString()+(retained[0]>0?"\n\nVocê pode apagar os originais pelo aplicativo Arquivos. A cópia criptografada já foi verificada.":""));},this::error);
+        String parent=folder;prepareTransfer(()->new VaultTransfers(this,vault).prepareImport(uris,parent));
     }
+
     private String uniqueName(String parent,String requested){
         String clean=requested.replaceAll("[\\\\/\\p{Cntrl}]","_");if(clean.length()>180)clean=clean.substring(0,180);if(clean.isEmpty()||clean.equals(".")||clean.equals(".."))clean="Arquivo";
         String candidate=clean;int n=2;Set<String> used=new HashSet<>();for(VaultEngine.Entry e:vault.list())if(!e.isTrashed()&&e.parent.equals(parent))used.add(e.name.toLowerCase(Locale.ROOT));
@@ -527,10 +562,11 @@ public class MainActivity extends Activity {
         private void showTarget(){
             if(closed||!unlocked)return;title.setText(entries.get(index).name);position.setText((index+1)+" de "+entries.size());previous.setEnabled(index>0);next.setEnabled(index+1<entries.size());previous.setAlpha(previous.isEnabled()?1f:.35f);next.setAlpha(next.isEnabled()?1f:.35f);
             if(releasing)return;
-            if(playing!=null){VaultMediaView old=playing;playing=null;releasing=true;host.removeAllViews();TextView preparing=text("Preparando mídia…",14,MUTED);preparing.setGravity(Gravity.CENTER);host.addView(preparing,new FrameLayout.LayoutParams(-1,-1));old.close(()->{releasing=false;if(!closed&&unlocked)showTarget();});return;}
+            if(playing==null&&!mediaRelease.isDone()){releasing=true;mediaRelease.whenComplete((ignored,failure)->ui.post(()->{releasing=false;if(!closed&&unlocked)showTarget();}));return;}
+            if(playing!=null){VaultMediaView old=playing;playing=null;releasing=true;host.removeAllViews();TextView preparing=text("Preparando mídia…",14,MUTED);preparing.setGravity(Gravity.CENTER);host.addView(preparing,new FrameLayout.LayoutParams(-1,-1));old.close(()->{releasing=false;if(!closed&&unlocked)showTarget();});rememberRelease(old);return;}
             host.removeAllViews();playing=new VaultMediaView(MainActivity.this,vault,entries.get(index),()->!closed&&unlocked);host.addView(playing,new FrameLayout.LayoutParams(-1,-1));
         }
-        @Override public void close(){if(closed)return;closed=true;if(playing!=null){playing.close();playing=null;}host.removeAllViews();entries.clear();}
+        @Override public void close(){if(closed)return;closed=true;if(playing!=null){playing.close();rememberRelease(playing);playing=null;}host.removeAllViews();entries.clear();}
     }
     private LinearLayout previewFrame(String title){
         closePreview();Dialog dialog=new Dialog(this,R.style.AppTheme);dialog.getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,WindowManager.LayoutParams.FLAG_SECURE);
@@ -547,14 +583,14 @@ public class MainActivity extends Activity {
     private void externalPreview(VaultEngine.Entry entry,File file){
         track(new AlertDialog.Builder(this).setTitle("Abrir em outro aplicativo?").setMessage("O aplicativo escolhido terá acesso a uma cópia descriptografada e poderá salvá-la. O acesso temporário será encerrado quando você voltar ao Cofre AMZ.").setNegativeButton("Cancelar",(d,w)->clearPreviews()).setPositiveButton("Abrir",(d,w)->{
             Uri uri=FileProvider.getUriForFile(this,getPackageName()+".preview",file);Intent i=new Intent(Intent.ACTION_VIEW).setDataAndType(uri,entry.mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);i.setClipData(ClipData.newRawUri("Arquivo",uri));
-            try{external=true;unlocked=false;thumbnails.clear();worker.execute(profiles::lock);all.clear();showLocked();startActivityForResult(Intent.createChooser(i,"Abrir arquivo"),20);}catch(Exception err){external=false;clearPreviews();notice("Nenhum aplicativo disponível","Instale um aplicativo compatível com este formato ou retire o arquivo para uma pasta.");}
+            try{external=true;unlocked=false;thumbnails.clear();worker.execute(this::lockProfiles);all.clear();visible.clear();showLocked();startActivityForResult(Intent.createChooser(i,"Abrir arquivo"),20);}catch(Exception err){external=false;clearPreviews();notice("Nenhum aplicativo disponível","Instale um aplicativo compatível com este formato ou retire o arquivo para uma pasta.");}
         }).setOnCancelListener(d->clearPreviews()).show());
     }
     private void closePreview(){if(preview!=null){Dialog old=preview;Runnable cleanup=previewCleanup;preview=null;previewCleanup=null;old.setOnDismissListener(null);old.dismiss();if(cleanup!=null)cleanup.run();clearPreviews();}}
     private void clearPreviews(){
         File dir=new File(getCacheDir(),"preview");File[] files=dir.listFiles();if(files!=null)for(File f:files){try{Uri uri=FileProvider.getUriForFile(this,getPackageName()+".preview",f);revokeUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}f.delete();}
     }
-    private void help(){notice("Cofre AMZ 1.2.0","• Funciona offline, sem permissão de internet.\n\n• Use Selecionar ou segure um item para mover, retirar ou enviar vários arquivos à lixeira.\n\n• Grade mostra miniaturas de fotos e vídeos compatíveis. As miniaturas não são salvas em texto legível.\n\n• A lixeira continua criptografada. Restaure os itens ou exclua definitivamente para liberar espaço. Não há exclusão automática.\n\n• Gere sua chave de recuperação no menu e guarde o código fora do cofre. Quem tiver o código e os dados do cofre pode recuperar o acesso. Sem senha ou código previamente gerado, não é possível recuperar.\n\n• Salve um backup sempre que aparecer o aviso. Ele inclui os arquivos, a lixeira e a recuperação ativada. Backups antigos mantêm a senha e a chave que tinham ao ser salvos.\n\n• Desinstalar o app ou limpar seus dados apaga o cofre. Instale atualizações por cima para manter seus arquivos.\n\n• Ao importar, o original só é removido após a verificação. Se o Android não permitir apagar na origem, o app avisa.\n\n• Bloqueio ao sair do app e após 2 minutos sem interação.\n\nAES-256-GCM · Android 8+");}
+    private void help(){notice("Cofre AMZ 1.3.0","• Funciona offline, sem permissão de internet.\n\n• Use Selecionar ou segure um item para mover, retirar ou enviar vários arquivos à lixeira.\n\n• Grade mostra miniaturas de fotos e vídeos compatíveis. As miniaturas não são salvas em texto legível.\n\n• A lixeira continua criptografada. Restaure os itens ou exclua definitivamente para liberar espaço. Não há exclusão automática.\n\n• Gere sua chave de recuperação no menu e guarde o código fora do cofre. Quem tiver o código e os dados do cofre pode recuperar o acesso. Sem senha ou código previamente gerado, não é possível recuperar.\n\n• Salve um backup sempre que aparecer o aviso. Ele inclui os arquivos, a lixeira e a recuperação ativada. Backups antigos mantêm a senha e a chave que tinham ao ser salvos.\n\n• Desinstalar o app ou limpar seus dados apaga o cofre. Instale atualizações por cima para manter seus arquivos.\n\n• Ao importar, o original só é removido após a verificação. Se o Android não permitir apagar na origem, o app avisa.\n\n• Transferências e backups em pasta podem ser pausados e retomados. A notificação é discreta e você pode apagar a tela. Se o Android encerrar o processo, desbloqueie e retome a operação pendente. Alguns provedores exigem selecionar novamente ou reiniciar a operação.\n\n• O backup em pasta conserva versões anteriores. Escolha a mesma pasta ao atualizar e guarde a pasta inteira. O arquivo .amzcofre continua disponível; esse formato reinicia a gravação se for interrompido.\n\n• O vídeo lembra onde você parou. Toque na velocidade para ajustar a reprodução. Ordene por nome, tamanho, data ou tipo no menu.\n\n• Bloqueio ao sair do app e após 2 minutos sem interação. Durante uma transferência, o serviço mantém apenas a sessão necessária à operação e bloqueia ao terminar ou pausar.\n\nAES-256-GCM · Android 8+");}
     private interface Job{void execute()throws Exception;}
     private interface Failure{void accept(Exception e);}
     private void run(String label,Job job,Runnable done,Failure failed){
@@ -562,7 +598,7 @@ public class MainActivity extends Activity {
         progress=new ProgressDialog(this);progress.setTitle(label);progress.setMessage("Aguarde. Seus arquivos estão sendo verificados.");progress.setIndeterminate(true);progress.setCancelable(false);progress.getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,WindowManager.LayoutParams.FLAG_SECURE);boolean cancellable=label.startsWith("Movendo arquivos")||label.startsWith("Retirando")||label.startsWith("Salvando backup")||label.startsWith("Salvando e conferindo")||label.startsWith("Abrindo arquivo")||label.startsWith("Restaurando e verificando");if(cancellable)progress.setButton(DialogInterface.BUTTON_NEGATIVE,"Interromper",(d,w)->{});progress.show();
         if(cancellable)progress.getButton(DialogInterface.BUTTON_NEGATIVE).setOnClickListener(v->{cancelRequested=true;progress.getButton(DialogInterface.BUTTON_NEGATIVE).setEnabled(false);progress.setMessage("Interrompendo com segurança. Aguarde…");});
         worker.execute(()->{Exception failure=null;try{job.execute();}catch(Exception e){failure=e;}vault=profiles.active();loadSummary();Exception outcome=failure;
-            ui.post(()->{busy=false;if(isFinishing()||isDestroyed()){profiles.lock();return;}getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);closeProgress();if(lockAfter||stopped){profiles.lock();unlocked=false;lockAfter=false;clearPreviews();showLocked();return;}if(outcome==null)done.run();else failed.accept(outcome);if(unlocked)armLock();});});
+            ui.post(()->{busy=false;if(isFinishing()||isDestroyed())return;getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);closeProgress();if(lockAfter||stopped){worker.execute(this::lockProfiles);unlocked=false;lockAfter=false;clearPreviews();showLocked();return;}if(outcome==null)done.run();else failed.accept(outcome);if(unlocked)armLock();});});
     }
     private void closeProgress(){ProgressDialog old=progress;progress=null;if(old!=null&&old.isShowing()&&old.getWindow()!=null&&old.getWindow().getDecorView().isAttachedToWindow())old.dismiss();}
     private void progressBytes(long bytes){if(cancelRequested)throw new CancellationException("Operação interrompida. Os arquivos ainda não transferidos permanecem na origem.");long now=SystemClock.elapsedRealtime();if(now-lastProgress<300)return;lastProgress=now;ui.post(()->{if(progress!=null&&!cancelRequested)progress.setMessage(progressPhase+"\n"+size(bytes)+" processados nesta etapa.\nMantenha o app aberto até concluir.");});}

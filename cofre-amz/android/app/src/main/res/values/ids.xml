@@ -1,4 +1,7 @@
 <resources>
+    <item name="vault_media_speed" type="id"/>
+    <item name="vault_transfer_pause" type="id"/>
+    <item name="vault_transfer_status" type="id"/>
     <item name="vault_alternate_password" type="id"/>
     <item name="vault_alternate_confirmation" type="id"/>
     <item name="vault_password" type="id"/>

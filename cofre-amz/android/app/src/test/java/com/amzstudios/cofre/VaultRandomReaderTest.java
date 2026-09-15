@@ -30,6 +30,13 @@ public class VaultRandomReaderTest {
     @Test public void closeAndCancellationRevokeCachedReads()throws Exception{
         AtomicBoolean allowed=new AtomicBoolean(true);VaultEngine.RandomReader reader=vault.openRandomAccess(entry.id,allowed::get);reader.readAt(0,new byte[30],0,30);allowed.set(false);assertThrows(IOException.class,()->reader.readAt(1,new byte[1],0,1));reader.close();reader.close();allowed.set(true);assertThrows(IOException.class,()->reader.readAt(1,new byte[1],0,1));
     }
+    @Test public void engineLockPermanentlyRevokesOldReaderEvenAfterLogin()throws Exception{
+        try(VaultEngine.RandomReader reader=vault.openRandomAccess(entry.id,()->true)){
+            reader.readAt(0,new byte[30],0,30);vault.lock();assertThrows(IOException.class,()->reader.readAt(1,new byte[1],0,1));
+            vault.unlock("Senha de teste aleatoria".toCharArray());assertThrows(IOException.class,()->reader.readAt(1,new byte[1],0,1));
+            try(VaultEngine.RandomReader fresh=vault.openRandomAccess(entry.id,()->true)){assertEquals(1,fresh.readAt(1,new byte[1],0,1));}
+        }
+    }
     @Test public void streamCanDecodeFromStartTwiceWithoutTemporaryCopy()throws Exception{
         for(int i=0;i<2;i++)try(InputStream in=vault.openRandomAccess(entry.id,()->true).stream()){assertEquals(VaultEngine.CHUNK-10,in.skip(VaultEngine.CHUNK-10));byte[] actual=new byte[70];assertEquals(70,in.read(actual));assertArrayEquals(Arrays.copyOfRange(data,VaultEngine.CHUNK-10,VaultEngine.CHUNK+60),actual);}
     }

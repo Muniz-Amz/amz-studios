@@ -57,4 +57,16 @@ final class VaultProfiles {
         catch(Exception e){target.lock();throw e;}
         other.lock();active=target;
     }
+    void restoreSet(VaultBackupSet.Store source,char[] password,String recovery,boolean toAlternate,VaultEngine.Progress progress)throws Exception{
+        restoreSet(source,null,password,recovery,toAlternate,progress);
+    }
+    void restoreSet(VaultBackupSet.Store source,String snapshot,char[] password,String recovery,boolean toAlternate,VaultEngine.Progress progress)throws Exception{
+        if(toAlternate)requirePrimary();
+        VaultEngine target=toAlternate?alternate:primary,other=toAlternate?primary:alternate;
+        if(target.exists())throw new IOException("O cofre existente será preservado. Restaure somente em um destino vazio.");
+        differentFrom(other,password);
+        try{if(snapshot==null){if(recovery==null)VaultBackupSet.restoreLatest(target,source,password,progress);else VaultBackupSet.restoreLatestUsingRecovery(target,source,recovery,password,progress);}else{if(recovery==null)VaultBackupSet.restoreSnapshot(target,source,snapshot,password,progress);else VaultBackupSet.restoreSnapshotUsingRecovery(target,source,snapshot,recovery,password,progress);}}
+        catch(Exception failure){target.lock();throw failure;}
+        other.lock();active=target;
+    }
 }

@@ -1,7 +1,33 @@
-# Cofre AMZ — Android 1.2.0
+# Cofre AMZ — Android 1.3.0
 
 Aplicativo nativo offline, Java, Android 8+ (API 26). ID permanente
-`com.amzstudios.cofre`, versionCode 7.
+`com.amzstudios.cofre`, versionCode 8.
+
+## Novidades da 1.3.0
+
+- Importação e retirada têm journal cifrado, pausa e retomada após desbloquear.
+  O serviço dataSync continua com a tela apagada. A notificação não mostra nomes
+  de arquivos; sua exibição na gaveta depende da permissão do Android 13+.
+  O serviço bloqueia as chaves ao concluir ou pausar. Não salva senha/chave em disco
+  nem reinicia sozinho após encerramento do processo.
+- Importação confere o prefixo original e o ciphertext antes de retomar. Retirada
+  confere o prefixo já salvo, sincroniza, relê todo o destino e só então remove o
+  original. Destino alterado, falta de espaço ou permissão interrompem a operação.
+  Retirada retomável exige documento local com seek e sincronização de disco.
+- Backup em pasta usa objetos cifrados imutáveis de até 4 MiB. Atualizações
+  reaproveitam objetos verificados; manifesto autenticado e confirmação são
+  gravados por último. A última versão inclui somente o índice atual, com lixeira.
+  Versões antigas continuam existindo; guarde a pasta inteira. Restauração permite
+  escolher uma versão explicitamente e nunca substitui um cofre existente.
+- O arquivo .amzcofre continua disponível e compatível com versões anteriores.
+  Esse formato reinicia a gravação se interrompido; não tem retomada no meio do ZIP.
+- Reprodução lembra a posição em metadados cifrados e oferece velocidades de
+  0,5× a 2×. Fechar, trocar mídia ou bloquear aguarda o checkpoint e libera o leitor.
+- Ordenação por nome, tamanho, data ou tipo, mantendo pastas primeiro.
+
+Verificações completas aumentam leitura de disco. Não há promessa de travamento
+zero ou corrupção impossível. Falha de hardware, limpeza de dados, desinstalação
+e perda do backup exigem cuidados externos ao aplicativo.
 
 ## Recursos
 
@@ -26,7 +52,7 @@ Aplicativo nativo offline, Java, Android 8+ (API 26). ID permanente
 O recurso separa o acesso dentro do app. Não garante ocultar a existência dos
 dois cofres em uma análise técnica do aparelho. Veja SECURITY.md.
 
-- Antes e depois de salvar o backup, a tela mostra quantos arquivos ativos e
+- Antes e depois de salvar o backup legado, a tela mostra quantos arquivos ativos e
   quantos arquivos da lixeira estão incluídos. Cofre vazio é identificado como
   backup somente da estrutura e dos dados de acesso. As contagens usam o índice
   no worker; não há leitura de fotos/vídeos nem consulta à galeria para o resumo.
@@ -67,8 +93,9 @@ dois cofres em uma análise técnica do aparelho. Veja SECURITY.md.
   A reprodução mantém a tela ativa e o bloqueio por inatividade fica suspenso
   enquanto a prévia está aberta; sair do aplicativo continua bloqueando o cofre.
 - Transferências, backups e restauração com etapas, progresso e interrupção.
-  A tela fica ativa; mantenha o app aberto. Não há serviço de transferência
-  persistente nem retomada automática após o sistema encerrar o processo.
+  Transferências e backup em pasta usam serviço em primeiro plano e retomada
+  autenticada. A exportação de ZIP legado e a restauração permanecem operações
+  da Activity e devem ser reiniciadas se interrompidas.
 - Importação verifica espaço conhecido antes de começar e novamente a cada
   64 MiB, preservando uma margem de aproximadamente 32 MiB. O tamanho informado
   pelo provedor pode estar ausente ou incorreto; falhas conservam a origem.
@@ -89,7 +116,7 @@ dois cofres em uma análise técnica do aparelho. Veja SECURITY.md.
   ativado. Restaura com senha ou código correspondente ao backup, somente em uma
   instalação sem cofre, sem substituir dados existentes.
 - Bloqueio ao sair e após dois minutos de inatividade. Operações em andamento
-  terminam antes de limpar a chave. Seletores autorizados permitem retorno
+  do serviço mantêm a sessão até terminar ou pausar. Seletores autorizados permitem retorno
   dentro do prazo. Sem senha, a seleção expirada não remove arquivos.
 - FLAG_SECURE, sem permissão INTERNET, conta, anúncios ou telemetria.
 - Backup e transferência automática de dados do Android desativados.
@@ -121,7 +148,7 @@ seguro antes de migrar de computador. Nunca publique ou substitua essa chave.
 SHA-256 do certificado:
 `c6dcd70a40693f6e0b9c5dec9b9d8007827b43605ebd2f55455af2ddb41c746f`.
 
-A v1.2 lê índices v1 e v2, mantendo `files/vault-v1`, applicationId e assinatura.
+A v1.3 lê índices v1 e v2, mantendo `files/vault-v1`, applicationId e assinatura.
 A primeira alteração grava o índice v2 com os campos da lixeira; o conteúdo e a
 chave mestre são preservados. Backups v1 podem ser restaurados. Cofres alterados
 na v1.1 não devem ser abertos na v1.0. Instale por cima, sem limpar dados ou
@@ -132,6 +159,14 @@ junto do SHA-256. Atualize a página do cofre e o link na raiz do site.
 
 ## Validação
 
+Na v1.3.0, os 105 testes JVM passaram na compilação de produção. Os 31 casos
+Android passaram em duas rodadas (11 de transferência + 20 de regressão); cinco
+casos de reprodução/criptografia passaram novamente após o último reforço da
+revogação de sessão. O ensaio de 3 GiB + 17 bytes pausou após 2 GiB, reabriu o
+engine e validou retomada, exportação completa e leituras aleatórias com heap
+limitado a 96 MiB. Consulte PERFORMANCE.md para os limites dessas medições.
+
+
 Nove testes JVM de sessões exercitam o isolamento entre senhas, arquivos,
 lixeira, backup e recuperação; recusam colisões de senha; verificam reinício,
 restauração lado a lado, interrupção e preservação do cofre anterior. Quatro testes Android
@@ -139,7 +174,7 @@ exercitam configuração pela tela, entrada pelas duas senhas, importação e ba
 no alternativo, seleção expirada após troca e restauração/recuperação do segundo.
 Uma regressão com 600 metadados bloqueia o filtro em segundo plano e confirma que nenhuma linha da sessão anterior permanece visível enquanto ele aguarda. Os demais testes verificam os recursos já existentes.
 
-41 testes JVM cobrem criptografia por blocos, senha errada, adulteração,
+105 testes JVM cobrem criptografia por blocos, senha errada, adulteração,
 truncamento, bytes extras, hierarquia, ciclos, backup/restauração, zip traversal,
 importação interrompida, erro de destino e alterações na origem. Incluem migração
 de um backup produzido pelo código original v1, lixeira aninhada, restauração com
@@ -150,7 +185,7 @@ arquivos: itens retirados, purgados, órfãos e externos ficam de fora; cópias
 mantidas no cofre e lixeira permanecem. Um backup antigo preserva seu retrato
 anterior e um novo backup do cofre vazio restaura somente estrutura e recuperação.
 
-Quinze testes instrumentados no emulador Android 14 em modo avião exercitam
+31 testes instrumentados distintos no emulador Android 14 em modo avião exercitam
 criptografia Android, criação e bloqueio, transferência real via DocumentsProvider,
 miniaturas PNG/MP4, grade/lista, seleção, lixeira/restauração/exclusão, recuperação
 pela tela, backup verificado e retirada em árvore com colisões e destino inválido.

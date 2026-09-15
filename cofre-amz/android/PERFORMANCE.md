@@ -1,4 +1,39 @@
-# Desempenho — 1.2.0
+# Desempenho — 1.3.0
+
+## Validação da 1.3.0 — 15/09/2026
+
+O APK de produção usa versionCode 8 e o certificado permanente; tem 1,245,316
+bytes. Compilação, 105 testes JVM e lint passaram (zero erros, 43 avisos).
+SHA-256: `f1ce34a04d36f249f55a147d4b6148450469326f16160bbfe148423ffd8ddb79`.
+
+No emulador Android 14, 11 testes SAF/serviço passaram em 124,324 s e 20 testes
+de regressão passaram em 419,374 s. Após vincular leitores aleatórios à geração
+exata da sessão, cinco testes de mídia/criptografia passaram novamente em 42,159 s.
+O modo avião foi ativado; o aplicativo não possui permissão de internet.
+
+Os testes cobrem alterações de origem/destino, falhas de escrita/fechamento,
+adulteração de checkpoint/índice/envelopes, troca de blocos, truncamento e 128
+mutações aleatórias reproduzíveis. Há pausa/reabertura, sessão revogada, backup
+incremental interrompido, restauração atual sem arquivos retirados, notificação
+genérica, Activity destruída e tela apagada com transferência continuando.
+
+`tools/ResumableVolumeProbe.java` processou 3.221.225.489 bytes reais com Java 17
+e `-Xmx96m`. Pausou a partir de 2.148.532.224 bytes, reabriu o engine, comparou o
+prefixo e retomou. A exportação completa teve SHA-256 igual ao da origem, e as
+leituras antes/depois do limite de 2 GiB foram iguais. Tempo total: 81,018 s.
+O destino de exportação do ensaio descarta os bytes após calcular o hash; os
+testes Android separados conferem gravação e releitura de destinos SAF reais.
+
+O consumo cresce principalmente com os metadados, não com o tamanho de um vídeo.
+O conteúdo é processado em blocos de 1 MiB; objetos do backup têm até 4 MiB.
+O catálogo SAF do backup é carregado uma vez e atualizado a cada objeto criado,
+evitando reler milhares de entradas para cada bloco. Backups incrementais poupam
+escrita e espaço para dados já copiados, mas relêem os dados para verificá-los.
+
+Não houve medição física de 100 GB no celular do usuário, nem garantia de tempo
+igual entre aparelhos/provedores. Hardware, permissões, bateria, espaço e codecs
+afetam os resultados. Nenhum teste demonstra corrupção impossível ou substitui
+auditoria criptográfica independente.
 
 ## Duas sessões na v1.2.0
 
