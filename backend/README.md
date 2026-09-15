@@ -22,3 +22,17 @@ Backend do painel e bot Discord da AMZ Studios.
 ```powershell
 python -m py_compile backend\app.py backend\bot.py backend\database.py
 ```
+
+Para verificar dependencias e importacao da API e das extensoes do bot, use um
+ambiente virtual limpo com Python 3.14 e execute na raiz do repositorio:
+
+```powershell
+python -m pip install -r backend/requirements.txt
+python -m pip check
+python -m unittest discover -s backend/tests -v
+```
+
+O teste nao carrega `.env`, nao conecta ao Discord ou MongoDB e bloqueia acesso
+a rede. O workflow `Backend startup` executa a mesma verificacao em Linux.
+No Render, mantenha `backend` como Root Directory, `pip install -r requirements.txt`
+como Build Command e `python app.py` como Start Command.
