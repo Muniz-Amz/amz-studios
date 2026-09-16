@@ -17,6 +17,11 @@ try:
 except ImportError:  # pragma: no cover
     YoutubeDL = None
 
+try:
+    from yt_dlp.networking.impersonate import ImpersonateTarget
+except ImportError:  # pragma: no cover
+    ImpersonateTarget = None
+
 
 class UrlVideoError(Exception):
     pass
@@ -76,15 +81,32 @@ class UrlVideoService:
             raise UrlVideoError("Envie um link valido (http/https).")
         return parsed.geturl()
 
+    @staticmethod
+    def _alvo_impersonacao(valor):
+        """Converte a configuração textual para o tipo aceito pelo yt-dlp.
+
+        A opção ``impersonate`` não aceita uma string diretamente nas versões
+        atuais do yt-dlp. Ela exige um ``ImpersonateTarget``. A configuração é
+        opcional: sem um alvo explícito, o downloader usa o cliente padrão.
+        """
+        texto = str(valor or "").strip()
+        if not texto:
+            return None
+        if ImpersonateTarget is None:
+            raise UrlVideoError("A biblioteca yt-dlp não suporta a configuração de impersonação do servidor.")
+
+        try:
+            return ImpersonateTarget.from_str(texto)
+        except (AssertionError, TypeError, ValueError) as erro:
+            raise UrlVideoError("Alvo de impersonação inválido no servidor.") from erro
+
     def _opcoes_plataforma(self, url: str):
         """Ajustes para plataformas que bloqueiam clientes sem um navegador real."""
         host = (urlparse(url).hostname or "").lower()
         usar_impersonacao_global = os.getenv("AMZ_YTDLP_IMPERSONATE", "").strip()
 
         if host == "tiktok.com" or host.endswith(".tiktok.com"):
-            usar_impersonacao = usar_impersonacao_global or os.getenv(
-                "AMZ_YTDLP_TIKTOK_IMPERSONATE", "chrome-131:android-14"
-            ).strip()
+            usar_impersonacao = usar_impersonacao_global or os.getenv("AMZ_YTDLP_TIKTOK_IMPERSONATE", "").strip()
             opcoes = {
                 "http_headers": {
                     "User-Agent": (
@@ -95,13 +117,11 @@ class UrlVideoService:
                 }
             }
             if usar_impersonacao:
-                opcoes["impersonate"] = usar_impersonacao
+                opcoes["impersonate"] = self._alvo_impersonacao(usar_impersonacao)
             return opcoes
 
-        if host in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}:
-            usar_impersonacao = usar_impersonacao_global or os.getenv(
-                "AMZ_YTDLP_YOUTUBE_IMPERSONATE", "chrome-136:macos-15"
-            ).strip()
+        if host == "youtu.be" or host.endswith(".youtube.com") or host == "youtube.com":
+            usar_impersonacao = usar_impersonacao_global or os.getenv("AMZ_YTDLP_YOUTUBE_IMPERSONATE", "").strip()
             opcoes = {
                 "http_headers": {
                     "User-Agent": (
@@ -112,7 +132,7 @@ class UrlVideoService:
                 }
             }
             if usar_impersonacao:
-                opcoes["impersonate"] = usar_impersonacao
+                opcoes["impersonate"] = self._alvo_impersonacao(usar_impersonacao)
             return opcoes
 
         return {}
@@ -190,6 +210,9 @@ class UrlVideoService:
 
         if "private video" in texto_lower or "this video is private" in texto_lower:
             return "Este video e privado ou exige login. Use um link publico."
+
+        if "video not available" in texto_lower or "status code 0" in texto_lower:
+            return "A plataforma nao disponibilizou esse video agora. Tente outro link publico."
 
         if "unsupported url" in texto_lower:
             return "Esse tipo de link ainda nao e suportado. Use Instagram, TikTok ou YouTube publico."

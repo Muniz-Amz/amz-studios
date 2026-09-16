@@ -2,7 +2,6 @@ import asyncio
 import base64
 import hashlib
 import hmac
-import io
 import json
 import math
 import os
@@ -24,6 +23,7 @@ from waitress.task import ThreadedTaskDispatcher
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
+from werkzeug.wsgi import ClosingIterator
 
 from bot import bot
 from database import (
@@ -2046,14 +2046,20 @@ def baixar_video_publico():
             mimetype = "video/mp4"
             filename = "amz-video-hd.mp4"
 
-        conteudo = output_path.read_bytes()
         resposta = send_file(
-            io.BytesIO(conteudo),
+            output_path,
             mimetype=mimetype,
             as_attachment=True,
             download_name=filename,
         )
         resposta.headers["Cache-Control"] = "no-store"
+        # Mantem o arquivo temporario vivo ate o fim da resposta sem carregar
+        # o video inteiro na memoria do processo.
+        resposta.response = ClosingIterator(
+            resposta.response,
+            [lambda path=temp_dir: shutil.rmtree(path, ignore_errors=True)],
+        )
+        temp_dir = None
         return resposta
     except UrlVideoError as erro:
         return jsonify({"status": "erro", "mensagem": str(erro)}), 400
@@ -2061,7 +2067,8 @@ def baixar_video_publico():
         print(f"[VIDEO] Erro inesperado ao baixar link: {erro}")
         return jsonify({"status": "erro", "mensagem": "Nao consegui baixar esse link agora."}), 500
     finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        if temp_dir:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 @app.route("/api/admin/login", methods=["POST"])

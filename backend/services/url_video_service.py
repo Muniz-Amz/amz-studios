@@ -1,7 +1,9 @@
 import binascii
 import base64
 import os
+import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -14,6 +16,11 @@ try:
 except ImportError:  # pragma: no cover
     YoutubeDL = None
 
+try:
+    from yt_dlp.networking.impersonate import ImpersonateTarget
+except ImportError:  # pragma: no cover
+    ImpersonateTarget = None
+
 
 class UrlVideoError(Exception):
     pass
@@ -24,6 +31,7 @@ class UrlVideoLimits:
     max_output_mb: int = int(os.getenv("AMZ_URLVIDEO_MAX_OUTPUT_MB", os.getenv("AMZ_MEDIA_MAX_OUTPUT_MB", "8")))
     max_seconds: int = int(os.getenv("AMZ_URLVIDEO_MAX_SECONDS", "90"))
     timeout_seconds: int = int(os.getenv("AMZ_URLVIDEO_TIMEOUT_SECONDS", "150"))
+    retries: int = int(os.getenv("AMZ_URLVIDEO_RETRIES", "2"))
     max_width: int = int(os.getenv("AMZ_URLVIDEO_MAX_WIDTH", "540"))
     fps: int = int(os.getenv("AMZ_URLVIDEO_FPS", "24"))
 
@@ -84,6 +92,9 @@ class UrlVideoService:
         if "video unavailable" in detalhe_lower or "this video is unavailable" in detalhe_lower:
             return "Esse video esta indisponivel para download."
 
+        if "video not available" in detalhe_lower or "status code 0" in detalhe_lower:
+            return "A plataforma nao disponibilizou esse video agora. Tente outro link publico."
+
         if "unsupported url" in detalhe_lower:
             return "Esse link ainda nao e suportado pelo downloader."
 
@@ -99,19 +110,146 @@ class UrlVideoService:
             raise UrlVideoError("Envie um link valido (http/https).")
         return parsed.geturl()
 
+    @staticmethod
+    def _alvo_impersonacao(valor):
+        """Converte um alvo textual para o tipo aceito pelo yt-dlp atual."""
+        texto = str(valor or "").strip()
+        if not texto:
+            return None
+        if ImpersonateTarget is None:
+            raise UrlVideoError("A biblioteca yt-dlp nao suporta a configuracao de impersonacao do servidor.")
+
+        try:
+            return ImpersonateTarget.from_str(texto)
+        except (AssertionError, TypeError, ValueError) as erro:
+            raise UrlVideoError("Alvo de impersonacao invalido no servidor.") from erro
+
     def _opcoes_plataforma(self, url: str):
         host = (urlparse(url).hostname or "").lower()
+        global_impersonate = os.getenv("AMZ_YTDLP_IMPERSONATE", "").strip()
         if host == "tiktok.com" or host.endswith(".tiktok.com"):
-            return {
+            opcoes = {
                 "http_headers": {
                     "User-Agent": (
-                        "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 "
-                        "(KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36"
+                        "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36"
                     ),
                     "Referer": "https://www.tiktok.com/",
                 }
             }
+            impersonate = (
+                global_impersonate
+                or os.getenv("AMZ_URLVIDEO_TIKTOK_IMPERSONATE", "").strip()
+                or os.getenv("AMZ_YTDLP_TIKTOK_IMPERSONATE", "").strip()
+            )
+            if impersonate:
+                opcoes["impersonate"] = self._alvo_impersonacao(impersonate)
+            return opcoes
+
+        if host in {"youtube.com", "youtu.be"} or host.endswith(".youtube.com"):
+            opcoes = {
+                "http_headers": {
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+                    ),
+                    "Referer": "https://www.youtube.com/",
+                }
+            }
+            impersonate = (
+                global_impersonate
+                or os.getenv("AMZ_URLVIDEO_YOUTUBE_IMPERSONATE", "").strip()
+                or os.getenv("AMZ_YTDLP_YOUTUBE_IMPERSONATE", "").strip()
+            )
+            if impersonate:
+                opcoes["impersonate"] = self._alvo_impersonacao(impersonate)
+            return opcoes
+
         return {}
+
+    def _opcoes_rede_ytdlp(self):
+        """Opcoes comuns de rede e o runtime EJS quando Node estiver disponivel."""
+        opcoes = {
+            "retries": max(1, min(int(self.limits.retries), 5)),
+            "fragment_retries": max(1, min(int(self.limits.retries), 5)),
+            "extractor_retries": 1,
+            "file_access_retries": max(1, min(int(self.limits.retries), 5)),
+            "socket_timeout": int(self.limits.timeout_seconds),
+        }
+        # O yt-dlp atual precisa de um runtime JS externo para resolver
+        # desafios do YouTube. O Render do bot pode nao ter Node instalado;
+        # nesse caso omitimos a opcao para nao quebrar plataformas que nao
+        # dependem dela.
+        if shutil.which("node"):
+            opcoes["js_runtimes"] = {"node": {}}
+        if os.getenv("AMZ_URLVIDEO_FORCE_IPV4", "").strip().lower() in {"1", "true", "yes"}:
+            opcoes["force_ipv4"] = True
+        return opcoes
+
+    @staticmethod
+    def _texto_erro_ytdlp(erro):
+        return " ".join(linha.strip() for linha in str(erro).splitlines() if linha.strip())
+
+    @classmethod
+    def _erro_temporario_ytdlp(cls, erro):
+        texto = cls._texto_erro_ytdlp(erro).lower()
+        # Bloqueios de conta e conteudo privado sao determinísticos; repetir
+        # so consome a janela de requisicao e deixa o comando mais lento.
+        if any(termo in texto for termo in (
+            "sign in to confirm",
+            "confirm you're not a bot",
+            "not a bot",
+            "private video",
+            "this video is private",
+            "video unavailable",
+            "this video is unavailable",
+            "requested format is not available",
+        )):
+            return False
+        return any(termo in texto for termo in (
+            "unexpected_eof_while_reading",
+            "eof occurred in violation of protocol",
+            "unable to download api page",
+            "connection reset",
+            "connection aborted",
+            "read timed out",
+            "timed out",
+            "temporarily unavailable",
+            "remote end closed connection",
+            "ssl:",
+            "http error 429",
+            "too many requests",
+        ))
+
+    @staticmethod
+    def _limpar_arquivos_parciais(ydl_opts):
+        outtmpl = ydl_opts.get("outtmpl")
+        if not outtmpl:
+            return
+        pasta = Path(str(outtmpl)).parent
+        if not pasta.exists():
+            return
+        for padrao in ("*.part", "*.ytdl", "*.tmp"):
+            for arquivo in pasta.glob(padrao):
+                try:
+                    arquivo.unlink()
+                except OSError:
+                    pass
+
+    def _executar_ytdlp(self, ydl_opts, url, *, download, tipo, cookies_file=None):
+        tentativas = max(1, min(int(self.limits.retries), 5))
+        for tentativa in range(1, tentativas + 1):
+            try:
+                with YoutubeDL(ydl_opts) as ydl:
+                    return ydl.extract_info(url, download=download)
+            except Exception as erro:
+                if tentativa < tentativas and self._erro_temporario_ytdlp(erro):
+                    self._limpar_arquivos_parciais(ydl_opts)
+                    time.sleep(min(2 * tentativa, 6))
+                    continue
+                raise UrlVideoError(self._formatar_erro_download(erro, tipo, cookies_file)) from erro
+
+        raise UrlVideoError("Nao consegui baixar esse conteudo agora.")
 
     def _run_ffmpeg(self, args):
         comando = [self.ffmpeg, "-hide_banner", "-loglevel", "error", "-y", *args]
@@ -289,6 +427,7 @@ class UrlVideoService:
             return None
 
         ydl_opts = {
+            **self._opcoes_rede_ytdlp(),
             **self._opcoes_plataforma(url),
             "outtmpl": outtmpl,
             "format": os.getenv(
@@ -300,9 +439,6 @@ class UrlVideoService:
             "noplaylist": True,
             "quiet": True,
             "no_warnings": True,
-            "retries": 2,
-            "fragment_retries": 2,
-            "socket_timeout": int(self.limits.timeout_seconds),
             "max_filesize": limite_bytes,
             "match_filter": filtro_por_duracao,
             "overwrites": True,
@@ -311,23 +447,22 @@ class UrlVideoService:
         if cookies_file:
             ydl_opts["cookiefile"] = str(cookies_file)
 
-        try:
-            with YoutubeDL(ydl_opts) as ydl:
-                ydl.extract_info(url, download=True)
-        except Exception as erro:
-            raise UrlVideoError(self._formatar_erro_download(erro, "video", cookies_file))
+        self._executar_ytdlp(ydl_opts, url, download=True, tipo="video", cookies_file=cookies_file)
 
         candidato = Path(temp_dir) / "video.mp4"
         if not candidato.exists():
             arquivos = sorted(
-                (item for item in Path(temp_dir).glob("video.*") if item.is_file() and not item.name.endswith(".part")),
+                (
+                    item for item in Path(temp_dir).glob("video.*")
+                    if item.is_file() and not item.name.endswith((".part", ".ytdl", ".tmp")) and item.stat().st_size > 0
+                ),
                 key=lambda item: item.stat().st_mtime,
                 reverse=True,
             )
             if arquivos:
                 candidato = arquivos[0]
 
-        if not candidato.exists():
+        if not candidato.exists() or candidato.stat().st_size <= 0:
             raise UrlVideoError("Nao consegui gerar o arquivo final do video.")
 
         convertido = candidato
@@ -358,6 +493,7 @@ class UrlVideoService:
             return None
 
         ydl_opts = {
+            **self._opcoes_rede_ytdlp(),
             **self._opcoes_plataforma(url),
             "outtmpl": outtmpl,
             # Equivalente a: yt-dlp -x --audio-format mp3 <link>
@@ -366,9 +502,6 @@ class UrlVideoService:
             "noplaylist": True,
             "quiet": True,
             "no_warnings": True,
-            "retries": 2,
-            "fragment_retries": 2,
-            "socket_timeout": int(self.limits.timeout_seconds),
             "max_filesize": limite_bytes,
             "match_filter": filtro_por_duracao,
             "postprocessors": [{
@@ -381,14 +514,13 @@ class UrlVideoService:
         if cookies_file:
             ydl_opts["cookiefile"] = str(cookies_file)
 
-        try:
-            with YoutubeDL(ydl_opts) as ydl:
-                ydl.extract_info(url, download=True)
-        except Exception as erro:
-            raise UrlVideoError(self._formatar_erro_download(erro, "audio", cookies_file))
+        self._executar_ytdlp(ydl_opts, url, download=True, tipo="audio", cookies_file=cookies_file)
 
         arquivos = sorted(
-            (item for item in Path(temp_dir).glob("audio.*") if item.is_file() and not item.name.endswith(".part")),
+            (
+                item for item in Path(temp_dir).glob("audio.*")
+                if item.is_file() and not item.name.endswith((".part", ".ytdl", ".tmp")) and item.stat().st_size > 0
+            ),
             key=lambda item: item.stat().st_mtime,
             reverse=True,
         )

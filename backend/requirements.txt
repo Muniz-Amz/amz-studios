@@ -8,4 +8,4 @@ pymongo
 python-dotenv
 requests
 waitress==3.0.2
-yt-dlp
+yt-dlp[default,curl-cffi]

@@ -62,6 +62,30 @@ with patch.object(app.bot, "is_ready", return_value=False):
     assert client.get('/api/health').status_code == 503
 """)
 
+    def test_video_download_streams_temp_file_without_copying_into_memory(self):
+        self.run_isolated("""
+from pathlib import Path
+client = app.app.test_client()
+generated = []
+
+def create_video(_url, directory, **_kwargs):
+    output = Path(directory) / 'video.mp4'
+    output.write_bytes(b'video data' * 8192)
+    generated.append(output)
+    return output
+
+with patch.object(app.url_video_service, 'download_video', side_effect=create_video), \\
+     patch.object(Path, 'read_bytes', side_effect=AssertionError('must stream, not load full output')):
+    response = client.post('/api/video/download', json={'url': 'https://example.com/a', 'modo': 'video'}, buffered=False)
+    try:
+        assert response.status_code == 200, response.data
+        assert response.mimetype == 'video/mp4'
+        assert b''.join(response.response) == b'video data' * 8192
+    finally:
+        response.close()
+assert generated and not generated[0].parent.exists()
+""")
+
     def test_health_reports_only_valid_commit_and_redacts_startup_error(self):
         self.run_isolated("""
 client = app.app.test_client()

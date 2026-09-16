@@ -22,6 +22,11 @@ try:
 except ImportError:  # pragma: no cover - tratado também em execução
     YoutubeDL = None
 
+try:
+    from yt_dlp.networking.impersonate import ImpersonateTarget
+except ImportError:  # pragma: no cover - a opção é opcional
+    ImpersonateTarget = None
+
 
 SUPPORTED_DOMAINS = ("youtube.com", "youtu.be", "tiktok.com", "instagram.com")
 
@@ -130,6 +135,19 @@ class Mp3DownloadService:
             return __version__
         except Exception:
             return "desconhecida"
+
+    @staticmethod
+    def _alvo_impersonacao(valor):
+        texto = str(valor or "").strip()
+        if not texto:
+            return None
+        if ImpersonateTarget is None:
+            raise Mp3DownloadError("A biblioteca yt-dlp não suporta a configuração de impersonação do servidor.")
+
+        try:
+            return ImpersonateTarget.from_str(texto)
+        except (AssertionError, TypeError, ValueError) as erro:
+            raise Mp3DownloadError("Alvo de impersonação inválido no servidor.") from erro
 
     @staticmethod
     def _host_is_supported(host: str) -> bool:
@@ -526,7 +544,7 @@ class Mp3DownloadService:
                 "Referer": "https://www.tiktok.com/",
             }
             impersonate = os.getenv("AMZ_MP3_TIKTOK_IMPERSONATE", "").strip()
-        elif host == "youtu.be" or host.endswith(".youtube.com"):
+        elif host in {"youtube.com", "youtu.be"} or host.endswith(".youtube.com"):
             options["http_headers"] = {
                 "User-Agent": (
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -542,7 +560,7 @@ class Mp3DownloadService:
 
         global_impersonate = os.getenv("AMZ_MP3_YTDLP_IMPERSONATE", "").strip()
         if global_impersonate or impersonate:
-            options["impersonate"] = global_impersonate or impersonate
+            options["impersonate"] = Mp3DownloadService._alvo_impersonacao(global_impersonate or impersonate)
 
         return options
 
@@ -596,6 +614,10 @@ class Mp3DownloadService:
                     if callback:
                         callback("tentando novamente", 10, f"Conexão instável. Tentando novamente ({attempt + 1}/{self.limits.retries})…")
                     time.sleep(min(attempt * 2, 5))
+                    continue
+                # Bloqueios de conta, links privados e formatos indisponíveis
+                # são determinísticos; repetir só gera mais carga e demora.
+                break
 
         # Detalhe fica somente no log privado do Render; a resposta pública é
         # normalizada abaixo para não expor URLs temporárias ou dados internos.
