@@ -21,7 +21,8 @@ RUN pip install --no-cache-dir --upgrade pip \
     && python -m yt_dlp --version
 
 COPY . .
+RUN python -m unittest discover -s tests -v
 
 EXPOSE 7860
 
-CMD ["gunicorn", "-b", "0.0.0.0:7860", "--timeout", "450", "--workers", "1", "app:app"]
+CMD ["gunicorn", "-b", "0.0.0.0:7860", "--timeout", "450", "--workers", "1", "--worker-class", "gthread", "--threads", "4", "--worker-connections", "32", "--access-logfile", "-", "--error-logfile", "-", "app:app"]

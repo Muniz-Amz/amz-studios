@@ -4,19 +4,23 @@ import hashlib
 import hmac
 import io
 import json
+import math
 import os
 import platform
 import re
 import shutil
+import signal
 import sys
 import tempfile
 import time
+import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 
 import discord
 import requests
-import werkzeug.serving
+from waitress import create_server, wasyncore
+from waitress.task import ThreadedTaskDispatcher
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
@@ -233,6 +237,18 @@ def bot_online():
     return bot.is_ready() and not bot.is_closed()
 
 
+def latencia_bot_ms():
+    latencia = bot.latency
+    if not bot_online() or latencia is None or not math.isfinite(latencia) or latencia < 0:
+        return None
+    return round(latencia * 1000)
+
+
+def commit_publico():
+    commit = os.getenv("RENDER_GIT_COMMIT", "").strip()
+    return commit if re.fullmatch(r"[a-fA-F0-9]{7,64}", commit) else None
+
+
 def status_publico_bot():
     online = bot_online()
     usuario = bot.user
@@ -249,7 +265,7 @@ def status_publico_bot():
             "display": str(usuario) if usuario else "AMZ Bot",
         },
         "servidores": len(bot.guilds) if online else 0,
-        "latencia_ms": round(bot.latency * 1000) if online and bot.latency is not None else None,
+        "latencia_ms": latencia_bot_ms(),
         "iniciado_em": data_iso(started_at),
         "online_ha_segundos": segundos_desde(started_at) if online else None,
         "ultimo_ready_em": data_iso(last_ready_at),
@@ -1855,7 +1871,7 @@ def montar_saude_admin(servidores, logs, sistema):
     permissoes_faltantes = listar_permissoes_faltantes_admin(servidores)
     automacoes = montar_fila_automacoes_admin()
     online = bot_online()
-    ping_ms = round(bot.latency * 1000) if online and bot.latency is not None else None
+    ping_ms = latencia_bot_ms()
     status = "ok"
 
     if not online or banco.get("online") is False:
@@ -1978,14 +1994,17 @@ def healthcheck_bot():
     status = status_publico_bot()
     codigo = 200 if status.get("online") else 503
 
-    return jsonify({
+    resposta = jsonify({
         "status": "ok" if status.get("online") else "erro",
         "api": "online",
         "bot": "online" if status.get("online") else "offline",
         "watchdog": status.get("watchdog"),
-        "erro_inicializacao": status.get("erro_inicializacao"),
+        "erro_inicializacao": "Falha ao iniciar o bot; consulte os logs do servico." if status.get("erro_inicializacao") else None,
+        "git_commit": commit_publico(),
         "atualizado_em": agora_iso(),
-    }), codigo
+    })
+    resposta.headers["Cache-Control"] = "no-store"
+    return resposta, codigo
 
 
 @app.route("/", methods=["GET"])
@@ -2716,23 +2735,81 @@ async def iniciar_bot_supervisionado():
         os._exit(1)
 
 
+def criar_servidor_http(port, canais):
+    # Own the dispatcher so a failed bind cannot leave worker threads behind.
+    dispatcher = ThreadedTaskDispatcher()
+    try:
+        servidor = create_server(
+            app, host="0.0.0.0", port=port, map=canais, _dispatcher=dispatcher,
+            threads=4, connection_limit=64, backlog=128, channel_timeout=60,
+            expose_tracebacks=False,
+        )
+        dispatcher.set_thread_count(4)
+        return servidor
+    except BaseException:
+        wasyncore.close_all(canais)
+        dispatcher.shutdown()
+        raise
+
+
+def executar_servidor_http(servidor, canais, parada):
+    try:
+        # A bounded polling interval permits shutdown without closing sockets
+        # from another thread while Waitress is processing them.
+        while canais and not parada.is_set():
+            wasyncore.loop(timeout=1, map=canais, count=1)
+    finally:
+        wasyncore.close_all(canais)
+        servidor.task_dispatcher.shutdown(timeout=5)
+
+
 async def main():
     port = int(os.getenv("PORT", 5000))
     loop = asyncio.get_running_loop()
     registrar_loop_bot(loop)
-
-    loop.run_in_executor(
-        None,
-        lambda: werkzeug.serving.run_simple("0.0.0.0", port, app, use_debugger=False, use_reloader=False, threaded=True),
-    )
-    print(f"[API] Servidor Flask iniciado na porta {port}")
-
-    asyncio.create_task(monitorar_bot_watchdog())
-    await iniciar_bot_supervisionado()
+    canais = {}
+    parada = threading.Event()
+    # Bind before connecting Discord, so HTTP startup failures fail the deploy.
+    servidor = criar_servidor_http(port, canais)
+    tarefa_principal = asyncio.current_task()
+    sinais = []
+    tarefas = []
+    http = None
+    try:
+        for sinal in (signal.SIGTERM, signal.SIGINT):
+            try:
+                loop.add_signal_handler(sinal, tarefa_principal.cancel)
+                sinais.append(sinal)
+            except NotImplementedError:
+                # Windows uses asyncio.run's KeyboardInterrupt handling.
+                pass
+        http = loop.run_in_executor(None, executar_servidor_http, servidor, canais, parada)
+        print(f"[API] Waitress iniciado na porta {port}; 4 workers HTTP, 1 sessao Discord.")
+        tarefas = [
+            asyncio.create_task(monitorar_bot_watchdog(), name="bot-watchdog"),
+            asyncio.create_task(iniciar_bot_supervisionado(), name="discord-bot"),
+        ]
+        concluidas, _ = await asyncio.wait([http, *tarefas], return_when=asyncio.FIRST_COMPLETED)
+        for tarefa in concluidas:
+            await tarefa
+        raise RuntimeError("Um servico essencial encerrou inesperadamente; reiniciando o processo.")
+    finally:
+        parada.set()
+        for tarefa in tarefas:
+            tarefa.cancel()
+        if tarefas:
+            await asyncio.gather(*tarefas, return_exceptions=True)
+        if http is not None:
+            await asyncio.gather(http, return_exceptions=True)
+        else:
+            wasyncore.close_all(canais)
+            servidor.task_dispatcher.shutdown(timeout=5)
+        for sinal in sinais:
+            loop.remove_signal_handler(sinal)
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, asyncio.CancelledError):
         print("Desligando aplicacao...")

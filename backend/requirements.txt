@@ -7,4 +7,5 @@ Pillow
 pymongo
 python-dotenv
 requests
+waitress==3.0.2
 yt-dlp

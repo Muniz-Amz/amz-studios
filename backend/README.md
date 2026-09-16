@@ -36,3 +36,20 @@ O teste nao carrega `.env`, nao conecta ao Discord ou MongoDB e bloqueia acesso
 a rede. O workflow `Backend startup` executa a mesma verificacao em Linux.
 No Render, mantenha `backend` como Root Directory, `pip install -r requirements.txt`
 como Build Command e `python app.py` como Start Command.
+
+## Operacao no Render
+
+A API usa Waitress com quatro workers HTTP, limite de 64 conexoes e descarte de
+conexoes inativas apos 60 segundos. A API e o bot continuam no mesmo processo;
+nao use multiplos workers de processo nem execute `bot.py` em outro servico, pois
+isso abriria sessoes Discord duplicadas. Falha ao abrir a porta HTTP impede a
+conexao do bot, e a parada inesperada de um servico essencial encerra o processo
+para que o Render possa reinicia-lo. No Linux, SIGTERM/SIGINT encerra os trabalhos
+do bot e o servidor HTTP; requisicoes em andamento podem ser interrompidas.
+
+Use `/` como health check HTTP do Render, que verifica se o processo aceita
+requisicoes enquanto o Discord inicia. Para o UptimeRobot, use `/api/health`:
+retorna 200 quando o bot esta conectado e 503 quando esta offline. A resposta nao
+e armazenada em cache, tolera latencia ainda indisponivel e informa `git_commit`
+para identificar a versao publicada. O erro detalhado de inicializacao fica nos
+logs do servico. Um monitor nao elimina suspensoes ou limites do provedor.

@@ -42,3 +42,21 @@ O único modo aceito é `mp3`. Pedidos idênticos em andamento reutilizam a mesm
 ## Hugging Face Space
 
 Crie o Space como `Docker` e envie todos os arquivos desta pasta para a raiz do Space.
+
+## Estabilidade e monitoramento
+
+- `GET /api/health` responde sem consultar plataformas externas e informa a fila.
+- Um processo Gunicorn atende com quatro threads HTTP; uma conversao por vez
+  evita concorrencia excessiva de ffmpeg. Nao aumente o numero de processos,
+  pois os jobs sao mantidos na memoria deste processo.
+- A fila aceita ate quatro jobs ativos e mantem ate vinte resultados/erros.
+  Quando cheia, retorna HTTP 503 e `Retry-After: 15`.
+- Resultados expiram trinta minutos depois da conclusao. Jobs em execucao e
+  arquivos sendo baixados ficam protegidos da limpeza.
+- O download envia o arquivo em partes, sem carregar o arquivo inteiro na RAM.
+- Pedidos JSON tem limite de 16 KiB.
+- O Dockerfile executa `python -m unittest discover -s tests -v` antes de publicar.
+  Envie tambem a pasta `tests/` ao Space.
+
+O plano gratuito pode adormecer por inatividade. O monitor de disponibilidade
+deve usar `https://dreadlord007-amz-video-api.hf.space/api/health`.

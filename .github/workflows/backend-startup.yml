@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'huggingface-video-api/**'
       - '.github/workflows/backend-startup.yml'
   pull_request:
     paths:
       - 'backend/**'
+      - 'huggingface-video-api/**'
       - '.github/workflows/backend-startup.yml'
   workflow_dispatch:
 
@@ -19,16 +21,33 @@ jobs:
   startup:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: bot
+            python: '3.14'
+            directory: backend
+          - service: huggingface
+            python: '3.11'
+            directory: huggingface-video-api
+          - service: mp3
+            python: '3.12'
+            directory: backend/mp3_extractor
+    name: Startup (${{ matrix.service }})
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: ${{ matrix.python }}
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: ${{ matrix.directory }}/requirements.txt
+      - name: Install media tools
+        if: matrix.service != 'bot'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Install deploy dependencies
-        run: python -m pip install -r backend/requirements.txt
+        run: python -m pip install -r '${{ matrix.directory }}/requirements.txt'
       - name: Check dependencies and startup without service credentials
         run: |
           python -m pip check
-          python -m unittest discover -s backend/tests -v
+          python -m unittest discover -s '${{ matrix.directory }}/tests' -v

@@ -16,6 +16,8 @@ RUN pip install --no-cache-dir --upgrade pip \
     && python -m yt_dlp --version
 
 COPY . ./
+RUN python -m pip check \
+    && python -m unittest discover -s tests -v
 
 EXPOSE 10000
 
