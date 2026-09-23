@@ -87,6 +87,8 @@ class LocalDownloadService : Service() {
         val task = Task(update = intent.action == ACTION_UPDATE)
         // Process-wide: a destroyed service can still be unwinding a blocking native call.
         if (!engineLock.tryLock(task)) {
+            DownloadState.publish(DownloadSnapshot(DownloadPhase.FAILED,
+                message = "A operação anterior ainda está encerrando. Aguarde alguns segundos e tente novamente."))
             stopSelf(startId)
             return START_NOT_STICKY
         }
