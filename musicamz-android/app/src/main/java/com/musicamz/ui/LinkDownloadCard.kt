@@ -1,5 +1,7 @@
 package com.musicamz.ui
 
+import android.app.Activity
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -125,6 +127,13 @@ fun LinkDownloadCard(
             }
         }
     }
+    val verifySession = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            cookiesPresent = true
+            useCookies = true
+            feedback("Sessão guardada no aparelho. Toque em Baixar MP3 para testar o acesso.")
+        }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -227,6 +236,25 @@ fun LinkDownloadCard(
                     }
                 }
             }
+            OutlinedButton(onClick = {
+                dismissKeyboard()
+                try {
+                    verifySession.launch(Intent(context, YoutubeSessionActivity::class.java)
+                        .putExtra(YoutubeSessionActivity.EXTRA_LINK, link))
+                } catch (_: Exception) {
+                    feedback("Não foi possível abrir a verificação. Tente novamente.", isError = true)
+                }
+            }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                Text("Verificar acesso ao YouTube")
+            }
+            Text("Experimente se o YouTube pedir uma verificação. Você não precisa exportar um arquivo.",
+                style = MaterialTheme.typography.bodySmall)
+            if (cookiesPresent) {
+                Row {
+                    Checkbox(checked = useCookies, onCheckedChange = { useCookies = it }, enabled = !busy)
+                    Text("Usar sessão salva neste download", modifier = Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodyMedium)
+                }
+            }
             TextButton(onClick = { showOptions = !showOptions }) {
                 Text(if (showOptions) "Fechar opções" else "Cookies e atualização")
             }
@@ -237,12 +265,6 @@ fun LinkDownloadCard(
                     "Use apenas seus próprios cookies se o YouTube pedir login. Importe um arquivo cookies.txt no formato Netscape. Eles ficam criptografados no aparelho e são enviados apenas ao YouTube durante o download. Podem expirar e não garantem acesso a todos os vídeos.",
                     style = MaterialTheme.typography.bodySmall
                 )
-                if (cookiesPresent) {
-                    Row {
-                        Checkbox(checked = useCookies, onCheckedChange = { useCookies = it }, enabled = !busy)
-                        Text("Usar meus cookies neste download", modifier = Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
                 OutlinedButton(onClick = { importCookies.launch(arrayOf("text/*", "application/octet-stream")) }, enabled = !busy) {
                     Text(if (cookiesPresent) "Substituir cookies" else "Importar cookies.txt")
                 }
@@ -252,6 +274,7 @@ fun LinkDownloadCard(
                             cookieWork = true
                             try {
                                 withContext(Dispatchers.IO) { cookieStore.delete() }
+                                YoutubeSessionActivity.clearBrowserSession()
                                 cookiesPresent = false
                                 useCookies = false
                                 feedback("Cookies removidos do MusicAmz.")

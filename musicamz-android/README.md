@@ -1,7 +1,8 @@
 # MusicAmz
 
 Player Android para músicas do aparelho, com importação de áudio do YouTube
-diretamente no celular. Versão 1.2.2, código de versão Android 17.
+diretamente no celular. Versão experimental 1.2.3-test01, código Android 18.
+Esta compilação é para avaliação local; a distribuição pública 1.2.2 não foi alterada.
 
 ## Recursos
 
@@ -49,6 +50,29 @@ problemas em outros componentes podem exigir uma nova versão do APK.
 Use o recurso com conteúdo que você tenha autorização para baixar.
 
 ## Cookies opcionais
+
+### Verificação no aplicativo (experimental)
+
+Toque em **Verificar acesso ao YouTube** na área de importação. O aplicativo abre
+uma janela temporária com o vídeo indicado (ou a página inicial do YouTube).
+Depois de acessar a página ou concluir a verificação apresentada pelo site,
+toque em **Usar esta sessão**. De volta ao AMZ, toque em **Baixar MP3**. Não é
+necessário exportar cookies.txt para experimentar esse caminho.
+
+Guardar a sessão não confirma login nem garante que o YouTube autorizará o
+download. O Google pode recusar o login em uma janela incorporada; nesse caso,
+volte ao AMZ. Não há alteração de identificação do navegador, resolução automática
+de CAPTCHA ou acesso aos dados do Chrome/aplicativo YouTube. A importação manual
+permanece disponível como alternativa.
+
+Somente cookies dos endereços YouTube permitidos são copiados para o armazenamento
+criptografado após o toque de confirmação. A sessão anterior é substituída apenas
+quando a gravação termina. Cancelar mantém a cópia salva anteriormente. A janela
+temporária limpa cookies e dados web ao abrir e ao fechar; seus dados são excluídos
+dos backups Android e da transferência de aparelho. Nenhum download começa só por
+abrir ou fechar a janela.
+
+### Importação por arquivo
 
 O aplicativo funciona sem importar cookies quando o vídeo pode ser acessado
 anonimamente. Se for necessário usar a sua sessão, abra **Cookies e atualização**,

@@ -377,7 +377,7 @@ class LocalDownloadService : Service() {
             "cookies antes" in message -> "Importe seus cookies antes de ativar essa opção."
             "768 mb" in message -> "Libere pelo menos 768 MB no armazenamento interno para importar áudio."
             "sign in" in message || "not a bot" in message || "confirm you" in message || "cookies" in message ->
-                "O YouTube exigiu uma verificação. Atualize o extrator ou importe cookies recentes da sua sessão."
+                "O YouTube exigiu uma verificação. Toque em Verificar acesso ao YouTube ou atualize o extrator nas opções."
             "private video" in message || "not available" in message || "unavailable" in message || "copyright" in message ->
                 "Este vídeo está indisponível ou exige acesso que esta sessão não possui."
             "filter" in message || "live" in message -> "Use um vídeo concluído com duração de até 4 horas."

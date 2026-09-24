@@ -12,8 +12,8 @@ android {
         applicationId = "com.musicamz"
         minSdk = 26
         targetSdk = 34
-        versionCode = 17
-        versionName = "1.2.2"
+        versionCode = 18
+        versionName = "1.2.3-test01"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

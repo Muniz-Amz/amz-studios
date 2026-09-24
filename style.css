@@ -1092,6 +1092,31 @@ html[data-site-theme] body {
     text-transform: uppercase;
 }
 
+.seo-experimental-note {
+    max-width: 780px;
+    margin-top: 26px;
+    padding: 18px 20px;
+    border: 1px solid var(--site-border);
+    background: var(--site-card-bg);
+}
+
+.seo-experimental-note strong {
+    color: var(--site-text);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.seo-experimental-note p {
+    margin: 9px 0 0;
+    font-size: 14px;
+    line-height: 1.65;
+}
+
+.seo-experimental-note .seo-cta-row {
+    margin-top: 16px;
+}
+
 .seo-layout {
     display: grid;
     grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.75fr);

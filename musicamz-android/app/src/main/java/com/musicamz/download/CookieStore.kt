@@ -45,6 +45,15 @@ class CookieStore(context: Context) {
                 buffer.fill(0)
             }
         } ?: throw IllegalArgumentException("Não foi possível abrir o arquivo de cookies.")
+        save(inputBytes)
+    }
+
+    /** Recebe somente a sessão da janela de verificação, após confirmação do usuário. */
+    fun importWebSession(headers: Map<String, String?>) = synchronized(lock) {
+        save(YoutubeWebSession.toNetscape(headers).toByteArray(Charsets.UTF_8))
+    }
+
+    private fun save(inputBytes: ByteArray) {
         val plaintext = try {
             NetscapeCookieParser.normalize(inputBytes).toByteArray(Charsets.UTF_8)
         } finally {
@@ -150,7 +159,7 @@ class CookieStore(context: Context) {
 /** Parser independente do Android para filtrar a sessão e testar entradas malformadas. */
 internal object NetscapeCookieParser {
     const val MAX_BYTES = 1024 * 1024
-    private val allowedDomains = setOf("youtube.com", ".youtube.com", "youtu.be")
+    private val allowedDomains = setOf("youtube.com", ".youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be")
     private val cookieName = Regex("[!#$%&'*+.^_`|~0-9A-Za-z-]+")
 
     fun normalize(bytes: ByteArray): String {
