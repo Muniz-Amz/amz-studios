@@ -24,3 +24,6 @@ Thumbs.db
 .server-out.log
 *.log
 musicamz-log.txt
+
+# Optional YouTube provider build artifacts and dependencies
+backend/.youtube-pot-provider/

@@ -53,3 +53,30 @@ retorna 200 quando o bot esta conectado e 503 quando esta offline. A resposta na
 e armazenada em cache, tolera latencia ainda indisponivel e informa `git_commit`
 para identificar a versao publicada. O erro detalhado de inicializacao fica nos
 logs do servico. Um monitor nao elimina suspensoes ou limites do provedor.
+
+## Teste opcional de acesso ao YouTube no servidor
+
+O YouTube pode recusar o IP do servidor com `Sign in to confirm you're not a bot`,
+antes mesmo da conversao. Isso e diferente dos limites de tamanho/duracao.
+Um PO-token provider pode ajudar em alguns casos, mas nao garante acesso.
+
+Para testar o provider local `bgutil-ytdlp-pot-provider` 2.0.0 no Render:
+
+- Build Command: `python build_youtube.py`.
+- Start Command: `python start_with_youtube.py`.
+- Requer Node.js 22.13+ LTS ou 24+ e npm, disponiveis nos runtimes nativos do Render.
+
+O build fixa o plugin e o codigo JavaScript na mesma versao e verifica a revisao
+Git. O provider roda como processo curto durante a extracao, sem abrir porta
+publica e sem importar cookies pessoais. A inicializacao usa o cliente `mweb`
+somente para YouTube. Uma trava compartilhada limita o provider a uma extracao
+por vez, inclusive pela API publica; pedidos concorrentes recebem aviso de ocupado.
+Valide o download completo a partir do Render; sucesso no PC nao comprova acesso
+do servidor. Se continuar bloqueado, nao repita indefinidamente.
+
+Para desativar, volte o Start Command para `python app.py` e o Build Command para
+`pip install -r requirements.txt`. Sem `AMZ_YOUTUBE_POT_SERVER_HOME`, a extracao
+continua com os clientes padrao do yt-dlp.
+
+Referencias: [guia do yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide)
+e [provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider).

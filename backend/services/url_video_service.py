@@ -3,6 +3,7 @@ import base64
 import os
 import shutil
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,10 @@ try:
     from yt_dlp.networking.impersonate import ImpersonateTarget
 except ImportError:  # pragma: no cover
     ImpersonateTarget = None
+
+
+# API HTTP e Discord compartilham o mesmo processo e o cache do provider.
+_YOUTUBE_POT_SEMAPHORE = threading.BoundedSemaphore(1)
 
 
 class UrlVideoError(Exception):
@@ -124,6 +129,37 @@ class UrlVideoService:
         except (AssertionError, TypeError, ValueError) as erro:
             raise UrlVideoError("Alvo de impersonacao invalido no servidor.") from erro
 
+    @staticmethod
+    def _opcoes_youtube_pot():
+        server_home = os.getenv("AMZ_YOUTUBE_POT_SERVER_HOME", "").strip()
+        if not server_home:
+            return {}
+
+        try:
+            pasta = Path(server_home).expanduser().resolve()
+            preparado = pasta.is_dir() and (pasta / "build" / "generate_once.js").is_file()
+        except (OSError, ValueError, RuntimeError):
+            preparado = False
+
+        if not preparado:
+            raise UrlVideoError(
+                "Configuracao do provedor PO Token invalida: AMZ_YOUTUBE_POT_SERVER_HOME "
+                "deve apontar para uma pasta com build/generate_once.js."
+            )
+        if not shutil.which("node"):
+            raise UrlVideoError(
+                "Configuracao do provedor PO Token incompleta: Node.js nao foi encontrado no servidor."
+            )
+
+        # Experimento opcional sem conta: PO Tokens nao garantem que o YouTube
+        # aceite o IP do servidor ou deixe de exigir confirmacao no player.
+        return {
+            "extractor_args": {
+                "youtube": {"player_client": ["mweb"]},
+                "youtubepot-bgutilscript": {"server_home": [str(pasta)]},
+            }
+        }
+
     def _opcoes_plataforma(self, url: str):
         host = (urlparse(url).hostname or "").lower()
         global_impersonate = os.getenv("AMZ_YTDLP_IMPERSONATE", "").strip()
@@ -148,6 +184,7 @@ class UrlVideoService:
 
         if host in {"youtube.com", "youtu.be"} or host.endswith(".youtube.com"):
             opcoes = {
+                **self._opcoes_youtube_pot(),
                 "http_headers": {
                     "User-Agent": (
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -237,6 +274,16 @@ class UrlVideoService:
                     pass
 
     def _executar_ytdlp(self, ydl_opts, url, *, download, tipo, cookies_file=None):
+        usando_provider = "youtubepot-bgutilscript" in (ydl_opts.get("extractor_args") or {})
+        if usando_provider and not _YOUTUBE_POT_SEMAPHORE.acquire(blocking=False):
+            raise UrlVideoError("O download do YouTube esta ocupado. Aguarde a tarefa atual terminar e tente novamente.")
+        try:
+            return self._tentar_ytdlp(ydl_opts, url, download=download, tipo=tipo, cookies_file=cookies_file)
+        finally:
+            if usando_provider:
+                _YOUTUBE_POT_SEMAPHORE.release()
+
+    def _tentar_ytdlp(self, ydl_opts, url, *, download, tipo, cookies_file=None):
         tentativas = max(1, min(int(self.limits.retries), 5))
         for tentativa in range(1, tentativas + 1):
             try:
