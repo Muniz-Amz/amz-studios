@@ -27,6 +27,15 @@ def main():
     print(f"Preparing optional YouTube provider {VERSION} with Node {version}", flush=True)
     run(sys.executable, "-m", "pip", "install", "-r", "requirements.txt")
     run(sys.executable, "-m", "pip", "install", f"bgutil-ytdlp-pot-provider=={VERSION}")
+    # Render can restore the provider's files from a previous build without
+    # restoring its nested .git directory. Treat that cache as incomplete so
+    # the pinned checkout is recreated instead of resolving the parent repo.
+    if PROVIDER.exists() and not (PROVIDER / ".git").is_dir():
+        shutil.rmtree(PROVIDER)
+    if PROVIDER.exists():
+        cached = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=PROVIDER, text=True).strip()
+        if cached != COMMIT:
+            shutil.rmtree(PROVIDER)
     if not PROVIDER.exists():
         run("git", "clone", "--depth", "1", "--branch", VERSION, REPOSITORY, str(PROVIDER))
     actual = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=PROVIDER, text=True).strip()
