@@ -1,7 +1,7 @@
 # MusicAmz
 
 Player Android para músicas do aparelho, com importação de áudio do YouTube
-diretamente no celular. Versão 1.2.1, código de versão Android 16.
+diretamente no celular. Versão 1.2.2, código de versão Android 17.
 
 ## Recursos
 
@@ -20,7 +20,9 @@ Na área de importação do aplicativo, cole um link de vídeo do YouTube e toqu
 **Baixar MP3**. Também é possível compartilhar o link do YouTube para o MusicAmz.
 Receber ou colar um link não inicia o download automaticamente. Ao tocar em
 **Baixar MP3**, o teclado fecha e a tela mostra o progresso ou um aviso de erro.
-A versão 1.2.1 melhora essa resposta para que o resultado do toque fique visível.
+A resposta visual introduzida na versão 1.2.1 é mantida. A versão 1.2.2 corrige
+uma falha ao preparar os componentes do download no primeiro uso, que podia
+impedir a importação antes de qualquer conexão com o YouTube.
 
 Para atualizar, instale o novo APK por cima da versão anterior, sem desinstalar
 o MusicAmz, para preservar os dados do aplicativo.

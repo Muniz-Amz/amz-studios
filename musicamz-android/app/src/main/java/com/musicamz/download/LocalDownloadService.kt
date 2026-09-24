@@ -13,6 +13,7 @@ import android.os.IBinder
 import android.os.SystemClock
 import android.system.Os
 import android.system.OsConstants
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.musicamz.MainActivity
 import com.yausername.ffmpeg.FFmpeg
@@ -134,9 +135,10 @@ class LocalDownloadService : Service() {
                 if (cancelled && task.failure == null) DownloadPhase.CANCELLED else DownloadPhase.FAILED,
                 message = message
             )
-        } catch (_: LinkageError) {
+        } catch (error: LinkageError) {
+            Log.e("MusicAmzEngine", "Audio engine linkage failure", error)
             task.result = DownloadSnapshot(DownloadPhase.FAILED,
-                message = "O motor de áudio não é compatível com este aparelho. Instale a versão mais recente do aplicativo.")
+                message = "Não foi possível preparar o motor de áudio. Atualize o aplicativo e tente novamente.")
         } finally {
             withContext(NonCancellable + Dispatchers.IO) {
                 task.watchdog?.cancel()

@@ -1,0 +1,3 @@
+# Observed mapping excerpt from MusicAmz 1.2.1 release, versionCode 16.
+# Only this original mapping line was preserved for the targeted regression check.
+org.apache.commons.compress.archivers.zip.AsiExtraField -> w4.a:
