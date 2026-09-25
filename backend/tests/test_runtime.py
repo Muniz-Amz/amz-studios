@@ -46,6 +46,25 @@ class RuntimeTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_command_sync_restores_gifs_and_removes_info_help_and_limits(self):
+        self.run_isolated("""
+import discord
+
+async def check():
+    await app.bot.setup_hook()
+    midia = app.bot.tree.get_command('midia')
+    assert {command.name for command in midia.commands} == {'audio', 'baixar', 'gifimagem', 'gifvideo'}
+    assert app.bot.tree.get_command('amz') is None
+    guild = discord.Object(id=123)
+    with patch.object(app.bot.tree, 'sync', new_callable=AsyncMock, return_value=[]) as sync:
+        await app.bot.sync_slash_guild(guild.id)
+        sync.assert_awaited_once_with(guild=guild)
+    assert app.bot.tree.get_command('amz', guild=guild) is None
+    assert {command.name for command in app.bot.tree.get_command('midia', guild=guild).commands} == {'audio', 'baixar', 'gifimagem', 'gifvideo'}
+
+runner.run(check())
+""")
+
     def test_health_handles_discord_latency_before_first_heartbeat(self):
         self.run_isolated("""
 client = app.app.test_client()

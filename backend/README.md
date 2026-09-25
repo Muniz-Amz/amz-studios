@@ -39,6 +39,14 @@ como Build Command e `python app.py` como Start Command.
 
 ## Operacao no Render
 
+Os comandos de midia sao `/midia gifimagem`, `/midia gifvideo`, `/midia audio`
+e `/midia baixar`. GIFs de video usam por padrao os primeiros 10 segundos,
+10 FPS e ate 480 pixels em cada dimensao, mantendo a proporcao. Imagens
+aceitam ate 12 megapixels antes da reducao. Entrada e saida ficam limitadas
+a 8 MB por padrao e as conversoes compartilham uma vaga de processamento.
+`/amz ajuda`, `/amz info` e `/midia limites` foram retirados do Discord;
+os limites de processamento continuam ativos.
+
 A API usa Waitress com quatro workers HTTP, limite de 64 conexoes e descarte de
 conexoes inativas apos 60 segundos. A API e o bot continuam no mesmo processo;
 nao use multiplos workers de processo nem execute `bot.py` em outro servico, pois

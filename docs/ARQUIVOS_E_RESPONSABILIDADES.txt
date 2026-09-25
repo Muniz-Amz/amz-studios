@@ -151,9 +151,6 @@ backend/cogs/mention.py
 backend/cogs/moderation.py
   Comandos de moderacao, punicoes, logs e funcoes de seguranca.
 
-backend/cogs/status.py
-  Comandos de status, informacoes e verificacoes do bot.
-
 backend/cogs/welcome.py
   Eventos e comandos de entrada/saida, boas-vindas e despedidas.
 

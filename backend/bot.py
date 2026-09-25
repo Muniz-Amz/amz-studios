@@ -12,7 +12,6 @@ load_dotenv()
 
 EXTENSIONS = (
     "cogs.cleanup",
-    "cogs.status",
     "cogs.admin",
     "cogs.media",
     "cogs.announcement",

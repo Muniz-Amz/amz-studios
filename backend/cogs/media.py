@@ -32,7 +32,9 @@ def formatar_erro_midia(erro, origem="arquivo"):
         )
 
     if "grande demais" in texto_lower or "file is larger" in texto_lower or "max_filesize" in texto_lower:
-        return "Arquivo grande demais para o limite atual. Tente um video menor ou o modo MP3."
+        if "imagem grande demais" in texto_lower:
+            return texto
+        return "Arquivo grande demais para o limite atual. Tente um arquivo menor ou um corte mais curto."
 
     if "longo demais" in texto_lower or "duration" in texto_lower:
         return "Video longo demais para esse comando. Use um corte menor e tente de novo."
@@ -80,6 +82,30 @@ class MediaCog(commands.Cog):
 
         return legenda, output_path
 
+    async def converter_anexo_gif(self, attachment, modo, temp_dir):
+        media_type = tipo_anexo(attachment)
+        esperado = "image" if modo == "image_gif" else "video"
+
+        if media_type != esperado:
+            tipo_legivel = "uma imagem" if esperado == "image" else "um video"
+            raise MediaError(f"Envie {tipo_legivel} para usar esse comando.")
+
+        input_path = await self.salvar_anexo(attachment, temp_dir)
+        base = Path(nome_seguro(Path(attachment.filename).stem)).stem or "amz"
+        output_path = Path(temp_dir) / f"{base}-convertido.gif"
+
+        if modo == "image_gif":
+            await asyncio.to_thread(self.service.imagem_para_gif, input_path, output_path)
+            legenda = "Imagem convertida para GIF."
+        else:
+            await asyncio.to_thread(self.service.video_para_gif, input_path, output_path)
+            legenda = (
+                f"Video convertido para GIF com limite de {self.limits.max_video_seconds}s "
+                f"e {self.limits.gif_fps} FPS."
+            )
+
+        return legenda, output_path
+
     async def processar_audio(self, interaction, attachment):
         await interaction.response.defer(thinking=True)
 
@@ -103,21 +129,43 @@ class MediaCog(commands.Cog):
                 ephemeral=True,
             )
 
+    async def processar_gif(self, interaction, attachment, modo):
+        await interaction.response.defer(thinking=True)
+
+        try:
+            async with self.semaphore:
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    legenda, output_path = await self.converter_anexo_gif(attachment, modo, temp_dir)
+                    await interaction.followup.send(
+                        f"Pronto: {legenda}",
+                        file=discord.File(output_path, filename=output_path.name),
+                    )
+        except MediaError as erro:
+            mensagem = formatar_erro_midia(erro, "arquivo")
+            self.bot.registrar_evento("media_file_rejected", mensagem, nivel="warning", guild_id=interaction.guild_id)
+            await interaction.followup.send(f"Nao deu para processar: {mensagem}", ephemeral=True)
+        except Exception as erro:
+            print(f"[MIDIA] Erro inesperado em slash command GIF: {erro}")
+            self.bot.registrar_evento("media_slash_error", f"Erro ao processar GIF: {erro}", nivel="error", guild_id=interaction.guild_id)
+            await interaction.followup.send(
+                "Nao consegui converter esse arquivo para GIF. Tente um arquivo menor ou outro formato.",
+                ephemeral=True,
+            )
+
+    @midia.command(name="gifimagem", description="Transforma uma imagem enviada em GIF.")
+    @app_commands.describe(arquivo="Imagem que sera transformada em GIF.")
+    async def midia_gifimagem(self, interaction: discord.Interaction, arquivo: discord.Attachment):
+        await self.processar_gif(interaction, arquivo, "image_gif")
+
+    @midia.command(name="gifvideo", description="Transforma um video enviado em GIF.")
+    @app_commands.describe(arquivo="Video que sera transformado em GIF.")
+    async def midia_gifvideo(self, interaction: discord.Interaction, arquivo: discord.Attachment):
+        await self.processar_gif(interaction, arquivo, "video_gif")
+
     @midia.command(name="audio", description="Extrai o audio de um video enviado.")
     @app_commands.describe(arquivo="Video de onde o audio sera extraido.")
     async def midia_audio(self, interaction: discord.Interaction, arquivo: discord.Attachment):
         await self.processar_audio(interaction, arquivo)
-
-    @midia.command(name="limites", description="Mostra os limites dos comandos de midia.")
-    async def midia_limites_grupo(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            "Limites de midia:\n"
-            f"- Entrada: {self.limits.max_input_mb} MB\n"
-            f"- Saida: {self.limits.max_output_mb} MB\n"
-            f"- Video para audio: {formatar_limite_segundos(self.limits.max_audio_seconds)}\n"
-            f"- Conversoes simultaneas: 1 por padrao",
-            ephemeral=True,
-        )
 
     @midia.command(name="baixar", description="Baixa um video por link e envia no chat.")
     @app_commands.describe(url="Link do video (Instagram Reels, TikTok, YouTube Shorts, etc.)")
