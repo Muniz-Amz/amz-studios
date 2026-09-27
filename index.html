@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AMZ Studios | Bot Discord, Apps e Downloads</title>
-    <meta name="description" content="AMZ Studios cria bots para Discord, painel de administração, automações, ferramentas de moderação, conversão de áudio em MP3 e aplicativos como AMZ Clicker e MusicAmz.">
+    <meta name="description" content="Conheça os aplicativos da AMZ Studios: AMZ Clicker para Windows, AMZ Notes, MusicAmz e Cofre AMZ para Android, além de ferramentas de mídia e bot Discord.">
     <meta name="robots" content="index, follow, max-image-preview:large">
     <meta name="author" content="AMZ Studios">
     <meta name="application-name" content="AMZ Studios">
@@ -48,7 +48,7 @@
                     "publisher": {
                         "@id": "https://muniz-amz.github.io/amz-studios/#organization"
                     },
-                    "description": "Hub oficial da AMZ Studios com bot Discord, painel administrativo, ferramentas de mídia, AMZ Clicker e MusicAmz."
+                    "description": "Hub oficial da AMZ Studios com bot Discord, ferramentas de mídia e aplicativos AMZ Clicker, AMZ Notes, MusicAmz e Cofre AMZ."
                 },
                 {
                     "@type": "Service",
@@ -90,6 +90,20 @@
                     }
                 },
                 {
+                    "@type": "SoftwareApplication",
+                    "@id": "https://muniz-amz.github.io/amz-studios/#amz-notes",
+                    "name": "AMZ Notes",
+                    "softwareVersion": "2.1.0",
+                    "operatingSystem": "Android 8.0 ou superior",
+                    "applicationCategory": "ProductivityApplication",
+                    "url": "https://muniz-amz.github.io/amz-studios/amz-notes/",
+                    "downloadUrl": "https://muniz-amz.github.io/amz-studios/assets/meu-site-downloads/AMZ-Notes-v2.1.0.apk",
+                    "description": "Notas, tarefas, calendário, checklists e lembretes locais para Android. Funciona offline, com widget e backup.",
+                    "publisher": {
+                        "@id": "https://muniz-amz.github.io/amz-studios/#organization"
+                    }
+                },
+                {
                     "@type": "FAQPage",
                     "@id": "https://muniz-amz.github.io/amz-studios/#faq",
                     "mainEntity": [
@@ -98,7 +112,7 @@
                             "name": "O que é a AMZ Studios?",
                             "acceptedAnswer": {
                                 "@type": "Answer",
-                                "text": "A AMZ Studios é um hub de desenvolvimento com bot para Discord, painel administrativo, ferramentas de automação, conversão de áudio em MP3 e aplicativos como AMZ Clicker e MusicAmz."
+                                "text": "A AMZ Studios é um hub de desenvolvimento com bot para Discord, ferramentas de automação e mídia e aplicativos como AMZ Clicker, AMZ Notes e MusicAmz."
                             }
                         },
                         {
@@ -123,6 +137,14 @@
                             "acceptedAnswer": {
                                 "@type": "Answer",
                                 "text": "MusicAmz é um player de música para Android com visual renovado, importação de faixas, fila persistente e reprodução local."
+                            }
+                        },
+                        {
+                            "@type": "Question",
+                            "name": "O AMZ Notes funciona offline?",
+                            "acceptedAnswer": {
+                                "@type": "Answer",
+                                "text": "Sim. O AMZ Notes guarda notas, tarefas e lembretes no aparelho, sem conta ou internet. O backup pode ser exportado nas configurações."
                             }
                         }
                     ]
@@ -259,12 +281,13 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                             <i class="ph ph-device-mobile" aria-hidden="true"></i>
                             <h3>Aplicativos AMZ</h3>
                             <p>
-                                O repositório de software inclui AMZ Clicker para PC e MusicAmz para Android, com foco em utilidade,
+                                O repositório de software inclui AMZ Clicker para PC e AMZ Notes, MusicAmz e Cofre AMZ para Android, com foco em utilidade,
                                 estabilidade e uso simples para quem acompanha os projetos da AMZ Studios.
                             </p>
                             <ul>
                                 <li>AMZ Clicker 3.0: cliques, macros e simulação para Windows.</li>
                                 <li>MusicAmz: player de música local para Android.</li>
+                                <li>AMZ Notes: notas, agenda e lembretes offline para Android.</li>
                                 <li>Downloads diretos pelo hub oficial da AMZ Studios.</li>
                             </ul>
                             <a class="site-card-link" href="./musicamz/">Ver página do MusicAmz</a>
@@ -420,6 +443,18 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                                 <i class="ph ph-download-simple text-lg" aria-hidden="true"></i> Baixar v1.3.0
                             </a>
                         </div>
+                        <div class="site-app-card bw-border p-10 bg-black group relative overflow-hidden" id="amz-notes">
+                            <div class="flex justify-between items-start mb-16">
+                                <i class="ph ph-note-pencil text-5xl text-white" aria-hidden="true"></i>
+                                <span class="site-chip font-mono text-[10px] border border-neutral-700 text-neutral-500 px-3 py-1 uppercase tracking-widest">Android APK · Offline</span>
+                            </div>
+                            <h3 class="text-3xl font-black uppercase mb-3">AMZ Notes</h3>
+                            <p class="text-neutral-500 text-sm mb-10 leading-relaxed max-w-sm">Notas, agenda, calendário e lembretes no celular. A versão 2.1 inclui checklists, lixeira e widget Hoje, sem conta ou internet.</p>
+                            <a href="./amz-notes/" class="site-card-link mb-4">Conhecer o AMZ Notes</a>
+                            <a href="./assets/meu-site-downloads/AMZ-Notes-v2.1.0.apk" download class="site-primary-action inline-flex items-center gap-3 bg-white text-black px-6 py-3 font-bold text-xs uppercase tracking-widest hover:bg-neutral-200 transition">
+                                <i class="ph ph-download-simple text-lg" aria-hidden="true"></i> Baixar v2.1.0
+                            </a>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -448,6 +483,10 @@ Eleve o nível do seu servidor. Desenvolvemos soluções inteligentes para que v
                         <article>
                             <h3>O que é o MusicAmz?</h3>
                             <p>MusicAmz é um player de música para Android com visual renovado, fila persistente e reprodução local.</p>
+                        </article>
+                        <article>
+                            <h3>O AMZ Notes funciona offline?</h3>
+                            <p>Sim. O AMZ Notes guarda notas, tarefas e lembretes no aparelho, sem conta ou internet. O backup pode ser exportado nas configurações.</p>
                         </article>
                         <article>
                             <h3>Qual formato o site baixa?</h3>
