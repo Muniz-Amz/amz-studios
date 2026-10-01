@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMZ PDF | Leitor de PDF Offline para Android</title>
+    <meta name="description" content="Baixe o AMZ PDF para Android: leia PDFs offline com zoom, modo noturno, marcadores e retorno à última página. Sem anúncios ou conta.">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <meta name="author" content="AMZ Studios">
+    <meta name="theme-color" content="#0b1520">
+    <link rel="canonical" href="https://muniz-amz.github.io/amz-studios/amz-pdf/">
+    <meta property="og:type" content="article">
+    <meta property="og:locale" content="pt_BR">
+    <meta property="og:site_name" content="AMZ Studios">
+    <meta property="og:title" content="AMZ PDF para Android">
+    <meta property="og:description" content="Seus PDFs. No seu ritmo. Leitura offline, zoom, modo noturno e marcadores no celular.">
+    <meta property="og:url" content="https://muniz-amz.github.io/amz-studios/amz-pdf/">
+    <meta property="og:image" content="https://muniz-amz.github.io/amz-studios/assets/logo.png">
+    <link rel="icon" href="../assets/logo.ico?v=6" type="image/x-icon">
+    <script>
+        try {
+            document.documentElement.dataset.siteTheme = localStorage.getItem('amz_site_theme') === 'light' ? 'light' : 'dark';
+        } catch { document.documentElement.dataset.siteTheme = 'dark'; }
+    </script>
+    <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            "name": "AMZ PDF",
+            "softwareVersion": "1.0.0",
+            "operatingSystem": "Android 8.0 ou superior",
+            "applicationCategory": "ProductivityApplication",
+            "url": "https://muniz-amz.github.io/amz-studios/amz-pdf/",
+            "downloadUrl": "https://muniz-amz.github.io/amz-studios/assets/meu-site-downloads/AMZ-PDF-v1.0.0.apk",
+            "fileSize": "37563 bytes",
+            "description": "Leitor de PDF offline para Android com zoom, modo noturno, marcadores e retorno à última página. Sem anúncios ou conta.",
+            "publisher": { "@type": "Organization", "name": "AMZ Studios" }
+        }
+    </script>
+    <link rel="stylesheet" href="../style.css?v=48">
+    <style>
+        .pdf-preview { margin: 0; display: grid; justify-items: center; gap: 16px; }
+        .pdf-preview img { display: block; width: min(100%, 250px); height: auto; border-radius: 18px; border: 1px solid var(--site-border); }
+        .pdf-preview figcaption { color: var(--site-muted); font-size: 12px; line-height: 1.6; text-align: center; }
+        .pdf-section { margin-top: 18px; }
+        .pdf-install ol { margin: 22px 0 0; padding-left: 22px; color: var(--site-muted); line-height: 1.8; }
+        .pdf-install li + li { margin-top: 10px; }
+        .pdf-download p { margin-top: 18px; color: var(--site-muted); line-height: 1.7; }
+        .pdf-download a { color: var(--site-text); text-decoration: underline; text-underline-offset: 4px; }
+    </style>
+</head>
+<body class="seo-page">
+    <nav class="seo-navbar" aria-label="Navegação principal">
+        <a class="seo-brand" href="../" aria-label="Voltar para AMZ Studios">
+            <img src="../assets/logo.png" alt="AMZ Studios">
+            <span>AMZ <em>STUDIOS</em></span>
+        </a>
+        <div class="seo-nav-links">
+            <a href="../#aplicativos">Aplicativos</a>
+            <a href="#como-instalar">Como instalar</a>
+            <button type="button" class="site-theme-toggle" id="site-theme-toggle" onclick="alternarTemaSeo()" aria-label="Alternar tema"><span id="site-theme-label">Claro</span></button>
+        </div>
+    </nav>
+    <main class="seo-main">
+        <section class="seo-hero" id="baixar">
+            <a class="seo-breadcrumb" href="../#aplicativos">AMZ Studios / Aplicativos</a>
+            <span class="site-chip">Android APK · v1.0.0</span>
+            <h1>AMZ PDF</h1>
+            <p>Seus PDFs. No seu ritmo. Abra seus documentos, amplie os detalhes e marque as páginas que quer guardar. Quando voltar, continue de onde parou.</p>
+            <div class="seo-cta-row">
+                <a class="site-primary-action" href="../assets/meu-site-downloads/AMZ-PDF-v1.0.0.apk" download>Baixar v1.0.0 · Android</a>
+                <a class="site-secondary-action" href="#como-instalar">Como instalar</a>
+            </div>
+            <p>Android 8.0 ou superior · APK de 37,6 KB · Sem anúncios ou conta.</p>
+        </section>
+        <section class="seo-layout" aria-label="Conheça o leitor">
+            <article class="seo-content-card">
+                <h2>Abra. Leia. Continue.</h2>
+                <p>Escolha um PDF no seletor de arquivos do Android ou envie um documento de outro aplicativo para o AMZ PDF. Os arquivos disponíveis no aparelho podem ser lidos offline.</p>
+                <p>Use dois dedos para ampliar, arraste a página para ver os detalhes ou toque no número para ir direto à página desejada. Na horizontal, os controles ficam ao lado do documento.</p>
+                <p>A biblioteca lembra os 15 documentos mais recentes, a última página lida e até 100 marcadores por documento. O arquivo original permanece intacto.</p>
+                <p>Histórico e marcadores ficam no aparelho. Arquivos de provedores na nuvem podem precisar de conexão para serem abertos.</p>
+            </article>
+            <aside class="seo-side-card">
+                <figure class="pdf-preview">
+                    <img src="../assets/amz-pdf-reader.png" width="1080" height="1920" loading="lazy" alt="AMZ PDF exibindo um documento de exemplo com controles de páginas, marcadores, modo noturno e zoom.">
+                    <figcaption>Tela do aplicativo com um documento de exemplo.</figcaption>
+                </figure>
+            </aside>
+        </section>
+        <section class="seo-feature-grid" aria-label="Funções do AMZ PDF">
+            <article><h3>Zoom com os dedos</h3><p>Amplie até 5×, arraste para explorar a página e use Ajustar para voltar à visão completa.</p></article>
+            <article><h3>Modo noturno</h3><p>Alterne entre Dia e Noite. O modo noturno inverte as cores da página, incluindo as imagens.</p></article>
+            <article><h3>Marcadores</h3><p>Guarde suas páginas preferidas e abra a lista de marcadores para voltar rapidamente a elas.</p></article>
+            <article><h3>Retome a leitura</h3><p>Abra um documento recente para continuar na última página lida, sem precisar procurá-la de novo.</p></article>
+        </section>
+        <section class="seo-layout pdf-section" id="como-instalar">
+            <article class="seo-content-card pdf-install">
+                <h2>Comece no seu Android</h2>
+                <ol>
+                    <li>Toque em <strong>Baixar v1.0.0 · Android</strong> no celular e abra o APK baixado.</li>
+                    <li>Se o Android solicitar, permita a instalação por esse navegador ou gerenciador de arquivos e conclua a instalação.</li>
+                    <li>Abra o AMZ PDF, toque em <strong>Abrir PDF</strong> e escolha seu documento.</li>
+                    <li>Use <strong>Marcar</strong> para guardar uma página e <strong>Biblioteca</strong> para trocar de documento.</li>
+                </ol>
+                <p>A instalação é direta pelo APK, fora da Play Store. Ao baixar no computador, transfira o arquivo para o celular antes de abri-lo.</p>
+            </article>
+            <aside class="seo-side-card pdf-download">
+                <h2>Download oficial</h2>
+                <p>Versão 1.0.0 · Android 8.0 ou superior · 37,6 KB.</p>
+                <p><a href="../assets/meu-site-downloads/AMZ-PDF-v1.0.0.apk" download>Baixar AMZ PDF 1.0.0</a></p>
+                <p><a href="../assets/meu-site-downloads/AMZ-PDF-v1.0.0-Guia.md" download>Baixar guia de uso</a></p>
+                <p><a href="../assets/meu-site-downloads/AMZ-PDF-v1.0.0.apk.sha256" download>Baixar verificação SHA-256</a></p>
+            </aside>
+        </section>
+        <section class="seo-content-card pdf-section" aria-labelledby="alcance">
+            <h2 id="alcance">Sobre esta versão</h2>
+            <p>Leitura de PDFs de até 100 MB, uma página por vez. PDFs protegidos por senha não são suportados nesta versão. O aplicativo não inclui edição, assinatura, preenchimento de formulários, OCR ou busca de texto.</p>
+            <p>Documentos movidos, excluídos ou recebidos com acesso temporário podem precisar ser selecionados novamente. Histórico e marcadores não têm sincronização nem backup automático; desinstalar o app ou limpar seus dados remove essas informações.</p>
+        </section>
+    </main>
+    <footer class="seo-footer"><a href="../">AMZ Studios</a><span>© 2026 AMZ Studios.</span></footer>
+    <script>
+        function atualizarTemaSeo() {
+            document.getElementById('site-theme-label').textContent = document.documentElement.dataset.siteTheme === 'light' ? 'Escuro' : 'Claro';
+        }
+        function alternarTemaSeo() {
+            const proximo = document.documentElement.dataset.siteTheme === 'light' ? 'dark' : 'light';
+            document.documentElement.dataset.siteTheme = proximo;
+            try { localStorage.setItem('amz_site_theme', proximo); } catch {}
+            atualizarTemaSeo();
+        }
+        atualizarTemaSeo();
+    </script>
+</body>
+</html>
