@@ -21,7 +21,7 @@ def formatar_limite_segundos(segundos):
     return f"{segundos}s"
 
 
-def formatar_erro_midia(erro, origem="arquivo"):
+def formatar_erro_midia(erro, origem="arquivo", limites=None):
     texto = str(erro or "").strip()
     texto_lower = texto.lower()
 
@@ -31,10 +31,19 @@ def formatar_erro_midia(erro, origem="arquivo"):
             "Tente outro link, use TikTok/Instagram ou atualize os cookies do yt-dlp."
         )
 
+    if "resultado ficou grande demais" in texto_lower:
+        limite = getattr(limites, "max_output_mb", None)
+        limite_texto = f" ({limite} MB)" if limite else ""
+        return f"O arquivo gerado ultrapassou o limite de envio{limite_texto}. Tente um corte menor ou confira `/midia limites`."
+
     if "grande demais" in texto_lower or "file is larger" in texto_lower or "max_filesize" in texto_lower:
         if "imagem grande demais" in texto_lower:
             return texto
-        return "Arquivo grande demais para o limite atual. Tente um arquivo menor ou um corte mais curto."
+        if origem == "arquivo" and "arquivo grande demais" in texto_lower:
+            limite = getattr(limites, "max_input_mb", None)
+            limite_texto = f" ({limite} MB)" if limite else ""
+            return f"O arquivo enviado ultrapassou o limite de entrada{limite_texto}. Confira `/midia limites` e envie um arquivo menor ou um corte mais curto."
+        return "A midia ultrapassou o limite de tamanho deste comando. Confira `/midia limites` ou tente um corte menor."
 
     if "longo demais" in texto_lower or "duration" in texto_lower:
         return "Video longo demais para esse comando. Use um corte menor e tente de novo."
@@ -118,7 +127,7 @@ class MediaCog(commands.Cog):
                         file=discord.File(output_path, filename=output_path.name),
                     )
         except MediaError as erro:
-            mensagem = formatar_erro_midia(erro, "arquivo")
+            mensagem = formatar_erro_midia(erro, "arquivo", self.limits)
             self.bot.registrar_evento("media_file_rejected", mensagem, nivel="warning", guild_id=interaction.guild_id)
             await interaction.followup.send(f"Nao deu para processar: {mensagem}", ephemeral=True)
         except Exception as erro:
@@ -141,7 +150,7 @@ class MediaCog(commands.Cog):
                         file=discord.File(output_path, filename=output_path.name),
                     )
         except MediaError as erro:
-            mensagem = formatar_erro_midia(erro, "arquivo")
+            mensagem = formatar_erro_midia(erro, "arquivo", self.limits)
             self.bot.registrar_evento("media_file_rejected", mensagem, nivel="warning", guild_id=interaction.guild_id)
             await interaction.followup.send(f"Nao deu para processar: {mensagem}", ephemeral=True)
         except Exception as erro:
